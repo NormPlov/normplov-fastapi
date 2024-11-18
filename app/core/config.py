@@ -2,6 +2,7 @@ from pydantic import Field
 from pydantic_settings import BaseSettings
 from urllib.parse import quote_plus
 
+
 class Settings(BaseSettings):
     DB_USER: str = Field(default="postgres", env="POSTGRESQL_USER")
     DB_PASSWORD: str = Field(default="Lymann-2", env="POSTGRESQL_PASSWORD")
@@ -22,13 +23,15 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = Field(default="development", env="ENVIRONMENT")
     DEBUG: bool = Field(default=True, env="DEBUG")
 
+
     @property
     def database_url(self) -> str:
-        return f"postgresql://{self.DB_USER}:{quote_plus(self.DB_PASSWORD)}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+        return f"postgresql+asyncpg://{quote_plus(self.DB_USER)}:{quote_plus(self.DB_PASSWORD)}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
 
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
         extra = "allow"  # Allow extra fields in environment variables
+
 
 settings = Settings()

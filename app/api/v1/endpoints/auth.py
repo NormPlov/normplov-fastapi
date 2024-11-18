@@ -1,102 +1,144 @@
-from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, status
-from sqlalchemy.orm import Session
-from datetime import timedelta
-
+from fastapi import APIRouter, Depends, BackgroundTasks, status
+from datetime import timedelta, date, datetime
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
-from app.schemas.user import UserCreateRequest, UserResponse, LoginUserDto, PasswordResetRequest, PasswordResetComplete
 from app.schemas.token import Token
 from app.utils.email_utils import send_reset_email
-from app.services.auth import register_user, verify_user, authenticate_user, create_access_token, create_refresh_token, create_password_reset_code, verify_password_reset_code, reset_password, resend_verification_code
+from app.schemas.payload import BaseResponse
+from app.schemas.user import (
+    UserCreateRequestDto,
+    LoginUserDto,
+    PasswordResetRequestDto,
+    PasswordResetCompleteDto
+)
+from app.services.auth import (
+    register_new_user,
+    verify_user,
+    validate_user_credentials,
+    generate_password_reset_code,
+    generate_and_save_verification_code,
+    generate_new_access_token,
+    reset_user_password
+)
+from app.services.token import (
+    create_access_token,
+    create_refresh_token,
+)
+from app.utils.email_utils import send_verification_email
 from app.core.database import get_db
-from app.models.user import User
 
-router = APIRouter()
+auth_router = APIRouter()
 
-@router.post("/request-password-reset")
-async def request_password_reset(
-    data: PasswordResetRequest,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+
+@auth_router.post("/auth/refresh")
+async def refresh_access_token(refresh_token: str, db: AsyncSession = Depends(get_db)):
+    return await generate_new_access_token(refresh_token, db)
+
+
+@auth_router.post("/reset-password", response_model=BaseResponse)
+async def reset_password(
+    data: PasswordResetCompleteDto,
+    db: AsyncSession = Depends(get_db)
 ):
-    user = db.query(User).filter(User.email == data.email).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User with this email does not exist."
-        )
+    await reset_user_password(data.email, data.token, data.new_password, db)
 
-    # Generate and save the reset code
-    reset_code = create_password_reset_code(user, db)
+    return BaseResponse(
+        status=status.HTTP_200_OK,
+        message="Password has been reset successfully.",
+        payload={"email": data.email}
+    )
 
-    # Send reset email with the reset code
+
+@auth_router.post("/request-password-reset", response_model=BaseResponse)
+async def request_password_reset(
+    data: PasswordResetRequestDto,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db)
+):
+
+    user, reset_code = await generate_password_reset_code(data.email, db)
+
     background_tasks.add_task(send_reset_email, user.email, reset_code, user.username)
 
-    return {"message": "Password reset email has been sent."}
+    return BaseResponse(
+        status=status.HTTP_200_OK,
+        message="Password reset email has been sent.",
+        payload={"email": user.email}
+    )
 
 
-@router.post("/reset-password")
-async def reset_password_route(data: PasswordResetComplete, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.reset_password_code == data.token).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired token."
-        )
-
-    # Verify the reset code
-    if not verify_password_reset_code(user, data.token):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired reset code."
-        )
-
-    # Reset the password
-    reset_password(user, data.new_password, db)
-
-    return {"message": "Password reset successful."}
-
-
-@router.post("/login", response_model=Token)
-async def login_for_access_token(
-        form_data: LoginUserDto,
-        db: Session = Depends(get_db)
+@auth_router.post("/login", response_model=Token)
+async def login_user(
+    form_data: LoginUserDto,
+    db: AsyncSession = Depends(get_db)
 ):
-    user = authenticate_user(db, form_data.username, form_data.password)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    user = await validate_user_credentials(db, form_data.email, form_data.password)
 
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
 
     access_token = create_access_token(
-        data={"sub": user.username},
+        data={"sub": user.email},
         expires_delta=access_token_expires
     )
     refresh_token = create_refresh_token(
-        data={"sub": user.username}
+        data={"sub": user.email}
     )
 
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
-        "token_type": "bearer"
+        "token_type": "bearer",
+        "message": f"Welcome back, {user.username}! Login successful 🎉"
     }
 
+@auth_router.post("/resend-verification-code", status_code=status.HTTP_200_OK)
+async def resend_code(email: str, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+    user, new_verification_code = await generate_and_save_verification_code(email, db)
 
-@router.post("/resend-verification-code")
-async def resend_code(email: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    return resend_verification_code(email, db, background_tasks)
+    background_tasks.add_task(
+        send_verification_email,
+        email=user.email,
+        username=user.username,
+        verification_code=new_verification_code
+    )
+
+    return BaseResponse(
+        date=datetime.utcnow().date(),
+        status=status.HTTP_200_OK,
+        payload=f"Verification code resent to {user.email}. Please check your inbox.🥰",
+        message="Verification code resent successfully."
+    )
 
 
-@router.post("/verify")
-def verify_email(email: str, verification_code: str, db: Session = Depends(get_db)):
-    return verify_user(email, verification_code, db)
+
+@auth_router.post("/verify", status_code=status.HTTP_200_OK)
+async def verify_email(email: str, verification_code: str, db: AsyncSession = Depends(get_db)):
+    return await verify_user(email, verification_code, db)
 
 
-@router.post("/register", response_model=UserResponse)
-async def register(data: UserCreateRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    return await register_user(data, db, background_tasks)
+
+@auth_router.post("/register", status_code=status.HTTP_201_CREATED)
+async def register_user(
+    create_user: UserCreateRequestDto,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db)
+):
+    new_user = await register_new_user(create_user, db)
+
+    background_tasks.add_task(
+        send_verification_email,
+        email=new_user.email,
+        username=new_user.username,
+        verification_code=new_user.verification_code
+    )
+
+    return BaseResponse(
+        date=date.today(),
+        status=int(status.HTTP_201_CREATED),
+        payload=f"Please check your email to verify your account 😉: {new_user.email}",
+        message="User has been registered successfully"
+    )
+
+
+
 
