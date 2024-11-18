@@ -72,16 +72,19 @@ async def login_user(
     form_data: LoginUserDto,
     db: AsyncSession = Depends(get_db)
 ):
+    # Authenticate the user
     user = await validate_user_credentials(db, form_data.email, form_data.password)
 
+    # Token expiration
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
 
+    # Generate tokens
     access_token = create_access_token(
-        data={"sub": user.email},
+        data={"sub": str(user.uuid)},
         expires_delta=access_token_expires
     )
     refresh_token = create_refresh_token(
-        data={"sub": user.email}
+        data={"sub": str(user.uuid)}
     )
 
     return {
@@ -90,6 +93,7 @@ async def login_user(
         "token_type": "bearer",
         "message": f"Welcome back, {user.username}! Login successful 🎉"
     }
+
 
 @auth_router.post("/resend-verification-code", status_code=status.HTTP_200_OK)
 async def resend_code(email: str, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):

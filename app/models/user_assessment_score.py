@@ -3,8 +3,6 @@ from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
-
-
 class UserAssessmentScore(Base):
     __tablename__ = "user_assessment_scores"
 
@@ -14,6 +12,7 @@ class UserAssessmentScore(Base):
     dimension_id = Column(Integer, ForeignKey("dimensions.id", ondelete="CASCADE"), nullable=False)
     score = Column(Float, nullable=False)
     created_at = Column(DateTime, nullable=False, server_default=func.now())
+    updated_at = Column(DateTime, nullable=True, onupdate=func.now())
 
     # Relationships
     user = relationship("User", back_populates="scores")

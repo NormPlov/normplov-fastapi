@@ -18,7 +18,6 @@ async def init_roles_and_admin(db: AsyncSession):
             result = await db.execute(stmt)
             role = result.scalars().first()
 
-            # If the role doesn't exist, create it
             if not role:
                 new_role = Role(
                     uuid=str(uuid.uuid4()),
@@ -45,7 +44,7 @@ async def init_roles_and_admin(db: AsyncSession):
         result = await db.execute(stmt)
         admin_user = result.scalars().first()
 
-        print(f"Admin user found: {admin_user}")  # Debugging log to check if user exists
+        print(f"Admin user found: {admin_user}")
 
         if not admin_user:
             # Create the admin user with is_verified set to True
@@ -53,8 +52,8 @@ async def init_roles_and_admin(db: AsyncSession):
                 uuid=str(uuid.uuid4()),
                 username="admin",
                 email="admin@gmail.com",
-                password=get_password_hash("Admin@123"),  # Default password
-                is_verified=True,  # Skip the verification process for the admin user
+                password=get_password_hash("Admin@123"),
+                is_verified=True,
                 is_active=True,
                 is_deleted=False,
                 created_at=datetime.utcnow(),

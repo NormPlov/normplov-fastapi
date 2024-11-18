@@ -17,3 +17,4 @@ class Dimension(Base):
     # Use lazy import to avoid circular import
     assessment_type = relationship("AssessmentType", back_populates="dimensions")
     scores = relationship("UserAssessmentScore", back_populates="dimension", cascade="all, delete-orphan")
+    questions = relationship("Question", back_populates="dimension")
