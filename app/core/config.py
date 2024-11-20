@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = Field(default="development", env="ENVIRONMENT")
     DEBUG: bool = Field(default=True, env="DEBUG")
 
+    GOOGLE_GENERATIVE_AI_KEY: str = Field(default="AIzaSyBs8q5cZDyFDPVqiN5JJ8loS_Qt2SiHsRk", env="GOOGLE_GENERATIVE_AI_KEY")
+
 
     @property
     def database_url(self) -> str:

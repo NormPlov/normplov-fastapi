@@ -40,3 +40,4 @@ class User(Base):
     roles = relationship("UserRole", back_populates="user", cascade="all, delete-orphan")
     responses = relationship("UserResponse", back_populates="user", cascade="all, delete-orphan")
     scores = relationship("UserAssessmentScore", back_populates="user", cascade="all, delete-orphan")
+    ai_recommendations = relationship("AIRecommendation", back_populates="user", cascade="all, delete-orphan")

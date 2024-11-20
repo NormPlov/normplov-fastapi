@@ -4,13 +4,11 @@ from app.models.role import Role
 from app.models.user import User
 from app.models.user_role import UserRole
 from app.utils.security import get_password_hash
-import uuid
 from datetime import datetime
+import uuid
 
 async def init_roles_and_admin(db: AsyncSession):
-    """Initialize default roles (ADMIN, USER) and the default admin user in the database."""
     try:
-        # Initialize roles (ADMIN and USER)
         default_roles = ["ADMIN", "USER"]
 
         for role_name in default_roles:
@@ -47,7 +45,6 @@ async def init_roles_and_admin(db: AsyncSession):
         print(f"Admin user found: {admin_user}")
 
         if not admin_user:
-            # Create the admin user with is_verified set to True
             admin_user = User(
                 uuid=str(uuid.uuid4()),
                 username="admin",
@@ -60,11 +57,9 @@ async def init_roles_and_admin(db: AsyncSession):
                 updated_at=datetime.utcnow(),
             )
             db.add(admin_user)
-            await db.commit()  # Commit after adding the admin user
+            await db.commit()
             await db.refresh(admin_user)
-            print(f"Admin user created: {admin_user.id}")  # Debugging log to check user creation
 
-            # Assign the ADMIN role to the admin user
             admin_user_role = UserRole(
                 uuid=str(uuid.uuid4()),
                 user_id=admin_user.id,
@@ -74,8 +69,8 @@ async def init_roles_and_admin(db: AsyncSession):
                 updated_at=datetime.utcnow(),
             )
             db.add(admin_user_role)
-            await db.commit()  # Commit after adding the user role
-            print(f"UserRole assigned: {admin_user_role.id}")  # Debugging log to check role assignment
+            await db.commit()
+            print(f"UserRole assigned: {admin_user_role.id}")
 
     except Exception as e:
         print(f"Error initializing roles and admin user: {e}")
