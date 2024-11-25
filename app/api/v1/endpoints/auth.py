@@ -1,15 +1,22 @@
-from fastapi import APIRouter, Depends, BackgroundTasks, status
+from fastapi import APIRouter, Depends, BackgroundTasks, status, HTTPException, Security, Request
+from fastapi.responses import JSONResponse
+from fastapi.security import OAuth2PasswordBearer
 from datetime import timedelta, date, datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
-from app.schemas.token import Token
+from app.schemas.token import Token, RefreshTokenRequest
 from app.utils.email_utils import send_reset_email
 from app.schemas.payload import BaseResponse
+from app.services.oauth import oauth
+from app.utils.email_utils import send_verification_email
+from app.core.database import get_db
+import logging
 from app.schemas.user import (
     UserCreateRequestDto,
     LoginUserDto,
     PasswordResetRequestDto,
-    PasswordResetCompleteDto
+    PasswordResetCompleteDto,
+    UserResponseDto, ChangePasswordDto
 )
 from app.services.auth import (
     register_new_user,
@@ -18,21 +25,85 @@ from app.services.auth import (
     generate_password_reset_code,
     generate_and_save_verification_code,
     generate_new_access_token,
-    reset_user_password
+    reset_user_password,
+    set_access_cookies,
+    unset_jwt_cookies,
+    get_current_user,
+    decode_jwt_token,
+    change_password,
+    get_or_create_user
+
 )
 from app.services.token import (
     create_access_token,
     create_refresh_token,
 )
-from app.utils.email_utils import send_verification_email
-from app.core.database import get_db
 
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+logger = logging.getLogger(__name__)
 auth_router = APIRouter()
 
 
-@auth_router.post("/auth/refresh")
-async def refresh_access_token(refresh_token: str, db: AsyncSession = Depends(get_db)):
-    return await generate_new_access_token(refresh_token, db)
+# Redirect to Google OAuth
+@auth_router.get("/google")
+async def google_login(request: Request):
+    redirect_uri = settings.GOOGLE_REDIRECT_URI
+    return await oauth.google.authorize_redirect(request, redirect_uri)
+
+
+# Handle Google OAuth callback
+@auth_router.get("/google/callback")
+async def google_callback(request: Request, db: AsyncSession = Depends(get_db)):
+    try:
+        token = await oauth.google.authorize_access_token(request)
+        user_info = token.get("userinfo")
+        if not user_info:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Google token.")
+
+        user = await get_or_create_user(db, user_info)
+        access_token = create_access_token(data={"sub": user.uuid})
+        return {"access_token": access_token, "token_type": "bearer"}
+    except Exception as e:
+        logger.exception("Unexpected error in Google OAuth callback.")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@auth_router.post("/change-password", response_model=BaseResponse)
+async def change_password_route(
+    data: ChangePasswordDto,
+    token: str = Security(oauth2_scheme),
+    db: AsyncSession = Depends(get_db),
+):
+    user_uuid = await decode_jwt_token(token)
+    response = await change_password(
+        user_uuid=user_uuid,
+        old_password=data.old_password,
+        new_password=data.new_password,
+        db=db
+    )
+    return BaseResponse(
+        status=status.HTTP_200_OK,
+        message=response["message"],
+    )
+
+
+
+@auth_router.get("/me", response_model=UserResponseDto, status_code=status.HTTP_200_OK)
+async def get_current_user_route(
+    token: str = Security(oauth2_scheme),
+    db: AsyncSession = Depends(get_db),
+):
+    return await get_current_user(token, db)
+
+
+
+@auth_router.post("/refresh", response_model=dict, status_code=status.HTTP_200_OK)
+async def refresh_access_token(
+    data: RefreshTokenRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    return await generate_new_access_token(data.refresh_token, db)
+
 
 
 @auth_router.post("/reset-password", response_model=BaseResponse)
@@ -47,6 +118,7 @@ async def reset_password(
         message="Password has been reset successfully.",
         payload={"email": data.email}
     )
+
 
 
 @auth_router.post("/request-password-reset", response_model=BaseResponse)
@@ -65,6 +137,24 @@ async def request_password_reset(
         message="Password reset email has been sent.",
         payload={"email": user.email}
     )
+
+
+
+@auth_router.post("/logout", response_model=BaseResponse)
+async def logout_user():
+    try:
+        response = JSONResponse({
+            "message": "Logout successful. See you again! 👋",
+            "status": status.HTTP_200_OK
+        })
+
+        # Clear access and refresh cookies
+        unset_jwt_cookies(response)
+        return response
+
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
 
 
 @auth_router.post("/login", response_model=Token)
@@ -87,12 +177,19 @@ async def login_user(
         data={"sub": str(user.uuid)}
     )
 
-    return {
+    # Create a response and set cookies
+    response = JSONResponse({
+        "message": f"Welcome back, {user.username}! Login successful 🎉",
         "access_token": access_token,
         "refresh_token": refresh_token,
-        "token_type": "bearer",
-        "message": f"Welcome back, {user.username}! Login successful 🎉"
-    }
+        "token_type": "bearer"
+    })
+
+    # Set access and refresh cookies
+    set_access_cookies(response, access_token, refresh_token)
+
+    return response
+
 
 
 @auth_router.post("/resend-verification-code", status_code=status.HTTP_200_OK)

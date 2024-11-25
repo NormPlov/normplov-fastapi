@@ -3,6 +3,16 @@ from pydantic import BaseModel, EmailStr, validator, Field
 from typing import Optional
 
 
+class UpdateBioDto(BaseModel):
+    bio: str = Field(..., min_length=1, max_length=500, description="User's bio")
+
+    @validator("bio")
+    def validate_bio(cls, value):
+        if not value.strip():
+            raise ValueError("Bio cannot be empty or only whitespace.")
+        return value
+
+
 class ChangePasswordDto(BaseModel):
     old_password: str = Field(..., min_length=8, description="Current password.")
     new_password: str = Field(..., min_length=8, description="New password.")
@@ -15,7 +25,6 @@ class ChangePasswordDto(BaseModel):
         return v
 
 
-
 class UpdateUserDto(BaseModel):
     username: Optional[str]
     address: Optional[str]
@@ -23,6 +32,7 @@ class UpdateUserDto(BaseModel):
     bio: Optional[str]
     gender: Optional[str]
     date_of_birth: Optional[datetime]
+
 
 class UserResponseDto(BaseModel):
     uuid: str
@@ -43,10 +53,12 @@ class UserResponseDto(BaseModel):
 class PasswordResetRequestDto(BaseModel):
     email: str
 
+
 class PasswordResetCompleteDto(BaseModel):
     email: EmailStr
     token: str = Field(..., min_length=6, max_length=6, description="Password reset token.")
     new_password: str = Field(..., min_length=8, description="New password.")
+
 
 class UserCreateRequestDto(BaseModel):
     username: str

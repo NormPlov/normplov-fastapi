@@ -1,8 +1,8 @@
 from sqlalchemy import Column, Integer, ForeignKey, DateTime, Boolean, String
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
-from app.core.database import Base
 from sqlalchemy.dialects.postgresql import JSONB
+from ..core.database import Base
 import uuid
 
 class UserAssessmentScore(Base):

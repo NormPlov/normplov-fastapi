@@ -1,8 +1,8 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
-from datetime import datetime
-from app.core.database import Base
 from sqlalchemy import DateTime
+from datetime import datetime
+from ..core.database import Base
 
 class Question(Base):
     __tablename__ = "questions"

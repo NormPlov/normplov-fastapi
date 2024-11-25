@@ -1,8 +1,8 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Boolean
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
-from app.core.database import Base
 from sqlalchemy.dialects.postgresql import JSONB
+from ..core.database import Base
 
 class UserResponse(Base):
     __tablename__ = "user_responses"

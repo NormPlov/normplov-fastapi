@@ -10,6 +10,7 @@ from app.models.user import User
 # Define the OAuth2 password flow
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
+
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
     credentials_exception = HTTPException(
         status_code=401,
@@ -25,6 +26,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
         return User(uuid=user_uuid)
     except JWTError:
         raise credentials_exception
+
 
 # Dependency to fetch the current user from the database using their UUID
 async def get_current_user_data(
