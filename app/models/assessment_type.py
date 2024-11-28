@@ -20,4 +20,3 @@ class AssessmentType(Base):
     dimensions = relationship("Dimension", back_populates="assessment_type", cascade="all, delete-orphan")
     user_responses = relationship("UserResponse", back_populates="assessment_type", cascade="all, delete-orphan")
     user_scores = relationship("UserAssessmentScore", back_populates="assessment_type", cascade="all, delete-orphan")
-    test_drafts = relationship("TestDraft", back_populates="assessment_type", cascade="all, delete-orphan")

@@ -4,6 +4,7 @@ from sqlalchemy.sql import func
 from uuid import uuid4
 from app.core.database import Base
 
+
 class LearningStyleStudyTechnique(Base):
     __tablename__ = "learning_style_study_techniques"
 
@@ -19,4 +20,9 @@ class LearningStyleStudyTechnique(Base):
 
     # Relationships
     dimension = relationship("Dimension", back_populates="learning_style_techniques")
+    images = relationship(
+        "LearningStyleTechniqueImage",
+        back_populates="technique",
+        cascade="all, delete-orphan"
+    )
 

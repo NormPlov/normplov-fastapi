@@ -5,14 +5,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload
 from fastapi import HTTPException
+
+from app.models import AssessmentType
 from app.models.user_response import UserResponse
 from app.models.user_assessment_score import UserAssessmentScore
 from app.models.learning_style_study_technique import LearningStyleStudyTechnique
 from app.models.dimension import Dimension
 from app.models.question import Question
-from app.models.user import User
 from app.models.dimension_career import DimensionCareer
 from app.schemas.learning_style_assessment import LearningStyleInput, LearningStyleChart, LearningStyleResponse
+from app.services.test import create_user_test
 from ml_models.model_loader import load_vark_model
 import logging
 import json
@@ -20,38 +22,45 @@ import json
 logger = logging.getLogger(__name__)
 vark_model = load_vark_model()
 
+async def get_assessment_type_id(name: str, db: AsyncSession) -> int:
+    stmt = select(AssessmentType.id).where(AssessmentType.name == name)
+    result = await db.execute(stmt)
+    assessment_type_id = result.scalars().first()
+
+    if not assessment_type_id:
+        raise HTTPException(status_code=404, detail=f"Assessment type '{name}' not found.")
+    return assessment_type_id
+
 
 async def predict_learning_style(
-        data: LearningStyleInput,
-        db: AsyncSession,
-        current_user: User
+    data: LearningStyleInput,
+    test_uuid: str | None,
+    db: AsyncSession,
+    current_user,
 ):
     try:
-        user = current_user
+        assessment_type_id = await get_assessment_type_id("Learning Style", db)
 
-        # Fetch questions with dimensions eagerly loaded
+        user_test = await create_user_test(db, current_user.id, "Learning Style")
+
         stmt = select(Question).options(joinedload(Question.dimension))
         result = await db.execute(stmt)
         questions = result.scalars().all()
 
-        # Normalize provided keys
-        normalized_answers = {key.replace('/', ''): value for key, value in data.responses.items()}
+        normalized_answers = {key.replace("/", ""): value for key, value in data.responses.items()}
 
-        # Prepare input data
         input_data_dict = {}
         missing_questions = []
-        expected_keys = []
 
         for question in questions:
             if not question.dimension:
                 logger.error(f"Dimension missing for question ID {question.id}")
                 raise HTTPException(
                     status_code=500,
-                    detail=f"Dimension missing for question ID {question.id}"
+                    detail=f"Dimension missing for question ID {question.id}",
                 )
 
             question_key = f"Q{question.id}_{question.dimension.name.replace('/', '')}"
-            expected_keys.append(question_key)
 
             answer = normalized_answers.get(question_key)
             if answer is not None:
@@ -63,39 +72,31 @@ async def predict_learning_style(
         if missing_questions:
             logger.warning(f"Missing answers for questions: {missing_questions}")
 
-        # Prepare input for the model
-        input_data = pd.DataFrame([input_data_dict]).reindex(columns=vark_model.feature_names_in_, fill_value=0)
-
-        # Predict using the regression model
+        input_data = pd.DataFrame([input_data_dict]).reindex(
+            columns=vark_model.feature_names_in_, fill_value=0
+        )
         predicted_scores = vark_model.predict(input_data)
 
-        # Ensure the output is 2-dimensional
-        if predicted_scores.ndim == 3:
-            predicted_scores = predicted_scores.reshape(predicted_scores.shape[0], -1)
-
-        # Map scores to learning styles
         predicted_probs_df = pd.DataFrame(
             predicted_scores,
-            columns=["Visual_Score", "Auditory_Score", "ReadWrite_Score", "Kinesthetic_Score"]
+            columns=["Visual_Score", "Auditory_Score", "ReadWrite_Score", "Kinesthetic_Score"],
         )
 
-        # Normalize scores to probabilities
-        predicted_probs_df = predicted_probs_df.div(predicted_probs_df.sum(axis=1), axis=0)
+        total_score = predicted_probs_df.sum(axis=1).iloc[0]
+        predicted_probs_df = predicted_probs_df.div(total_score, axis=1)
 
-        # Identify learning style
         row = predicted_probs_df.iloc[0]
         learning_style = row.idxmax().replace("_Score", "")
         max_prob = row.max()
 
-        # Prepare chart data
         chart_data = {
             "labels": ["Visual Learning", "Auditory Learning", "Read/Write Learning", "Kinesthetic Learning"],
             "values": [
-                row["Visual_Score"],
-                row["Auditory_Score"],
-                row["ReadWrite_Score"],
-                row["Kinesthetic_Score"]
-            ]
+                round(row["Visual_Score"] * 100, 2),
+                round(row["Auditory_Score"] * 100, 2),
+                round(row["ReadWrite_Score"] * 100, 2),
+                round(row["Kinesthetic_Score"] * 100, 2),
+            ],
         }
 
         assessment_scores = []
@@ -109,18 +110,25 @@ async def predict_learning_style(
             dimension = dimension.scalars().first()
 
             if dimension:
-                assessment_scores.append(UserAssessmentScore(
-                    uuid=str(uuid.uuid4()),
-                    user_id=user.id,
-                    assessment_type_id=5,
-                    dimension_id=dimension.id,
-                    score=prob,
-                    created_at=datetime.utcnow(),
-                ))
+                percentage = round(prob * 100, 2)
+                assessment_scores.append(
+                    UserAssessmentScore(
+                        uuid=str(uuid.uuid4()),
+                        user_id=current_user.id,
+                        user_test_id=user_test.id,
+                        assessment_type_id=assessment_type_id,
+                        dimension_id=dimension.id,
+                        score={
+                            "score": round(prob, 2),
+                            "percentage": percentage
+                        },
+                        created_at=datetime.utcnow(),
+                    )
+                )
 
                 techniques_stmt = select(LearningStyleStudyTechnique).where(
                     LearningStyleStudyTechnique.dimension_id == dimension.id,
-                    LearningStyleStudyTechnique.is_deleted == False
+                    LearningStyleStudyTechnique.is_deleted == False,
                 )
                 techniques = await db.execute(techniques_stmt)
                 techniques = techniques.scalars().all()
@@ -134,45 +142,43 @@ async def predict_learning_style(
                 careers = careers.scalars().all()
 
                 related_careers.extend(
-                    {"career_name": career.career.name}
-                    for career in careers if career.career
+                    {"career_name": career.career.name} for career in careers if career.career
                 )
 
-                dimension_details.append({
-                    "dimension_name": dimension.name,
-                    "dimension_description": dimension.description,
-                    "techniques": [
-                        {
-                            "technique_name": t.technique_name,
-                            "category": t.category,
-                            "description": t.description,
-                        }
-                        for t in techniques
-                    ]
-                })
+                dimension_details.append(
+                    {
+                        "dimension_name": dimension.name,
+                        "dimension_description": dimension.description,
+                        "techniques": [
+                            {
+                                "technique_name": t.technique_name,
+                                "category": t.category,
+                                "description": t.description,
+                            }
+                            for t in techniques
+                        ],
+                    }
+                )
 
         db.add_all(assessment_scores)
 
         unique_careers = list({c["career_name"]: c for c in related_careers}.values())
 
         response = LearningStyleResponse(
-            user_id=user.uuid,
+            user_id=current_user.uuid,
             learning_style=learning_style,
             probability=round(max_prob * 100, 2),
             details=row.to_dict(),
-            chart=LearningStyleChart(
-                labels=chart_data["labels"],
-                values=chart_data["values"]
-            ),
+            chart=LearningStyleChart(labels=chart_data["labels"], values=chart_data["values"]),
             dimensions=dimension_details,
-            related_careers=unique_careers
+            related_careers=unique_careers,
         )
 
-        # Save the full response to the `user_responses` table
         user_responses = UserResponse(
             uuid=str(uuid.uuid4()),
-            user_id=user.id,
-            assessment_type_id=5,
+            user_id=current_user.id,
+            user_test_id=user_test.id,
+            assessment_type_id=assessment_type_id,
             response_data=json.dumps(response.dict()),
             created_at=datetime.utcnow(),
         )

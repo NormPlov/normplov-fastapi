@@ -1,9 +1,17 @@
+import os
+
 from pydantic import Field
 from pydantic_settings import BaseSettings
 from urllib.parse import quote_plus
 
 
 class Settings(BaseSettings):
+    BASE_UPLOAD_FOLDER: str = Field(default="uploads", env="BASE_UPLOAD_FOLDER")
+
+    @property
+    def LEARNING_STYLE_UPLOAD_FOLDER(self) -> str:
+        return os.path.join(self.BASE_UPLOAD_FOLDER, "learning_style")
+
     DB_USER: str = Field(default="postgres", env="POSTGRESQL_USER")
     DB_PASSWORD: str = Field(default="Lymann-2", env="POSTGRESQL_PASSWORD")
     DB_NAME: str = Field(default="fastapi", env="POSTGRESQL_DB")
@@ -31,7 +39,6 @@ class Settings(BaseSettings):
 
     # Google API Key
     GOOGLE_GENERATIVE_AI_KEY: str = Field(default="AIzaSyBs8q5cZDyFDPVqiN5JJ8loS_Qt2SiHsRk", env="GOOGLE_GENERATIVE_AI_KEY")
-
 
     @property
     def database_url(self) -> str:

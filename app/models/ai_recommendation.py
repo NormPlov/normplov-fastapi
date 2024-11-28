@@ -4,6 +4,7 @@ from sqlalchemy.orm import relationship
 from ..core.database import Base
 import uuid
 
+
 class AIRecommendation(Base):
     __tablename__ = "ai_recommendations"
 

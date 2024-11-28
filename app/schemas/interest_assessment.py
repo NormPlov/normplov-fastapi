@@ -1,5 +1,5 @@
-from pydantic import BaseModel, validator, Field
-from typing import List, Dict
+from typing import Dict, List
+from pydantic import BaseModel, Field, validator
 
 
 class InterestAssessmentInput(BaseModel):
@@ -13,6 +13,7 @@ class InterestAssessmentInput(BaseModel):
             if not (0 <= value <= 5):
                 raise ValueError(f"Invalid response value for {key}: {value}. Must be between 0 and 5.")
         return responses
+
 
 
 class ChartData(BaseModel):

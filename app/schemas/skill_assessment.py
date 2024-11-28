@@ -1,20 +1,25 @@
 from pydantic import BaseModel, Field, validator
 from typing import Dict, List
+from typing import Optional
 
 
 class SkillAssessmentInput(BaseModel):
-    scores: Dict[str, float] = Field(
+    responses: Dict[str, float] = Field(
         ..., description="Mapping of skill names to their scores."
     )
+    test_uuid: Optional[str] = Field(
+        None, description="Optional UUID for linking to an existing test."
+    )
 
-    @validator("scores")
-    def validate_scores(cls, scores):
-        if not scores:
-            raise ValueError("Scores cannot be empty.")
-        for skill, value in scores.items():
+    @validator("responses")
+    def validate_scores(cls, responses):
+        if not responses:
+            raise ValueError("Responses cannot be empty.")
+        for skill, value in responses.items():
             if not isinstance(value, (int, float)) or value < 0:
                 raise ValueError(f"Invalid score for {skill}: {value}. Must be non-negative.")
-        return scores
+        return responses
+
 
 
 class SkillGroupedByLevel(BaseModel):

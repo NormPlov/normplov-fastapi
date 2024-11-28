@@ -1,11 +1,14 @@
 from pydantic import BaseModel, Field, validator
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 
 class LearningStyleInput(BaseModel):
+    test_uuid: Optional[str] = Field(
+        None, description="Optional test UUID. A new test will be created if not provided."
+    )
     responses: Dict[str, int] = Field(
         ...,
-        description="Mapping of learning style question keys to answers (1-5 scale)."
+        description="Mapping of learning style question keys to answers (1-5 scale).",
     )
 
     @validator("responses")

@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 from datetime import datetime
 from ..core.database import Base
 
+
 class Dimension(Base):
     __tablename__ = "dimensions"
 
@@ -21,5 +22,9 @@ class Dimension(Base):
     learning_style_techniques = relationship(
         "LearningStyleStudyTechnique", back_populates="dimension", cascade="all, delete-orphan"
     )
-    careers = relationship("DimensionCareer", back_populates="dimension", cascade="all, delete-orphan")
     categories = relationship("SkillCategory", back_populates="dimension", cascade="all, delete-orphan")
+    dimension_careers = relationship(
+        "DimensionCareer",
+        back_populates="dimension",
+        cascade="all, delete-orphan",
+    )
