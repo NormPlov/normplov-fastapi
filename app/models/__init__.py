@@ -12,6 +12,7 @@ from app.models.skill_category import SkillCategory
 from app.models.learning_style_technique_image import LearningStyleTechniqueImage
 from app.models.user_test import UserTest
 from app.models.career import Career
+from app.models.user_feedback import UserFeedback
 
 __all__ = ["Role",
            "UserRole",
@@ -25,5 +26,7 @@ __all__ = ["Role",
            "DimensionCareer",
            "SkillCategory",
            "LearningStyleTechniqueImage",
-           "UserTest"]
+           "UserTest",
+           "UserFeedback"
+           ]
 

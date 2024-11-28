@@ -2,6 +2,7 @@ from pydantic import BaseModel, validator
 from typing import Any
 from datetime import date
 
+
 class BaseResponse(BaseModel):
     date: str
     status: int

@@ -42,4 +42,4 @@ class User(Base):
     scores = relationship("UserAssessmentScore", back_populates="user", cascade="all, delete-orphan")
     ai_recommendations = relationship("AIRecommendation", back_populates="user", cascade="all, delete-orphan")
     tests = relationship("UserTest", back_populates="user", cascade="all, delete-orphan")
-
+    feedbacks = relationship("UserFeedback", back_populates="user", cascade="all, delete-orphan")

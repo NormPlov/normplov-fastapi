@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.api.v1.endpoints import auth, user, assessment, ai_recommendation, test, draft
+from app.api.v1.endpoints import auth, user, assessment, ai_recommendation, test, draft, feedback
 from app.api.v1.endpoints.technique_image import learning_style_image_router
 from app.core.database import engine, Base, get_db
 from app.core.init import init_roles_and_admin
@@ -39,3 +39,4 @@ app.include_router(test.test_router, prefix="/api/v1/test", tags=["test"])
 app.include_router(ai_recommendation.ai_recommendation_router, prefix="/api/v1/ai", tags=["recommendations"])
 app.include_router(learning_style_image_router, prefix="/api/v1/technique-image", tags=["Learning Style Images"])
 app.include_router(draft.draft_router, prefix="/api/v1/draft", tags=["Draft"])
+app.include_router(feedback.feedback_router, prefix="/api/v1/feedback", tags=["Feedback"])

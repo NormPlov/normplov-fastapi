@@ -4,6 +4,7 @@ from sqlalchemy import Column, Integer, String, Boolean, Text, DateTime
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
+
 class ValueCategory(Base):
     __tablename__ = "value_categories"
 
