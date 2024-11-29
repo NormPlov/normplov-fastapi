@@ -23,6 +23,7 @@ class User(Base):
     is_active = Column(Boolean, default=False)
     is_verified = Column(Boolean, default=False)
     is_deleted = Column(Boolean, default=False)
+    is_blocked = Column(Boolean, default=False)
 
     # Verification and password reset fields
     verification_code = Column(String, nullable=True)

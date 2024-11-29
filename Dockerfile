@@ -1,18 +1,20 @@
-FROM python:3.12
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-COPY requirements.txt ./
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --upgrade pip
+COPY requirements.txt /app/
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir --timeout=300 -r requirements.txt --index-url https://pypi.org/simple
 
-RUN pip install -r requirements.txt
-
-COPY . .
+COPY . /app/
 
 EXPOSE 8000
-
-#  Mount the uploads directory to serve static files
-VOLUME ["/app/uploads"]
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

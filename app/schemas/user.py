@@ -1,9 +1,9 @@
 from datetime import datetime
 from pydantic import BaseModel, EmailStr, validator, Field
-from typing import Optional
+from typing import Optional, Any
 
 
-class UpdateBioDto(BaseModel):
+class UpdateBio(BaseModel):
     bio: str = Field(..., min_length=1, max_length=500, description="User's bio")
 
     @validator("bio")
@@ -13,7 +13,7 @@ class UpdateBioDto(BaseModel):
         return value
 
 
-class ChangePasswordDto(BaseModel):
+class ChangePassword(BaseModel):
     old_password: str = Field(..., min_length=8, description="Current password.")
     new_password: str = Field(..., min_length=8, description="New password.")
     confirm_new_password: str = Field(..., min_length=8, description="Confirm new password.")
@@ -25,7 +25,7 @@ class ChangePasswordDto(BaseModel):
         return v
 
 
-class UpdateUserDto(BaseModel):
+class UpdateUser(BaseModel):
     username: Optional[str]
     address: Optional[str]
     phone_number: Optional[str]
@@ -34,7 +34,7 @@ class UpdateUserDto(BaseModel):
     date_of_birth: Optional[datetime]
 
 
-class UserResponseDto(BaseModel):
+class UserResponse(BaseModel):
     uuid: str
     username: str
     email: str
@@ -43,24 +43,41 @@ class UserResponseDto(BaseModel):
     phone_number: str
     bio: str
     gender: str
-    date_of_birth: Optional[datetime]
+    date_of_birth: Optional[str]
     is_deleted: bool
     is_active: bool
     is_verified: bool
     registered_at: Optional[datetime]
 
 
-class PasswordResetRequestDto(BaseModel):
+class PasswordResetRequest(BaseModel):
     email: str
 
 
-class PasswordResetCompleteDto(BaseModel):
+class PasswordResetComplete(BaseModel):
     email: EmailStr
     token: str = Field(..., min_length=6, max_length=6, description="Password reset token.")
     new_password: str = Field(..., min_length=8, description="New password.")
+    confirm_password: str = Field(..., min_length=8, description="Confirm new password.")
+
+    @validator("confirm_password")
+    def passwords_match(cls, confirm_password: str, values: Any):
+        new_password = values.get("new_password")
+        if new_password != confirm_password:
+            raise ValueError("Passwords do not match.")
+        return confirm_password
 
 
-class UserCreateRequestDto(BaseModel):
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr
+
+
+class VerifyRequest(BaseModel):
+    email: EmailStr
+    verification_code: str
+
+
+class UserCreateRequest(BaseModel):
     username: str
     email: EmailStr
     password: str
@@ -73,7 +90,7 @@ class UserCreateRequestDto(BaseModel):
         return v
 
 
-class LoginUserDto(BaseModel):
+class LoginUser(BaseModel):
     email: EmailStr
     password: str
 

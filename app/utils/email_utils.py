@@ -8,10 +8,7 @@ import asyncio
 
 
 load_dotenv()
-
-# Set up Jinja2 for rendering templates
 env = Environment(loader=FileSystemLoader(os.path.join(os.path.dirname(__file__), '../templates')))
-
 
 
 async def send_verification_email(email: str, username: str, verification_code: str):
@@ -36,14 +33,11 @@ async def send_verification_email(email: str, username: str, verification_code: 
         except Exception as e:
             print(f"Failed to send email: {e}")
 
-    # Run the synchronous send_email function in a separate thread
     await asyncio.to_thread(send_email)
 
 
 def send_reset_email(email: str, reset_code: str, username: str):
-    """Send the password reset email with the reset code in the email body."""
 
-    # Load and render the password reset email template
     template = env.get_template('password_reset.html')
     html_content = template.render(username=username, reset_code=reset_code)
 

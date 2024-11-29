@@ -12,26 +12,23 @@ from app.utils.email_utils import send_verification_email
 from app.core.database import get_db
 import logging
 from app.schemas.user import (
-    UserCreateRequestDto,
-    LoginUserDto,
-    PasswordResetRequestDto,
-    PasswordResetCompleteDto,
-    UserResponseDto, ChangePasswordDto
+    UserCreateRequest,
+    LoginUser,
+    PasswordResetRequest,
+    PasswordResetComplete,
+    VerifyRequest,
+    ResendVerificationRequest
 )
 from app.services.auth import (
     register_new_user,
     verify_user,
     validate_user_credentials,
     generate_password_reset_code,
-    generate_and_save_verification_code,
     generate_new_access_token,
     reset_user_password,
     set_access_cookies,
     unset_jwt_cookies,
-    get_current_user,
-    decode_jwt_token,
-    change_password,
-    get_or_create_user
+    get_or_create_user, resend_verification_code
 
 )
 from app.services.token import (
@@ -68,35 +65,6 @@ async def google_callback(request: Request, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@auth_router.post("/change-password", response_model=BaseResponse)
-async def change_password_route(
-    data: ChangePasswordDto,
-    token: str = Security(oauth2_scheme),
-    db: AsyncSession = Depends(get_db),
-):
-    user_uuid = await decode_jwt_token(token)
-    response = await change_password(
-        user_uuid=user_uuid,
-        old_password=data.old_password,
-        new_password=data.new_password,
-        db=db
-    )
-    return BaseResponse(
-        status=status.HTTP_200_OK,
-        message=response["message"],
-    )
-
-
-
-@auth_router.get("/me", response_model=UserResponseDto, status_code=status.HTTP_200_OK)
-async def get_current_user_route(
-    token: str = Security(oauth2_scheme),
-    db: AsyncSession = Depends(get_db),
-):
-    return await get_current_user(token, db)
-
-
-
 @auth_router.post("/refresh", response_model=dict, status_code=status.HTTP_200_OK)
 async def refresh_access_token(
     data: RefreshTokenRequest,
@@ -105,39 +73,37 @@ async def refresh_access_token(
     return await generate_new_access_token(data.refresh_token, db)
 
 
-
 @auth_router.post("/reset-password", response_model=BaseResponse)
 async def reset_password(
-    data: PasswordResetCompleteDto,
+    data: PasswordResetComplete,
     db: AsyncSession = Depends(get_db)
 ):
     await reset_user_password(data.email, data.token, data.new_password, db)
 
     return BaseResponse(
+        date=datetime.utcnow().date(),
         status=status.HTTP_200_OK,
         message="Password has been reset successfully.",
         payload={"email": data.email}
     )
 
 
-
-@auth_router.post("/request-password-reset", response_model=BaseResponse)
-async def request_password_reset(
-    data: PasswordResetRequestDto,
+@auth_router.post("/password-reset-request", response_model=BaseResponse)
+async def request_password_reset_handler(
+    data: PasswordResetRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db)
 ):
-
     user, reset_code = await generate_password_reset_code(data.email, db)
 
     background_tasks.add_task(send_reset_email, user.email, reset_code, user.username)
 
     return BaseResponse(
+        date=datetime.utcnow().date(),
         status=status.HTTP_200_OK,
         message="Password reset email has been sent.",
         payload={"email": user.email}
     )
-
 
 
 @auth_router.post("/logout", response_model=BaseResponse)
@@ -156,10 +122,9 @@ async def logout_user():
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-
 @auth_router.post("/login", response_model=Token)
 async def login_user(
-    form_data: LoginUserDto,
+    form_data: LoginUser,
     db: AsyncSession = Depends(get_db)
 ):
     # Authenticate the user
@@ -191,10 +156,13 @@ async def login_user(
     return response
 
 
-
 @auth_router.post("/resend-verification-code", status_code=status.HTTP_200_OK)
-async def resend_code(email: str, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
-    user, new_verification_code = await generate_and_save_verification_code(email, db)
+async def resend_code(
+    payload: ResendVerificationRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db)
+):
+    user, new_verification_code = await resend_verification_code(payload.email, db)
 
     background_tasks.add_task(
         send_verification_email,
@@ -203,24 +171,24 @@ async def resend_code(email: str, background_tasks: BackgroundTasks, db: AsyncSe
         verification_code=new_verification_code
     )
 
-    return BaseResponse(
-        date=datetime.utcnow().date(),
-        status=status.HTTP_200_OK,
-        payload=f"Verification code resent to {user.email}. Please check your inbox.🥰",
-        message="Verification code resent successfully."
-    )
+    logger.info(f"Verification code resent to {user.email}")
 
+    return {
+        "date": datetime.utcnow().date(),
+        "status": status.HTTP_200_OK,
+        "payload": f"Verification code resent to {user.email}. Please check your inbox.🥰",
+        "message": "Verification code resent successfully."
+    }
 
 
 @auth_router.post("/verify", status_code=status.HTTP_200_OK)
-async def verify_email(email: str, verification_code: str, db: AsyncSession = Depends(get_db)):
-    return await verify_user(email, verification_code, db)
-
+async def verify_email(payload: VerifyRequest, db: AsyncSession = Depends(get_db)):
+    return await verify_user(payload.email, payload.verification_code, db)
 
 
 @auth_router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register_user(
-    create_user: UserCreateRequestDto,
+    create_user: UserCreateRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db)
 ):

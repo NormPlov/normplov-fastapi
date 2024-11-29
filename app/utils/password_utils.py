@@ -1,7 +1,7 @@
 from fastapi import HTTPException, status
 import bcrypt
 
-# Validation function for password security requirements
+
 def validate_password(password: str):
     if len(password) < 8:
         raise HTTPException(
@@ -37,12 +37,10 @@ def hash_password(password: str) -> str:
     return hashed_password.decode("utf-8")
 
 
-# Verify a password against its hashed value
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
 
 
-# Combined utility for validating, hashing, and returning the hashed password
 def validate_and_hash_password(password: str) -> str:
     validate_password(password)
     return hash_password(password)
