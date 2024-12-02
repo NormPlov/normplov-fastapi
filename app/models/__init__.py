@@ -13,6 +13,10 @@ from app.models.learning_style_technique_image import LearningStyleTechniqueImag
 from app.models.user_test import UserTest
 from app.models.career import Career
 from app.models.user_feedback import UserFeedback
+from app.models.job import Job
+from app.models.job_scraping_log import JobScrapingLog
+from app.models.job_category import JobCategory
+from app.models.job_image import JobImage
 
 __all__ = ["Role",
            "UserRole",
@@ -27,6 +31,10 @@ __all__ = ["Role",
            "SkillCategory",
            "LearningStyleTechniqueImage",
            "UserTest",
-           "UserFeedback"
+           "UserFeedback",
+           "Job",
+           "JobScrapingLog",
+           "JobCategory",
+           "JobImage"
            ]
 

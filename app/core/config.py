@@ -5,7 +5,7 @@ from urllib.parse import quote_plus
 
 
 class Settings(BaseSettings):
-    ENVIRONMENT: str = Field(default="development", env="ENVIRONMENT")  # Add ENVIRONMENT to distinguish local and remote
+    ENVIRONMENT: str = Field(default="development", env="ENVIRONMENT")
     BASE_UPLOAD_FOLDER: str = Field(default="uploads", env="BASE_UPLOAD_FOLDER")
 
     @property
@@ -14,10 +14,10 @@ class Settings(BaseSettings):
 
     # Database Configuration
     DB_USER: str = Field(default="postgres", env="POSTGRESQL_USER")
-    DB_PASSWORD: str = Field(default="Lymann-2", env="POSTGRESQL_PASSWORD")
+    DB_PASSWORD: str = Field(default="password", env="POSTGRESQL_PASSWORD")
     DB_NAME: str = Field(default="fastapi", env="POSTGRESQL_DB")
-    DB_HOST: str = Field(default="localhost", env="POSTGRESQL_SERVER")
-    DB_PORT: str = Field(default="5432", env="POSTGRESQL_PORT")
+    DB_HOST: str = Field(default="34.142.184.99", env="POSTGRESQL_SERVER")
+    DB_PORT: str = Field(default="5433", env="POSTGRESQL_PORT")
 
     # JWT Configuration
     JWT_SECRET: str = Field(default="supersecretkey", env="JWT_SECRET")
@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     # Database URL Configuration
     @property
     def database_url(self) -> str:
-        db_host = "localhost" if self.ENVIRONMENT == "development" else self.DB_HOST
+        db_host = "34.142.184.99" if self.ENVIRONMENT == "development" else self.DB_HOST
         return f"postgresql+asyncpg://{quote_plus(self.DB_USER)}:{quote_plus(self.DB_PASSWORD)}@{db_host}:{self.DB_PORT}/{self.DB_NAME}"
 
     class Config:

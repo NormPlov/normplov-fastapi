@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
+from app.dependencies import get_current_user_data
 from app.schemas.personality_assessment import PersonalityAssessmentResponse, PersonalityAssessmentInput
 from app.schemas.skill_assessment import SkillAssessmentInput, SkillAssessmentResponse
 from app.schemas.learning_style_assessment import LearningStyleInput, LearningStyleResponse
@@ -10,7 +11,6 @@ from app.services.personality_assessment import process_personality_assessment
 from app.services.skill_assessment import predict_skills
 from app.services.learning_style_assessment import predict_learning_style
 from app.services.interest_assessment import process_interest_assessment
-from app.dependencies import get_current_user_data
 from app.models.user import User
 from app.services.value_assessment import process_value_assessment
 

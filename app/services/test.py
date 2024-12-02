@@ -14,11 +14,7 @@ from app.schemas.payload import BaseResponse
 
 
 async def get_shared_test(test_uuid: str, db: AsyncSession) -> BaseResponse:
-    """
-    Retrieve a test using the shareable link, with a structured response.
-    """
     try:
-        # Fetch the test
         stmt = select(UserTest).where(
             UserTest.uuid == test_uuid,
             UserTest.is_deleted == False
@@ -27,21 +23,40 @@ async def get_shared_test(test_uuid: str, db: AsyncSession) -> BaseResponse:
         user_test = result.scalars().first()
 
         if not user_test:
-            raise HTTPException(status_code=404, detail="Shared test not found or deleted.")
+            raise HTTPException(status_code=404, detail="Test not found or deleted.")
 
-        # Prepare and return the response
+        response_stmt = select(UserResponse).where(
+            UserResponse.user_test_id == user_test.id,
+            UserResponse.is_deleted == False
+        )
+        response_result = await db.execute(response_stmt)
+        user_response = response_result.scalars().first()
+
+        if not user_response:
+            raise HTTPException(status_code=404, detail="No response found for the test.")
+
+        response_payload = {
+            "response_id": user_response.id,
+            "uuid": user_response.uuid,
+            "response_data": user_response.response_data,
+            "is_draft": user_response.is_draft,
+            "created_at": user_response.created_at.strftime("%d-%B-%Y %H:%M:%S"),
+            "updated_at": user_response.updated_at.strftime("%d-%B-%Y %H:%M:%S") if user_response.updated_at else None
+        }
+
         return BaseResponse(
             date=date.today(),
             status=200,
             payload={
                 "test_uuid": user_test.uuid,
                 "test_name": user_test.name,
-                "is_completed": user_test.is_completed,
-                "created_at": user_test.created_at.strftime("%d-%B-%Y"),
+                "response": response_payload
             },
-            message="Shared test retrieved successfully."
+            message="User response retrieved successfully."
         )
 
+    except HTTPException as e:
+        raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
 
@@ -221,7 +236,6 @@ async def get_test_details(test_uuid: str, user_id: int, db: AsyncSession):
         raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
-
 
 
 async def create_user_test(db: AsyncSession, user_id: int, test_name_prefix: str) -> UserTest:

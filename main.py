@@ -1,5 +1,6 @@
 from fastapi import FastAPI
-from app.api.v1.endpoints import auth, user, assessment, ai_recommendation, test, draft, feedback
+from fastapi.middleware.cors import CORSMiddleware
+from app.api.v1.endpoints import auth, user, assessment, ai_recommendation, test, draft, feedback, job_category
 from app.api.v1.endpoints.technique_image import learning_style_image_router
 from app.core.database import engine, Base, get_db
 from app.core.init import init_roles_and_admin
@@ -10,7 +11,6 @@ import os
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Create tables after loading all models
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
@@ -22,6 +22,15 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # Add SessionMiddleware for OAuth
@@ -40,3 +49,4 @@ app.include_router(ai_recommendation.ai_recommendation_router, prefix="/api/v1/a
 app.include_router(learning_style_image_router, prefix="/api/v1/technique-image", tags=["Learning Style Images"])
 app.include_router(draft.draft_router, prefix="/api/v1/draft", tags=["Draft"])
 app.include_router(feedback.feedback_router, prefix="/api/v1/feedback", tags=["Feedback"])
+app.include_router(job_category.job_category_router, prefix="/api/v1/job-categories", tags=["Job Categories"])

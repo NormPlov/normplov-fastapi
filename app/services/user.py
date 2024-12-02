@@ -3,28 +3,41 @@ import logging
 
 from fastapi import HTTPException, status, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
-from jose import jwt, JWTError
 from sqlalchemy.future import select
 from datetime import datetime
-from ..core.config import settings
-from ..models.user import User
-from ..schemas.user import UserResponse, UpdateUser
-from ..utils.format_date import format_date
-from ..utils.password_utils import verify_password, validate_password, hash_password
-from ..utils.verify import is_valid_uuid
+from app.models.user import User
+from app.schemas.payload import BaseResponse
+from app.schemas.user import UpdateUser, UserResponse
+from app.utils.format_date import format_date
+from app.utils.password import verify_password, validate_password, hash_password
+from app.utils.verify import is_valid_uuid
 
 
 logger = logging.getLogger(__name__)
 
 
-async def block_user_service(uuid: str, is_blocked: bool, db: AsyncSession):
-
+async def block_user(uuid: str, is_blocked: bool, db: AsyncSession, current_user: User) -> BaseResponse:
     stmt = select(User).where(User.uuid == uuid)
     result = await db.execute(stmt)
     user = result.scalars().first()
 
     if not user:
-        raise HTTPException(status_code=404, detail="User not found.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found."
+        )
+
+    if user.uuid == current_user.uuid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot block/unblock yourself."
+        )
+
+    if is_blocked and user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin users cannot be blocked."
+        )
 
     user.is_blocked = is_blocked
     user.updated_at = datetime.utcnow()
@@ -33,20 +46,28 @@ async def block_user_service(uuid: str, is_blocked: bool, db: AsyncSession):
     await db.commit()
     await db.refresh(user)
 
-    status = "blocked" if is_blocked else "unblocked"
-    return {"message": f"User has been {status} successfully.", "uuid": user.uuid}
+    return BaseResponse(
+        date=datetime.utcnow().strftime("%d-%B-%Y"),
+        status=status.HTTP_200_OK,
+        message=f"User {'blocked' if is_blocked else 'unblocked'} successfully.",
+        payload={
+            "uuid": user.uuid,
+            "username": user.username,
+            "is_blocked": user.is_blocked,
+        },
+    )
 
 
-async def get_user_by_email(email: str, db: AsyncSession):
+async def get_user_by_email(email: str, db: AsyncSession, current_user: User) -> UserResponse:
+    if current_user.email != email and not any(role.role.name == "ADMIN" for role in current_user.roles):
+        raise HTTPException(status_code=403, detail="Permission denied.")
+
     stmt = select(User).where(User.email == email)
     result = await db.execute(stmt)
     user = result.scalars().first()
 
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User with the given email not found."
-        )
+        raise HTTPException(status_code=404, detail="User not found.")
 
     return UserResponse(
         uuid=user.uuid,
@@ -58,40 +79,15 @@ async def get_user_by_email(email: str, db: AsyncSession):
         bio=user.bio,
         gender=user.gender,
         date_of_birth=format_date(user.date_of_birth),
+        roles=[role.role.name for role in user.roles],
         is_deleted=user.is_deleted,
         is_active=user.is_active,
         is_verified=user.is_verified,
-        registered_at=user.registered_at or datetime.utcnow(),
+        registered_at=user.registered_at,
     )
 
 
-async def decode_jwt_token(token: str) -> str:
-    try:
-        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
-        user_uuid = payload.get("sub")
-        if not user_uuid:
-            raise ValueError("Missing user UUID in token payload")
-        return user_uuid
-    except JWTError as e:
-        logger.error(f"JWT decoding failed: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-
-async def change_password(user_uuid: str, old_password: str, new_password: str, db: AsyncSession):
-    stmt = select(User).where(User.uuid == user_uuid)
-    result = await db.execute(stmt)
-    user = result.scalars().first()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found."
-        )
-
+async def change_password(user: User, old_password: str, new_password: str, db: AsyncSession) -> BaseResponse:
     if not verify_password(old_password, user.password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -99,16 +95,22 @@ async def change_password(user_uuid: str, old_password: str, new_password: str, 
         )
 
     validate_password(new_password)
+
     user.password = hash_password(new_password)
     user.updated_at = datetime.utcnow()
 
     db.add(user)
     await db.commit()
-    return {"message": "Password updated successfully!"}
+
+    return BaseResponse(
+        date=datetime.utcnow().strftime("%d-%B-%Y"),
+        status=status.HTTP_200_OK,
+        message="Password updated successfully.",
+        payload=None,
+    )
 
 
-async def update_user_bio(uuid: str, bio: str, db: AsyncSession):
-
+async def update_user_bio(uuid: str, bio: str, db: AsyncSession) -> BaseResponse:
     stmt = select(User).where(User.uuid == uuid)
     result = await db.execute(stmt)
     user = result.scalars().first()
@@ -119,6 +121,12 @@ async def update_user_bio(uuid: str, bio: str, db: AsyncSession):
             detail="User not found."
         )
 
+    if not bio.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Bio cannot be empty or whitespace."
+        )
+
     user.bio = bio
     user.updated_at = datetime.utcnow()
 
@@ -126,13 +134,15 @@ async def update_user_bio(uuid: str, bio: str, db: AsyncSession):
     await db.commit()
     await db.refresh(user)
 
-    return {
-        "message": "User bio updated successfully.",
-        "bio": user.bio,
-    }
+    return BaseResponse(
+        date=datetime.utcnow().strftime("%d-%B-%Y"),
+        status=status.HTTP_200_OK,
+        message="User bio updated successfully.",
+        payload={"bio": user.bio},
+    )
 
 
-async def upload_profile_picture(uuid: str, file: UploadFile, db: AsyncSession):
+async def upload_profile_picture(uuid: str, file: UploadFile, db: AsyncSession) -> BaseResponse:
     stmt = select(User).where(User.uuid == uuid)
     result = await db.execute(stmt)
     user = result.scalars().first()
@@ -144,8 +154,14 @@ async def upload_profile_picture(uuid: str, file: UploadFile, db: AsyncSession):
         )
 
     file_location = f"uploads/profile_pictures/{uuid}_{file.filename}"
-    with open(file_location, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    try:
+        with open(file_location, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error saving file: {str(e)}"
+        )
 
     user.avatar = file_location
     user.updated_at = datetime.utcnow()
@@ -154,10 +170,15 @@ async def upload_profile_picture(uuid: str, file: UploadFile, db: AsyncSession):
     await db.commit()
     await db.refresh(user)
 
-    return {"message": "Profile picture updated successfully", "avatar_url": file_location}
+    return BaseResponse(
+        date=datetime.utcnow().strftime("%d-%B-%Y"),
+        status=status.HTTP_200_OK,
+        message="Profile picture uploaded successfully.",
+        payload={"avatar_url": file_location},
+    )
 
 
-async def update_user_profile(uuid: str, profile_update: UpdateUser, db: AsyncSession):
+async def update_user_profile(uuid: str, profile_update: UpdateUser, db: AsyncSession) -> BaseResponse:
     stmt = select(User).where(User.uuid == uuid)
     result = await db.execute(stmt)
     user = result.scalars().first()
@@ -178,36 +199,55 @@ async def update_user_profile(uuid: str, profile_update: UpdateUser, db: AsyncSe
     await db.commit()
     await db.refresh(user)
 
-    return user
+    return BaseResponse(
+        date=datetime.utcnow().strftime("%d-%B-%Y"),
+        status=status.HTTP_200_OK,
+        message="User profile updated successfully.",
+        payload={
+            "uuid": user.uuid,
+            "username": user.username,
+            "email": user.email,
+            "avatar": user.avatar,
+            "address": user.address,
+            "phone_number": user.phone_number,
+            "bio": user.bio,
+            "gender": user.gender,
+            "date_of_birth": user.date_of_birth,
+        },
+    )
 
 
-async def delete_user_by_uuid(uuid: str, session: AsyncSession):
-    if not is_valid_uuid(uuid):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user UUID.")
-
+async def delete_user_by_uuid(uuid: str, db: AsyncSession) -> BaseResponse:
     stmt = select(User).where(User.uuid == uuid)
-    result = await session.execute(stmt)
+    result = await db.execute(stmt)
     user = result.scalars().first()
 
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found."
+        )
 
     user.is_deleted = True
     user.updated_at = datetime.utcnow()
 
-    session.add(user)
-    await session.commit()
-    await session.refresh(user)
+    db.add(user)
+    await db.commit()
 
-    return {"message": f"User with UUID {uuid} has been marked as deleted."}
+    return BaseResponse(
+        date=datetime.utcnow().strftime("%d-%B-%Y"),
+        status=status.HTTP_200_OK,
+        message=f"User with UUID {uuid} has been marked as deleted.",
+        payload={"uuid": user.uuid},
+    )
 
 
-async def update_user_by_uuid(uuid: str, user_update: UpdateUser, session: AsyncSession):
+async def update_user_by_uuid(uuid: str, user_update: UpdateUser, db: AsyncSession) -> BaseResponse:
     if not is_valid_uuid(uuid):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user UUID.")
 
     stmt = select(User).where(User.uuid == uuid)
-    result = await session.execute(stmt)
+    result = await db.execute(stmt)
     user = result.scalars().first()
 
     if not user:
@@ -220,13 +260,15 @@ async def update_user_by_uuid(uuid: str, user_update: UpdateUser, session: Async
 
     user.updated_at = datetime.utcnow()
 
-    session.add(user)
-    await session.commit()
-    await session.refresh(user)
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
 
-    return {
-        "message": "User updated successfully.",
-        "user": {
+    return BaseResponse(
+        date=datetime.utcnow().strftime("%d-%B-%Y"),
+        status=status.HTTP_200_OK,
+        message="User updated successfully.",
+        payload={
             "uuid": user.uuid,
             "username": user.username,
             "email": user.email,
@@ -235,64 +277,73 @@ async def update_user_by_uuid(uuid: str, user_update: UpdateUser, session: Async
             "phone_number": user.phone_number,
             "bio": user.bio,
             "gender": user.gender,
-            "date_of_birth": user.date_of_birth,
+            "date_of_birth": format_date(user.date_of_birth),
             "is_deleted": user.is_deleted,
             "is_active": user.is_active,
             "is_verified": user.is_verified,
-            "registered_at": user.registered_at,
         }
-    }
+    )
 
 
-async def get_all_users(session: AsyncSession):
-
+async def get_all_users(db: AsyncSession) -> BaseResponse:
     query = select(User).where(User.is_deleted == False).order_by(User.created_at.desc())
-    result = await session.execute(query)
+    result = await db.execute(query)
     users = result.scalars().all()
 
-    return [
-        UserResponse(
-            uuid=user.uuid,
-            username=user.username,
-            email=user.email,
-            avatar=user.avatar,
-            address=user.address,
-            phone_number=user.phone_number,
-            bio=user.bio,
-            gender=user.gender,
-            date_of_birth=format_date(user.date_of_birth),
-            is_deleted=user.is_deleted,
-            is_active=user.is_active,
-            is_verified=user.is_verified,
-            registered_at=user.registered_at
-        )
-        for user in users
-    ]
+    return BaseResponse(
+        date=datetime.utcnow().strftime("%d-%B-%Y"),
+        status=status.HTTP_200_OK,
+        message="Users retrieved successfully.",
+        payload=[
+            {
+                "uuid": user.uuid,
+                "username": user.username,
+                "email": user.email,
+                "avatar": user.avatar,
+                "address": user.address,
+                "phone_number": user.phone_number,
+                "bio": user.bio,
+                "gender": user.gender,
+                "date_of_birth": format_date(user.date_of_birth),
+                "is_deleted": user.is_deleted,
+                "is_active": user.is_active,
+                "is_verified": user.is_verified,
+                "registered_at": user.registered_at,
+            }
+            for user in users
+        ]
+    )
 
 
-async def get_user_by_uuid(uuid: str, session: AsyncSession):
+async def get_user_by_uuid(uuid: str, db: AsyncSession) -> BaseResponse:
     if not is_valid_uuid(uuid):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user UUID.")
 
     stmt = select(User).where(User.uuid == uuid)
-    result = await session.execute(stmt)
+    result = await db.execute(stmt)
     user = result.scalars().first()
 
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
 
-    return UserResponse(
-        uuid=user.uuid,
-        username=user.username,
-        email=user.email,
-        avatar=user.avatar,
-        address=user.address,
-        phone_number=user.phone_number,
-        bio=user.bio,
-        gender=user.gender,
-        date_of_birth=format_date(user.date_of_birth),
-        is_deleted=user.is_deleted,
-        is_active=user.is_active,
-        is_verified=user.is_verified,
-        registered_at=user.registered_at
+    return BaseResponse(
+        date=datetime.utcnow().strftime("%d-%B-%Y"),
+        status=status.HTTP_200_OK,
+        message="User retrieved successfully.",
+        payload={
+            "uuid": user.uuid,
+            "username": user.username,
+            "email": user.email,
+            "avatar": user.avatar,
+            "address": user.address,
+            "phone_number": user.phone_number,
+            "bio": user.bio,
+            "gender": user.gender,
+            "date_of_birth": format_date(user.date_of_birth),
+            "is_deleted": user.is_deleted,
+            "is_active": user.is_active,
+            "is_verified": user.is_verified,
+            "registered_at": user.registered_at,
+        }
     )
+

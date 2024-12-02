@@ -1,6 +1,6 @@
 from datetime import datetime
 from pydantic import BaseModel, EmailStr, validator, Field
-from typing import Optional, Any
+from typing import Optional, Any, List
 
 
 class UpdateBio(BaseModel):
@@ -44,6 +44,7 @@ class UserResponse(BaseModel):
     bio: str
     gender: str
     date_of_birth: Optional[str]
+    roles: List[str]
     is_deleted: bool
     is_active: bool
     is_verified: bool
@@ -56,7 +57,7 @@ class PasswordResetRequest(BaseModel):
 
 class PasswordResetComplete(BaseModel):
     email: EmailStr
-    token: str = Field(..., min_length=6, max_length=6, description="Password reset token.")
+    reset_code: str = Field(..., min_length=6, max_length=6, description="Password reset token.")
     new_password: str = Field(..., min_length=8, description="New password.")
     confirm_password: str = Field(..., min_length=8, description="Confirm new password.")
 

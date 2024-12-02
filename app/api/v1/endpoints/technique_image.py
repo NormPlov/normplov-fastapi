@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
+from app.dependencies import get_current_user_data
 from app.services.technique_image import (
     upload_learning_style_image,
     update_learning_style_image,
@@ -10,7 +11,6 @@ from app.services.technique_image import (
 from app.schemas.technique_image import LearningStyleTechniqueImageResponse
 from app.schemas.payload import BaseResponse
 from app.models.user import User
-from app.dependencies import get_current_user_data
 
 
 learning_style_image_router = APIRouter()
@@ -88,7 +88,6 @@ async def delete_learning_style_image_route(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_data),
 ):
-    """Delete a learning style image."""
     try:
         is_admin(current_user)
         return await delete_learning_style_image(image_uuid, db)

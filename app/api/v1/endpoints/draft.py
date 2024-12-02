@@ -1,10 +1,10 @@
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
+from app.dependencies import get_current_user_data
 from app.services.draft import save_draft, get_draft, delete_draft
 from app.schemas.draft import DraftCreateUpdateInput, DraftResponse
 from app.models.user import User
-from app.dependencies import get_current_user_data
 
 draft_router = APIRouter()
 

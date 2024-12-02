@@ -1,23 +1,24 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.dependencies import get_current_user_data
 from app.schemas.assessment import AssessmentResponseList
 from app.schemas.payload import BaseResponse
 from app.schemas.test import GetTestDetailsResponse, UserTestsResponse
 from app.services.test import get_assessment_responses_by_test, get_test_details, get_tests_by_user, delete_test, \
     generate_shareable_link, get_shared_test
 from app.core.database import get_db
-from app.dependencies import get_current_user_data
 from app.models.user import User
 
 test_router = APIRouter()
 
 
 @test_router.get(
-    "/shared-tests/{test_uuid}",
+    "/{test_uuid}/response",
     response_model=BaseResponse,
-    summary="Retrieve a shared test (read-only)",
+    summary="Retrieve the user response for a specific test"
 )
-async def get_shared_test_route(
+async def get_user_response_route(
     test_uuid: str,
     db: AsyncSession = Depends(get_db),
 ):
