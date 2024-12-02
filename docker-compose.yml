@@ -1,20 +1,11 @@
-version: '3.8'
-
 services:
-  app:
-    build: .
-    container_name: fastapi-app
-    ports:
-      - "8000:8000"
-    environment:
-      - PYTHONUNBUFFERED=1
-      - PYTHONDONTWRITEBYTECODE=1
-    volumes:
-      - .:/app
+  api:
+    build:
+      context: .
+    container_name: norm_plov_api_container
     restart: always
-    networks:
-      - fastapi-network
-
-networks:
-  fastapi-network:
-    driver: bridge
+    ports:
+      - "8000:8000"  
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:password@34.142.184.99:5433/fastapi
+    depends_on: []
