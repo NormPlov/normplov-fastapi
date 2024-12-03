@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload
 
+from app.models import UserRole
 from app.utils.auth import decode_jwt_token
 from app.core.database import get_db
 from app.models.user import User
@@ -30,7 +31,6 @@ async def get_current_user_data(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-
     try:
         user_uuid = current_user.get("uuid")
         if not user_uuid:
@@ -42,9 +42,10 @@ async def get_current_user_data(
 
         logger.info(f"Fetching user data for UUID: {user_uuid}")
 
+        # Eager load roles and related data
         stmt = (
             select(User)
-            .options(joinedload(User.roles))  # Ensure roles are loaded
+            .options(joinedload(User.roles).joinedload(UserRole.role))
             .where(User.uuid == user_uuid)
         )
         result = await db.execute(stmt)
@@ -74,11 +75,18 @@ async def get_current_user_data(
 
 
 async def is_admin_user(current_user: User = Depends(get_current_user_data)) -> User:
-
-    if not any(role.role.name == "ADMIN" for role in current_user.roles):
-        logger.warning(f"Non-admin user attempted admin-only action: UUID {current_user.uuid}")
+    try:
+        if not any(role.role.name == "ADMIN" for role in current_user.roles):
+            logger.warning(f"Non-admin user attempted admin-only action: UUID {current_user.uuid}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to perform this action.",
+            )
+        return current_user
+    except Exception as e:
+        logger.error(f"Error in is_admin_user: {e}")
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have permission to perform this action.",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred while checking admin privileges: {str(e)}",
         )
-    return current_user
+

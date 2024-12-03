@@ -10,431 +10,473 @@ import uuid
 import logging
 
 from sqlalchemy.orm import joinedload
-
-from ..core.config import settings
-from ..models.user import User
-from ..schemas.payload import BaseResponse
-from ..schemas.user import UserCreateRequest
-from ..utils.security import generate_verification_code, generate_reset_code
-from ..utils.password import hash_password, validate_password, validate_and_hash_password
-from ..models.role import Role
-from ..models.user_role import UserRole
-from ..services.token import create_access_token, create_refresh_token
+from app.core.config import settings
+from app.models.user import User
+from app.schemas.payload import BaseResponse
+from app.schemas.user import UserCreateRequest
+from app.utils.email import send_verification_email
+from app.utils.security import generate_verification_code, generate_reset_code
+from app.utils.password import hash_password, validate_password, validate_and_hash_password
+from app.models.role import Role
+from app.models.user_role import UserRole
+from app.services.token import create_access_token, create_refresh_token
 
 logger = logging.getLogger(__name__)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
-class AuthService:
-    @staticmethod
-    async def get_or_create_user(db: AsyncSession, user_info: dict) -> dict:
-        email = user_info.get("email")
-        name = user_info.get("name") or "Google User"
-        picture = user_info.get("picture", "")
+async def resend_reset_password_code(email: str, db: AsyncSession) -> BaseResponse:
 
-        if not email:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email is required.")
+    stmt = select(User).where(User.email == email)
+    result = await db.execute(stmt)
+    user = result.scalars().first()
 
-        stmt = select(User).where(User.email == email)
-        result = await db.execute(stmt)
-        user = result.scalars().first()
-
-        if not user:
-            logger.info(f"Creating a new user for email: {email}")
-            user = User(
-                uuid=str(uuid.uuid4()),
-                username=name,
-                email=email,
-                avatar=picture,
-                is_verified=True,
-                is_active=True,
-            )
-            db.add(user)
-            await db.commit()
-            await db.refresh(user)
-
-        user_roles = [role.name for role in user.roles] if user.roles else []
-        access_token = create_access_token(data={"sub": user.uuid})
-        refresh_token = create_refresh_token(data={"sub": user.uuid})
-
-        return {
-            "date": datetime.utcnow().strftime("%Y-%m-%d"),
-            "status": 200,
-            "message": "User authenticated successfully.",
-            "payload": {
-                "uuid": user.uuid,
-                "username": user.username,
-                "email": user.email,
-                "roles": user_roles,
-                "access_token": access_token,
-                "refresh_token": refresh_token,
-                "token_type": "bearer",
-            }
-        }
-
-    @staticmethod
-    async def validate_user_credentials(db: AsyncSession, email: str, password: str) -> User:
-        stmt = (
-            select(User)
-            .where(User.email == email)
-            .options(joinedload(User.roles))
-        )
-        result = await db.execute(stmt)
-        user = result.scalars().first()
-
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect email or password."
-            )
-
-        if not user.is_verified:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="User is not verified. Please verify your account."
-            )
-
-        if not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="User account is inactive. Please contact support."
-            )
-
-        return user
-
-    @staticmethod
-    async def login_user(db: AsyncSession, email: str, password: str) -> BaseResponse:
-
-        user = await AuthService.validate_user_credentials(db, email, password)
-
-        if not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="User account is inactive. Contact support."
-            )
-        if not user.is_verified:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="User account is not verified. Please verify your email."
-            )
-
-        stmt = (
-            select(Role.name)
-            .join(UserRole, Role.id == UserRole.role_id)
-            .where(UserRole.user_id == user.id, UserRole.is_deleted == False)
-        )
-        result = await db.execute(stmt)
-        user_roles = [row.name for row in result.all()]
-
-        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-        access_token = create_access_token({"sub": str(user.uuid)}, expires_delta=access_token_expires)
-        refresh_token = create_refresh_token({"sub": str(user.uuid)})
-
-        return BaseResponse(
-            date=datetime.utcnow().strftime("%d-%B-%Y"),
-            status=status.HTTP_200_OK,
-            message=f"Welcome back, {user.username}! Login successful 🎉",
-            payload={
-                "uuid": user.uuid,
-                "username": user.username,
-                "email": user.email,
-                "roles": user_roles,
-                "access_token": access_token,
-                "refresh_token": refresh_token,
-                "token_type": "bearer",
-            }
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User with this email does not exist."
         )
 
-    @staticmethod
-    async def generate_new_access_token(refresh_token: str, db: AsyncSession) -> BaseResponse:
-        try:
-            payload = jwt.decode(refresh_token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
-            user_uuid = payload.get("sub")
+    reset_code = generate_reset_code()
+    expiration_time = datetime.utcnow() + timedelta(minutes=15)
 
-            if user_uuid is None:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Invalid refresh token payload: missing user identifier."
-                )
+    user.reset_password_code = reset_code
+    user.reset_password_code_expiration = expiration_time
+    user.updated_at = datetime.utcnow()
 
-            stmt = select(User).where(User.uuid == user_uuid)
-            result = await db.execute(stmt)
-            user = result.scalars().first()
+    try:
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+    except Exception as e:
+        logger.error(f"Error while resending reset password code: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to resend reset password code: {str(e)}"
+        )
 
-            if not user or not user.is_active:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="User not found or inactive."
-                )
+    # Send the reset password email
+    await send_verification_email(user.email, user.username, reset_code)
 
-            access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-            access_token = create_access_token(
-                data={"sub": str(user.uuid)},
-                expires_delta=access_token_expires
-            )
-            refresh_token = create_refresh_token(data={"sub": str(user.uuid)})
+    return BaseResponse(
+        date=datetime.utcnow().strftime("%d-%B-%Y"),
+        status=status.HTTP_200_OK,
+        message="Reset password code resent successfully.",
+        payload={"email": user.email, "reset_code": reset_code}
+    )
 
-            return BaseResponse(
-                date=datetime.utcnow().strftime("%d-%B-%Y"),
-                status=status.HTTP_200_OK,
-                message="New access token generated successfully.",
-                payload={
-                    "access_token": access_token,
-                    "refresh_token": refresh_token,
-                    "token_type": "bearer"
-                }
-            )
-        except JWTError:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or expired refresh token."
-            )
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=str(e)
-            )
 
-    @staticmethod
-    async def generate_password_reset_code(email: str, db: AsyncSession) -> BaseResponse:
-        stmt = select(User).where(User.email == email)
-        result = await db.execute(stmt)
-        user = result.scalars().first()
+async def get_or_create_user(db: AsyncSession, user_info: dict) -> dict:
+    email = user_info.get("email")
+    name = user_info.get("name") or "Google User"
+    picture = user_info.get("picture", "")
 
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User with this email does not exist."
-            )
+    if not email:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email is required.")
 
-        reset_code = generate_reset_code()
-        expiration_time = datetime.utcnow() + timedelta(hours=1)
-        user.reset_password_code = reset_code
-        user.reset_password_code_expiration = expiration_time
+    stmt = select(User).where(User.email == email)
+    result = await db.execute(stmt)
+    user = result.scalars().first()
+
+    if not user:
+        logger.info(f"Creating a new user for email: {email}")
+        user = User(
+            uuid=str(uuid.uuid4()),
+            username=name,
+            email=email,
+            avatar=picture,
+            is_verified=True,
+            is_active=True,
+        )
         db.add(user)
         await db.commit()
         await db.refresh(user)
 
-        return BaseResponse(
-            date=datetime.utcnow().strftime("%d-%B-%Y"),
-            status=status.HTTP_200_OK,
-            message="Password reset code generated successfully.",
-            payload={"email": user.email, "reset_code": reset_code}
+    user_roles = [role.name for role in user.roles] if user.roles else []
+    access_token = create_access_token(data={"sub": user.uuid})
+    refresh_token = create_refresh_token(data={"sub": user.uuid})
+
+    return {
+        "date": datetime.utcnow().strftime("%Y-%m-%d"),
+        "status": 200,
+        "message": "User authenticated successfully.",
+        "payload": {
+            "uuid": user.uuid,
+            "username": user.username,
+            "email": user.email,
+            "roles": user_roles,
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+        }
+    }
+
+
+async def validate_user_credentials(db: AsyncSession, email: str, password: str) -> User:
+    stmt = (
+        select(User)
+        .where(User.email == email)
+        .options(joinedload(User.roles))
+    )
+    result = await db.execute(stmt)
+    user = result.scalars().first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password."
         )
 
-    @staticmethod
-    async def reset_user_password(email: str, reset_code: str, new_password: str, db: AsyncSession) -> BaseResponse:
-        stmt = select(User).where(User.email == email)
+    if not user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User is not verified. Please verify your account."
+        )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is inactive. Please contact support."
+        )
+
+    return user
+
+
+async def perform_login(db: AsyncSession, email: str, password: str) -> BaseResponse:
+    user = await validate_user_credentials(db, email, password)
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is inactive. Contact support."
+        )
+    if not user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is not verified. Please verify your email."
+        )
+
+    stmt = (
+        select(Role.name)
+        .join(UserRole, Role.id == UserRole.role_id)
+        .where(UserRole.user_id == user.id, UserRole.is_deleted == False)
+    )
+    result = await db.execute(stmt)
+    user_roles = [row.name for row in result.all()]
+
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token({"sub": str(user.uuid)}, expires_delta=access_token_expires)
+    refresh_token = create_refresh_token({"sub": str(user.uuid)})
+
+    return BaseResponse(
+        date=datetime.utcnow().strftime("%d-%B-%Y"),
+        status=status.HTTP_200_OK,
+        message=f"Welcome back, {user.username}! Login successful 🎉",
+        payload={
+            "uuid": user.uuid,
+            "username": user.username,
+            "email": user.email,
+            "roles": user_roles,
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+        }
+    )
+
+
+async def generate_new_access_token(refresh_token: str, db: AsyncSession) -> BaseResponse:
+    try:
+        payload = jwt.decode(refresh_token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        user_uuid = payload.get("sub")
+
+        if user_uuid is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid refresh token payload: missing user identifier."
+            )
+
+        stmt = select(User).where(User.uuid == user_uuid)
         result = await db.execute(stmt)
         user = result.scalars().first()
 
-        if not user:
+        if not user or not user.is_active:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found."
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found or inactive."
             )
 
-        if user.reset_password_code != reset_code or user.reset_password_code_expiration < datetime.utcnow():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid or expired reset code."
-            )
-
-        validate_password(new_password)
-
-        user.password = hash_password(new_password)
-        user.reset_password_code = None
-        user.reset_password_code_expiration = None
-        user.updated_at = datetime.utcnow()
-
-        db.add(user)
-        await db.commit()
+        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": str(user.uuid)},
+            expires_delta=access_token_expires
+        )
+        refresh_token = create_refresh_token(data={"sub": str(user.uuid)})
 
         return BaseResponse(
             date=datetime.utcnow().strftime("%d-%B-%Y"),
             status=status.HTTP_200_OK,
-            message="Password reset successfully.",
-            payload={"email": user.email}
+            message="New access token generated successfully.",
+            payload={
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "token_type": "bearer"
+            }
+        )
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token."
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
         )
 
-    @staticmethod
-    async def verify_user(email: str, verification_code: str, db: AsyncSession) -> BaseResponse:
-        stmt = select(User).where(User.email == email)
-        result = await db.execute(stmt)
-        user = result.scalars().first()
 
-        if not user:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+async def generate_password_reset_code(email: str, db: AsyncSession) -> BaseResponse:
+    stmt = select(User).where(User.email == email)
+    result = await db.execute(stmt)
+    user = result.scalars().first()
 
-        if user.is_verified:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User is already verified.")
-
-        if user.verification_code != verification_code or user.verification_code_expiration < datetime.utcnow():
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired verification code.")
-
-        user.is_verified = True
-        user.is_active = True
-        user.verification_code = None
-        user.verification_code_expiration = None
-        user.updated_at = datetime.utcnow()
-
-        db.add(user)
-        await db.commit()
-
-        return BaseResponse(
-            date=datetime.utcnow().strftime("%d-%B-%Y"),
-            status=status.HTTP_200_OK,
-            message="User verified successfully.",
-            payload={"email": user.email}
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User with this email does not exist."
         )
 
-    @staticmethod
-    def verify_password_reset_code(user: User, reset_code: str) -> bool:
-        return (
+    reset_code = generate_reset_code()
+    expiration_time = datetime.utcnow() + timedelta(hours=1)
+    user.reset_password_code = reset_code
+    user.reset_password_code_expiration = expiration_time
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    return BaseResponse(
+        date=datetime.utcnow().strftime("%d-%B-%Y"),
+        status=status.HTTP_200_OK,
+        message="Password reset code generated successfully.",
+        payload={"email": user.email, "reset_code": reset_code}
+    )
+
+
+async def reset_user_password(email: str, reset_code: str, new_password: str, db: AsyncSession) -> BaseResponse:
+    stmt = select(User).where(User.email == email)
+    result = await db.execute(stmt)
+    user = result.scalars().first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found."
+        )
+
+    if user.reset_password_code != reset_code or user.reset_password_code_expiration < datetime.utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset code."
+        )
+
+    validate_password(new_password)
+
+    user.password = hash_password(new_password)
+    user.reset_password_code = None
+    user.reset_password_code_expiration = None
+    user.updated_at = datetime.utcnow()
+
+    db.add(user)
+    await db.commit()
+
+    return BaseResponse(
+        date=datetime.utcnow().strftime("%d-%B-%Y"),
+        status=status.HTTP_200_OK,
+        message="Password reset successfully.",
+        payload={"email": user.email}
+    )
+
+
+async def verify_user(email: str, verification_code: str, db: AsyncSession) -> BaseResponse:
+    stmt = select(User).where(User.email == email)
+    result = await db.execute(stmt)
+    user = result.scalars().first()
+
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+
+    if user.is_verified:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User is already verified.")
+
+    if user.verification_code != verification_code or user.verification_code_expiration < datetime.utcnow():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired verification code.")
+
+    user.is_verified = True
+    user.is_active = True
+    user.verification_code = None
+    user.verification_code_expiration = None
+    user.updated_at = datetime.utcnow()
+
+    db.add(user)
+    await db.commit()
+
+    return BaseResponse(
+        date=datetime.utcnow().strftime("%d-%B-%Y"),
+        status=status.HTTP_200_OK,
+        message="User verified successfully.",
+        payload={"email": user.email}
+    )
+
+
+def verify_password_reset_code(user: User, reset_code: str) -> bool:
+    return (
             user.reset_password_code == reset_code
             and user.reset_password_code_expiration > datetime.utcnow()
+    )
+
+
+def generate_code_expiration(minutes: int) -> datetime:
+    return datetime.utcnow() + timedelta(minutes=minutes)
+
+
+async def resend_verification_code(email: str, db: AsyncSession) -> BaseResponse:
+    user = await get_user_by_email(email, db)
+
+    if user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User is already verified."
         )
 
-    @staticmethod
-    def generate_code_expiration(minutes: int) -> datetime:
-        return datetime.utcnow() + timedelta(minutes=minutes)
+    new_verification_code = generate_verification_code()
+    expiration_time = generate_code_expiration(minutes=15)
 
-    @staticmethod
-    async def resend_verification_code(email: str, db: AsyncSession) -> BaseResponse:
-        user = await AuthService.get_user_by_email(email, db)
+    user.verification_code = new_verification_code
+    user.verification_code_expiration = expiration_time
+    user.updated_at = datetime.utcnow()
 
-        if user.is_verified:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="User is already verified."
-            )
-
-        new_verification_code = generate_verification_code()
-        expiration_time = AuthService.generate_code_expiration(minutes=15)
-
-        user.verification_code = new_verification_code
-        user.verification_code_expiration = expiration_time
-        user.updated_at = datetime.utcnow()
-
-        try:
-            db.add(user)
-            await db.commit()
-            await db.refresh(user)
-        except Exception as e:
-            logger.error(f"Error while resending verification code: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to resend verification code: {str(e)}"
-            )
-
-        return BaseResponse(
-            date=datetime.utcnow().strftime("%d-%B-%Y"),
-            status=status.HTTP_200_OK,
-            message="Verification code resent successfully.",
-            payload={"email": user.email, "verification_code": new_verification_code}
-        )
-
-    @staticmethod
-    async def get_user_by_email(email: str, db: AsyncSession) -> User:
-        stmt = select(User).where(User.email == email)
-        result = await db.execute(stmt)
-        user = result.scalars().first()
-
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found."
-            )
-
-        return user
-
-    @staticmethod
-    def set_access_cookies(response: JSONResponse, access_token: str, refresh_token: str):
-        response.set_cookie(
-            key="access_token",
-            value=f"Bearer {access_token}",
-            httponly=True,
-            secure=True,
-            samesite="Lax",
-            max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        )
-        response.set_cookie(
-            key="refresh_token",
-            value=f"Bearer {refresh_token}",
-            httponly=True,
-            secure=True,
-            samesite="Lax",
-            max_age=30 * 24 * 60 * 60,
-        )
-
-    @staticmethod
-    def unset_jwt_cookies(response: JSONResponse):
-        response.delete_cookie("access_token", httponly=True)
-        response.delete_cookie("refresh_token", httponly=True)
-
-    @staticmethod
-    async def register_new_user(create_user: UserCreateRequest, db: AsyncSession) -> BaseResponse:
-        if create_user.password != create_user.confirm_password:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Passwords do not match."
-            )
-
-        hashed_password = validate_and_hash_password(create_user.password)
-
-        stmt = select(User).where(User.email == create_user.email)
-        result = await db.execute(stmt)
-        if result.scalars().first():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered."
-            )
-
-        verification_code = generate_verification_code()
-        expiration_time = datetime.utcnow() + timedelta(minutes=15)
-
-        new_user = User(
-            uuid=str(uuid.uuid4()),
-            username=create_user.username,
-            email=create_user.email,
-            password=hashed_password,
-            verification_code=verification_code,
-            verification_code_expiration=expiration_time,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
-        )
-
-        db.add(new_user)
+    try:
+        db.add(user)
         await db.commit()
-        await db.refresh(new_user)
-
-        await AuthService.assign_user_role(new_user.id, "USER", db)
-
-        return BaseResponse(
-            date=datetime.utcnow().strftime("%d-%B-%Y"),
-            status=status.HTTP_201_CREATED,
-            message="User registered successfully. Please verify your email.",
-            payload={"email": new_user.email}
+        await db.refresh(user)
+    except Exception as e:
+        logger.error(f"Error while resending verification code: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to resend verification code: {str(e)}"
         )
 
-    @staticmethod
-    async def assign_user_role(user_id: int, role_name: str, db: AsyncSession) -> None:
-        stmt = select(Role).where(Role.name == role_name)
-        result = await db.execute(stmt)
-        role = result.scalars().first()
+    return BaseResponse(
+        date=datetime.utcnow().strftime("%d-%B-%Y"),
+        status=status.HTTP_200_OK,
+        message="Verification code resent successfully.",
+        payload={"email": user.email, "verification_code": new_verification_code}
+    )
 
-        if not role:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Role '{role_name}' not found."
-            )
 
-        user_role = UserRole(
-            user_id=user_id,
-            role_id=role.id,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+async def get_user_by_email(email: str, db: AsyncSession) -> User:
+    stmt = select(User).where(User.email == email)
+    result = await db.execute(stmt)
+    user = result.scalars().first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found."
         )
 
-        db.add(user_role)
-        await db.commit()
+    return user
+
+
+def set_access_cookies(response: JSONResponse, access_token: str, refresh_token: str):
+    response.set_cookie(
+        key="access_token",
+        value=f"Bearer {access_token}",
+        httponly=True,
+        secure=True,
+        samesite="Lax",
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=f"Bearer {refresh_token}",
+        httponly=True,
+        secure=True,
+        samesite="Lax",
+        max_age=30 * 24 * 60 * 60,
+    )
+
+
+def unset_jwt_cookies(response: JSONResponse):
+    response.delete_cookie("access_token", httponly=True)
+    response.delete_cookie("refresh_token", httponly=True)
+
+
+async def register_new_user(create_user: UserCreateRequest, db: AsyncSession) -> BaseResponse:
+    if create_user.password != create_user.confirm_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Passwords do not match."
+        )
+
+    hashed_password = validate_and_hash_password(create_user.password)
+
+    stmt = select(User).where(User.email == create_user.email)
+    result = await db.execute(stmt)
+    if result.scalars().first():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered."
+        )
+
+    verification_code = generate_verification_code()
+    expiration_time = datetime.utcnow() + timedelta(minutes=15)
+
+    new_user = User(
+        uuid=str(uuid.uuid4()),
+        username=create_user.username,
+        email=create_user.email,
+        password=hashed_password,
+        verification_code=verification_code,
+        verification_code_expiration=expiration_time,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+
+    db.add(new_user)
+    await db.commit()
+    await db.refresh(new_user)
+
+    await assign_user_role(new_user.id, "USER", db)
+
+    # Send the verification email
+    await send_verification_email(new_user.email, new_user.username, verification_code)
+
+    return BaseResponse(
+        date=datetime.utcnow().strftime("%d-%B-%Y"),
+        status=status.HTTP_201_CREATED,
+        message="User registered successfully. Please verify your email.",
+        payload={"email": new_user.email}
+    )
+
+
+async def assign_user_role(user_id: int, role_name: str, db: AsyncSession) -> None:
+    stmt = select(Role).where(Role.name == role_name)
+    result = await db.execute(stmt)
+    role = result.scalars().first()
+
+    if not role:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Role '{role_name}' not found."
+        )
+
+    user_role = UserRole(
+        user_id=user_id,
+        role_id=role.id,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+
+    db.add(user_role)
+    await db.commit()
+

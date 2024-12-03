@@ -17,6 +17,10 @@ from app.models.job import Job
 from app.models.job_scraping_log import JobScrapingLog
 from app.models.job_category import JobCategory
 from app.models.job_image import JobImage
+from app.models.school import School
+from app.models.major import Major
+from app.models.school_major import SchoolMajor
+from app.models.faculty import Faculty
 
 __all__ = ["Role",
            "UserRole",
@@ -35,6 +39,10 @@ __all__ = ["Role",
            "Job",
            "JobScrapingLog",
            "JobCategory",
-           "JobImage"
+           "JobImage",
+           "School",
+           "Major",
+           "SchoolMajor",
+           "Faculty"
            ]
 

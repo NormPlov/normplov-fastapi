@@ -51,6 +51,10 @@ class UserResponse(BaseModel):
     registered_at: Optional[datetime]
 
 
+class ResendResetPasswordRequest(BaseModel):
+    email: EmailStr
+
+
 class PasswordResetRequest(BaseModel):
     email: str
 

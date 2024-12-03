@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.v1.endpoints import auth, user, assessment, ai_recommendation, test, draft, feedback, job_category
+from app.api.v1.endpoints import auth, user, assessment, ai_recommendation, test, draft, feedback, job_category, school
 from app.api.v1.endpoints.technique_image import learning_style_image_router
 from app.core.database import engine, Base, get_db
 from app.core.init import init_roles_and_admin
@@ -50,3 +50,4 @@ app.include_router(learning_style_image_router, prefix="/api/v1/technique-image"
 app.include_router(draft.draft_router, prefix="/api/v1/draft", tags=["Draft"])
 app.include_router(feedback.feedback_router, prefix="/api/v1/feedback", tags=["Feedback"])
 app.include_router(job_category.job_category_router, prefix="/api/v1/job-categories", tags=["Job Categories"])
+app.include_router(school.school_router, prefix="/api/v1/schools", tags=["schools"])
