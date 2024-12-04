@@ -1,14 +1,18 @@
 import shutil
 import logging
 
-from fastapi import HTTPException, status, UploadFile
+from fastapi import HTTPException, status, UploadFile, Query, Depends
+from sqlalchemy import or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from datetime import datetime
+
+from app.dependencies import is_admin_user
 from app.models.user import User
 from app.schemas.payload import BaseResponse
 from app.schemas.user import UpdateUser, UserResponse
 from app.utils.format_date import format_date
+from app.utils.pagination import paginate_results
 from app.utils.password import verify_password, validate_password, hash_password
 from app.utils.verify import is_valid_uuid
 
@@ -285,34 +289,70 @@ async def update_user_by_uuid(uuid: str, user_update: UpdateUser, db: AsyncSessi
     )
 
 
-async def get_all_users(db: AsyncSession) -> BaseResponse:
-    query = select(User).where(User.is_deleted == False).order_by(User.created_at.desc())
-    result = await db.execute(query)
-    users = result.scalars().all()
+async def get_all_users(
+    db: AsyncSession,
+    page: int = 1,
+    page_size: int = 10,
+    search: str = None,
+    is_active: bool = None,
+    sort_by: str = "created_at",
+    sort_order: str = "desc",
+) -> BaseResponse:
+    try:
+        stmt = select(User).where(User.is_deleted == False)
 
-    return BaseResponse(
-        date=datetime.utcnow().strftime("%d-%B-%Y"),
-        status=status.HTTP_200_OK,
-        message="Users retrieved successfully.",
-        payload=[
-            {
-                "uuid": user.uuid,
-                "username": user.username,
-                "email": user.email,
-                "avatar": user.avatar,
-                "address": user.address,
-                "phone_number": user.phone_number,
-                "bio": user.bio,
-                "gender": user.gender,
-                "date_of_birth": format_date(user.date_of_birth),
-                "is_deleted": user.is_deleted,
-                "is_active": user.is_active,
-                "is_verified": user.is_verified,
-                "registered_at": user.registered_at,
-            }
-            for user in users
-        ]
-    )
+        if search:
+            stmt = stmt.where(
+                or_(
+                    User.username.ilike(f"%{search}%"),
+                    User.email.ilike(f"%{search}%"),
+                    User.address.ilike(f"%{search}%"),
+                )
+            )
+
+        if is_active is not None:
+            stmt = stmt.where(User.is_active == is_active)
+
+        if sort_by and hasattr(User, sort_by):
+            sort_column = getattr(User, sort_by)
+            stmt = stmt.order_by(sort_column.asc() if sort_order.lower() == "asc" else sort_column.desc())
+
+        result = await db.execute(stmt)
+        users = result.scalars().all()
+
+        paginated_result = paginate_results(users, page, page_size)
+
+        return BaseResponse(
+            date=datetime.utcnow().strftime("%d-%B-%Y"),
+            status=status.HTTP_200_OK,
+            message="Users retrieved successfully.",
+            payload={
+                "metadata": paginated_result["metadata"],
+                "users": [
+                    {
+                        "uuid": user.uuid,
+                        "username": user.username,
+                        "email": user.email,
+                        "avatar": user.avatar,
+                        "address": user.address,
+                        "phone_number": user.phone_number,
+                        "bio": user.bio,
+                        "gender": user.gender,
+                        "date_of_birth": format_date(user.date_of_birth),
+                        "is_deleted": user.is_deleted,
+                        "is_active": user.is_active,
+                        "is_verified": user.is_verified,
+                        "registered_at": format_date(user.registered_at),
+                    }
+                    for user in paginated_result["items"]
+                ],
+            },
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred while retrieving users: {str(e)}",
+        )
 
 
 async def get_user_by_uuid(uuid: str, db: AsyncSession) -> BaseResponse:

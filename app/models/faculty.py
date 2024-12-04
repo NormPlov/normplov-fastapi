@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from ..core.database import Base
@@ -9,7 +9,7 @@ class Faculty(Base):
     __tablename__ = "faculties"
 
     id = Column(Integer, primary_key=True, index=True)
-    uuid = Column(String, unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
+    uuid = Column(UUID(as_uuid=True), unique=True, nullable=False, default=uuid.uuid4)
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     school_id = Column(Integer, ForeignKey("schools.id", ondelete="CASCADE"), nullable=False)

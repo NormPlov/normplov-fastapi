@@ -13,7 +13,8 @@ from app.models.learning_style_study_technique import LearningStyleStudyTechniqu
 from app.models.dimension import Dimension
 from app.models.question import Question
 from app.models.dimension_career import DimensionCareer
-from app.schemas.learning_style_assessment import LearningStyleInput, LearningStyleChart, LearningStyleResponse
+from app.schemas.learning_style_assessment import LearningStyleInput, LearningStyleChart, LearningStyleResponse, \
+    Technique
 from app.services.test import create_user_test
 from ml_models.model_loader import load_vark_model
 import logging
@@ -21,6 +22,7 @@ import json
 
 logger = logging.getLogger(__name__)
 vark_model = load_vark_model()
+
 
 async def get_assessment_type_id(name: str, db: AsyncSession) -> int:
     stmt = select(AssessmentType.id).where(AssessmentType.name == name)
@@ -99,8 +101,8 @@ async def predict_learning_style(
             ],
         }
 
-        assessment_scores = []
         dimension_details = []
+        recommended_techniques = []
         related_careers = []
 
         for style, prob in row.items():
@@ -111,27 +113,14 @@ async def predict_learning_style(
 
             if dimension:
                 percentage = round(prob * 100, 2)
-                assessment_scores.append(
-                    UserAssessmentScore(
-                        uuid=str(uuid.uuid4()),
-                        user_id=current_user.id,
-                        user_test_id=user_test.id,
-                        assessment_type_id=assessment_type_id,
-                        dimension_id=dimension.id,
-                        score={
-                            "score": round(prob, 2),
-                            "percentage": percentage
-                        },
-                        created_at=datetime.utcnow(),
-                    )
-                )
 
-                techniques_stmt = select(LearningStyleStudyTechnique).where(
-                    LearningStyleStudyTechnique.dimension_id == dimension.id,
-                    LearningStyleStudyTechnique.is_deleted == False,
-                )
-                techniques = await db.execute(techniques_stmt)
-                techniques = techniques.scalars().all()
+                # Assign level based on score
+                if prob > 0.6:
+                    level = 3
+                elif prob >= 0.3:
+                    level = 2
+                else:
+                    level = 1
 
                 careers_stmt = (
                     select(DimensionCareer)
@@ -149,18 +138,29 @@ async def predict_learning_style(
                     {
                         "dimension_name": dimension.name,
                         "dimension_description": dimension.description,
-                        "techniques": [
-                            {
-                                "technique_name": t.technique_name,
-                                "category": t.category,
-                                "description": t.description,
-                            }
-                            for t in techniques
-                        ],
+                        "level": level,
                     }
                 )
 
-        db.add_all(assessment_scores)
+        # Fetch techniques for the highest-scoring learning style
+        highest_scoring_dimension_stmt = select(Dimension).where(Dimension.name == learning_style)
+        highest_scoring_dimension = await db.execute(highest_scoring_dimension_stmt)
+        highest_scoring_dimension = highest_scoring_dimension.scalars().first()
+
+        if highest_scoring_dimension:
+            techniques_stmt = select(LearningStyleStudyTechnique).where(
+                LearningStyleStudyTechnique.dimension_id == highest_scoring_dimension.id,
+                LearningStyleStudyTechnique.is_deleted == False,
+            )
+            techniques = await db.execute(techniques_stmt)
+            recommended_techniques = [
+                {
+                    "technique_name": t.technique_name,
+                    "category": t.category,
+                    "description": t.description,
+                }
+                for t in techniques.scalars().all()
+            ]
 
         unique_careers = list({c["career_name"]: c for c in related_careers}.values())
 
@@ -171,6 +171,7 @@ async def predict_learning_style(
             details=row.to_dict(),
             chart=LearningStyleChart(labels=chart_data["labels"], values=chart_data["values"]),
             dimensions=dimension_details,
+            recommended_techniques=recommended_techniques,
             related_careers=unique_careers,
         )
 

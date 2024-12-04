@@ -10,7 +10,97 @@ from app.models.user_feedback import UserFeedback
 from fastapi import HTTPException
 import logging
 
+from app.schemas.payload import BaseResponse
+from app.utils.pagination import paginate_results
+
 logger = logging.getLogger(__name__)
+
+
+async def get_user_feedback_by_uuid(user_uuid: str, db: AsyncSession) -> BaseResponse:
+
+    try:
+        stmt = select(UserFeedback).join(UserFeedback.user).where(
+            UserFeedback.user.uuid == user_uuid,
+            UserFeedback.is_deleted == False
+        ).options(joinedload(UserFeedback.user))
+
+        result = await db.execute(stmt)
+        feedbacks = result.scalars().all()
+
+        if not feedbacks:
+            return BaseResponse(
+                date=datetime.utcnow(),
+                status=404,
+                payload=None,
+                message="No feedback found for this user"
+            )
+
+        feedback_list = [
+            {
+                "feedback_uuid": str(feedback.uuid),
+                "username": feedback.user.username,
+                "email": feedback.user.email,
+                "avatar": feedback.user.avatar,
+                "feedback": feedback.feedback,
+                "created_at": feedback.created_at.strftime("%d-%B-%Y"),
+                "is_deleted": feedback.is_deleted,
+                "is_promoted": feedback.is_promoted,
+            }
+            for feedback in feedbacks
+        ]
+
+        return BaseResponse(
+            date=datetime.utcnow(),
+            status=200,
+            payload={"user_uuid": user_uuid, "feedbacks": feedback_list},
+            message="User feedbacks retrieved successfully"
+        )
+
+    except Exception as e:
+        logger.exception("Error fetching user feedback")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch user feedback: {str(e)}"
+        )
+
+
+async def delete_user_feedback(feedback_uuid: str, db: AsyncSession) -> BaseResponse:
+
+    try:
+        stmt = select(UserFeedback).where(
+            UserFeedback.uuid == feedback_uuid,
+            UserFeedback.is_deleted == False
+        )
+        result = await db.execute(stmt)
+        feedback = result.scalars().first()
+
+        if not feedback:
+            return BaseResponse(
+                date=datetime.utcnow(),
+                status=404,
+                payload=None,
+                message="Feedback not found"
+            )
+
+        feedback.is_deleted = True
+        feedback.updated_at = datetime.utcnow()
+
+        db.add(feedback)
+        await db.commit()
+
+        return BaseResponse(
+            date=datetime.utcnow(),
+            status=200,
+            payload={"feedback_uuid": feedback_uuid},
+            message="Feedback deleted successfully"
+        )
+    except Exception as e:
+        logger.exception("Error deleting feedback")
+        await db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete feedback: {str(e)}"
+        )
 
 
 async def get_promoted_feedbacks(db: AsyncSession) -> list:
@@ -39,15 +129,38 @@ async def get_promoted_feedbacks(db: AsyncSession) -> list:
         raise HTTPException(status_code=500, detail="Failed to fetch promoted feedbacks")
 
 
-async def get_all_feedbacks(db: AsyncSession) -> list:
+async def get_all_feedbacks(
+    db: AsyncSession,
+    page: int,
+    page_size: int,
+    search: str = None,
+    is_deleted: bool = None,
+    is_promoted: bool = None,
+    sort_by: str = "created_at",
+    sort_order: str = "desc",
+) -> dict:
     try:
-        stmt = (
-            select(UserFeedback)
-            .options(joinedload(UserFeedback.user))
-            .where(UserFeedback.is_deleted == False)
-        )
-        result = await db.execute(stmt)
+        query = select(UserFeedback).options(joinedload(UserFeedback.user))
+
+        filters = [UserFeedback.is_deleted == False]
+        if is_deleted is not None:
+            filters.append(UserFeedback.is_deleted == is_deleted)
+        if is_promoted is not None:
+            filters.append(UserFeedback.is_promoted == is_promoted)
+        if search:
+            filters.append(UserFeedback.feedback.ilike(f"%{search}%"))
+
+        query = query.where(*filters)
+
+        # Sorting
+        if sort_order.lower() == "desc":
+            query = query.order_by(getattr(UserFeedback, sort_by).desc())
+        else:
+            query = query.order_by(getattr(UserFeedback, sort_by).asc())
+
+        result = await db.execute(query)
         feedbacks = result.scalars().all()
+        paginated_feedbacks = paginate_results(feedbacks, page, page_size)
 
         return [
             {
@@ -60,8 +173,8 @@ async def get_all_feedbacks(db: AsyncSession) -> list:
                 "is_deleted": feedback.is_deleted,
                 "is_promoted": feedback.is_promoted,
             }
-            for feedback in feedbacks
-        ]
+            for feedback in paginated_feedbacks["items"]
+        ], paginated_feedbacks["metadata"]
     except Exception as e:
         logger.exception("Error fetching feedbacks")
         raise HTTPException(status_code=500, detail="Failed to fetch feedbacks")

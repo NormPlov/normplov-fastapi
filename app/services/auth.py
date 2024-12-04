@@ -13,7 +13,7 @@ from sqlalchemy.orm import joinedload
 from app.core.config import settings
 from app.models.user import User
 from app.schemas.payload import BaseResponse
-from app.schemas.user import UserCreateRequest
+from app.schemas.user import UserCreateRequest, VerifyResetPasswordRequest, VerifyResetPasswordResponse
 from app.utils.email import send_verification_email
 from app.utils.security import generate_verification_code, generate_reset_code
 from app.utils.password import hash_password, validate_password, validate_and_hash_password
@@ -23,47 +23,6 @@ from app.services.token import create_access_token, create_refresh_token
 
 logger = logging.getLogger(__name__)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-
-async def resend_reset_password_code(email: str, db: AsyncSession) -> BaseResponse:
-
-    stmt = select(User).where(User.email == email)
-    result = await db.execute(stmt)
-    user = result.scalars().first()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User with this email does not exist."
-        )
-
-    reset_code = generate_reset_code()
-    expiration_time = datetime.utcnow() + timedelta(minutes=15)
-
-    user.reset_password_code = reset_code
-    user.reset_password_code_expiration = expiration_time
-    user.updated_at = datetime.utcnow()
-
-    try:
-        db.add(user)
-        await db.commit()
-        await db.refresh(user)
-    except Exception as e:
-        logger.error(f"Error while resending reset password code: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to resend reset password code: {str(e)}"
-        )
-
-    # Send the reset password email
-    await send_verification_email(user.email, user.username, reset_code)
-
-    return BaseResponse(
-        date=datetime.utcnow().strftime("%d-%B-%Y"),
-        status=status.HTTP_200_OK,
-        message="Reset password code resent successfully.",
-        payload={"email": user.email, "reset_code": reset_code}
-    )
 
 
 async def get_or_create_user(db: AsyncSession, user_info: dict) -> dict:
@@ -293,6 +252,108 @@ async def reset_user_password(email: str, reset_code: str, new_password: str, db
         status=status.HTTP_200_OK,
         message="Password reset successfully.",
         payload={"email": user.email}
+    )
+
+
+async def verify_reset_password(
+    data: VerifyResetPasswordRequest,
+    db: AsyncSession
+) -> VerifyResetPasswordResponse:
+    try:
+        logger.info(f"Verifying reset password code for email: {data.email}")
+
+        # Retrieve the user by email
+        stmt = select(User).where(User.email == data.email)
+        result = await db.execute(stmt)
+        user = result.scalars().first()
+
+        if not user:
+            logger.warning(f"User not found with email: {data.email}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User with this email does not exist.",
+            )
+
+        # Validate reset code and expiration
+        if not user.reset_password_code:
+            logger.warning(f"No reset code found for user: {data.email}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No reset code is associated with this user.",
+            )
+
+        if user.reset_password_code != data.reset_code:
+            logger.warning(f"Invalid reset code for user: {data.email}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid reset code.",
+            )
+
+        if user.reset_password_code_expiration < datetime.utcnow():
+            logger.warning(f"Expired reset code for user: {data.email}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Reset code has expired.",
+            )
+
+        logger.info(f"Reset password code verified successfully for email: {data.email}")
+
+        return VerifyResetPasswordResponse(
+            date=datetime.utcnow().strftime("%d-%B-%Y"),
+            status=status.HTTP_200_OK,
+            message="Reset password code verified successfully.",
+            payload={"email": data.email},
+        )
+
+    except HTTPException as http_error:
+        logger.warning(f"HTTP Exception during verification: {http_error.detail}")
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error during verification: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred during reset password verification.",
+        )
+
+
+async def resend_reset_password_code(email: str, db: AsyncSession) -> BaseResponse:
+
+    stmt = select(User).where(User.email == email)
+    result = await db.execute(stmt)
+    user = result.scalars().first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User with this email does not exist."
+        )
+
+    reset_code = generate_reset_code()
+    expiration_time = datetime.utcnow() + timedelta(minutes=15)
+
+    user.reset_password_code = reset_code
+    user.reset_password_code_expiration = expiration_time
+    user.updated_at = datetime.utcnow()
+
+    try:
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+    except Exception as e:
+        logger.error(f"Error while resending reset password code: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to resend reset password code: {str(e)}"
+        )
+
+    # Send the reset password email
+    await send_verification_email(user.email, user.username, reset_code)
+
+    return BaseResponse(
+        date=datetime.utcnow().strftime("%d-%B-%Y"),
+        status=status.HTTP_200_OK,
+        message="Reset password code resent successfully.",
+        payload={"email": user.email, "reset_code": reset_code}
     )
 
 

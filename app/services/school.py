@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.school import School
 from app.schemas.payload import BaseResponse
@@ -11,29 +11,71 @@ from sqlalchemy.future import select
 
 import logging
 
+from app.utils.pagination import paginate_results
+
 logger = logging.getLogger(__name__)
 
 
-async def load_all_schools(db: AsyncSession, page: int = 1, limit: int = 10):
+async def load_all_schools(
+    db: AsyncSession,
+    page: int = 1,
+    page_size: int = 10,
+    search: str = None,
+    type: str = None,
+    sort_by: str = "created_at",
+    sort_order: str = "desc",
+) -> tuple:
 
     try:
-        offset = (page - 1) * limit
+        query = select(School).where(School.is_deleted == False)
 
-        stmt = select(School).where(School.is_deleted == False).offset(offset).limit(limit)
-        result = await db.execute(stmt)
+        if search:
+            search_filter = or_(
+                School.kh_name.ilike(f"%{search}%"),
+                School.en_name.ilike(f"%{search}%"),
+                School.location.ilike(f"%{search}%"),
+                School.description.ilike(f"%{search}%"),
+            )
+            query = query.where(search_filter)
+
+        if type:
+            query = query.where(School.type == type)
+
+        if hasattr(School, sort_by):
+            sort_column = getattr(School, sort_by)
+            if sort_order.lower() == "asc":
+                query = query.order_by(sort_column.asc())
+            else:
+                query = query.order_by(sort_column.desc())
+
+        # Load all schools from the database
+        result = await db.execute(query)
         schools = result.scalars().all()
 
-        total_stmt = select(func.count(School.id)).where(School.is_deleted == False)
-        total_result = await db.execute(total_stmt)
+        paginated_schools = paginate_results(schools, page, page_size)
+
+        total_query = select(func.count(School.id)).where(School.is_deleted == False)
+        if search:
+            total_query = total_query.where(search_filter)
+        if type:
+            total_query = total_query.where(School.type == type)
+
+        total_result = await db.execute(total_query)
         total_schools = total_result.scalar()
 
-        payload = [
+        metadata = {
+            "page": page,
+            "page_size": page_size,
+            "total_items": total_schools,
+            "total_pages": (total_schools + page_size - 1) // page_size,
+        }
+
+        formatted_schools = [
             {
-                "id": school.id,
                 "uuid": str(school.uuid),
                 "kh_name": school.kh_name,
                 "en_name": school.en_name,
-                "type": school.type,
+                "type": school.type.value,
                 "logo_url": school.logo_url,
                 "cover_image": school.cover_image,
                 "location": school.location,
@@ -46,23 +88,13 @@ async def load_all_schools(db: AsyncSession, page: int = 1, limit: int = 10):
                 "description": school.description,
                 "mission": school.mission,
                 "vision": school.vision,
-                "created_at": school.created_at,
-                "updated_at": school.updated_at,
+                "created_at": school.created_at.strftime("%d-%B-%Y"),
+                "updated_at": school.updated_at.strftime("%d-%B-%Y"),
             }
-            for school in schools
+            for school in paginated_schools["items"]
         ]
 
-        return BaseResponse(
-            date=datetime.utcnow(),
-            status=status.HTTP_200_OK,
-            payload={
-                "schools": payload,
-                "page": page,
-                "limit": limit,
-                "total": total_schools,
-            },
-            message="Schools retrieved successfully.",
-        )
+        return formatted_schools, metadata
     except Exception as e:
         logger.error(f"Error loading schools: {e}")
         raise HTTPException(
@@ -161,7 +193,6 @@ async def create_school(data: CreateSchoolRequest, db: AsyncSession):
             detail="A school with this name already exists.",
         )
 
-    # Create school instance
     new_school = School(
         uuid=uuid4(),
         kh_name=data.kh_name,

@@ -1,23 +1,23 @@
 import uuid
 
-from sqlalchemy import Column, Integer, String, Boolean, Enum, DateTime, Float, Text, func
+from sqlalchemy import Column, Integer, String, Boolean, Enum, DateTime, Float, Text, func, UUID
 from sqlalchemy.orm import relationship
 from enum import Enum as PyEnum
 from ..core.database import Base
 
 
 class DegreeType(PyEnum):
-    ASSOCIATE = "Associate"
-    BACHELOR = "Bachelor"
-    MASTER = "Master"
-    PHD = "PhD"
+    ASSOCIATE = "ASSOCIATE"
+    BACHELOR = "BACHELOR"
+    MASTER = "MASTER"
+    PHD = "PHD"
 
 
 class Major(Base):
     __tablename__ = "majors"
 
     id = Column(Integer, primary_key=True, index=True)
-    uuid = Column(String, unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
+    uuid = Column(UUID(as_uuid=True), unique=True, nullable=False, default=uuid.uuid4)
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     fee_per_year = Column(Float, nullable=True)
@@ -30,3 +30,4 @@ class Major(Base):
 
     # Relationships
     school_majors = relationship("SchoolMajor", back_populates="major", cascade="all, delete-orphan")
+    careers = relationship("CareerMajor", back_populates="major", cascade="all, delete-orphan")

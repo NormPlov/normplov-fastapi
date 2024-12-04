@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.dependencies import is_admin_user
@@ -19,13 +19,43 @@ from app.schemas.school import (
 school_router = APIRouter()
 
 
-@school_router.get("/", response_model=BaseResponse)
-async def get_all_schools(
+@school_router.get(
+    "/",
+    summary="Fetch all schools",
+    tags=["School"],
+    response_model=BaseResponse,
+    dependencies=[Depends(is_admin_user)],
+)
+async def fetch_all_schools_route(
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(10, ge=1, le=100, description="Number of items per page"),
+    search: str = Query(None, description="Search by Khmer name, English name, or description"),
+    type: str = Query(None, description="Filter by school type"),
+    sort_by: str = Query("created_at", description="Field to sort by"),
+    sort_order: str = Query("desc", description="Sort order: 'asc' or 'desc'"),
     db: AsyncSession = Depends(get_db),
-    page: int = 1,
-    limit: int = 10,
 ):
-    return await load_all_schools(db, page, limit)
+    try:
+        schools, metadata = await load_all_schools(
+            db=db,
+            page=page,
+            page_size=page_size,
+            search=search,
+            type=type,
+            sort_by=sort_by,
+            sort_order=sort_order,
+        )
+        return BaseResponse(
+            date=datetime.utcnow().strftime("%d-%B-%Y"),
+            status=200,
+            message="Schools retrieved successfully",
+            payload={"schools": schools, "metadata": metadata},
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred while retrieving schools: {str(e)}",
+        )
 
 
 @school_router.put("/{school_uuid}", response_model=BaseResponse)

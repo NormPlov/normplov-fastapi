@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, status, UploadFile, File
+from fastapi import APIRouter, Depends, status, UploadFile, File, Query
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
@@ -129,13 +129,26 @@ async def update_user_by_uuid_route(uuid: str, user_update: UpdateUser, db: Asyn
     return await update_user_by_uuid(uuid, user_update, db)
 
 
-# Get all users
-@user_router.get("/list", response_model=list[UserResponse])
+@user_router.get("/list", response_model=BaseResponse)
 async def list_all_users_route(
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(10, ge=1, le=100, description="Number of items per page"),
+    search: str = Query(None, description="Search query for filtering users"),
+    is_active: bool = Query(None, description="Filter by active status"),
+    sort_by: str = Query("created_at", description="Field to sort by"),
+    sort_order: str = Query("desc", description="Sort order: 'asc' or 'desc'"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(is_admin_user),
+    current_user: User = Depends(is_admin_user),  # Ensure only admins can access
 ):
-    return await get_all_users(db, current_user)
+    return await get_all_users(
+        db=db,
+        page=page,
+        page_size=page_size,
+        search=search,
+        is_active=is_active,
+        sort_by=sort_by,
+        sort_order=sort_order,
+    )
 
 
 # Retrieve user by UUID

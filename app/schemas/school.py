@@ -53,7 +53,6 @@ class UpdateSchoolRequest(BaseModel):
 
 
 class SchoolResponse(BaseModel):
-    id: int
     uuid: str
     kh_name: str
     en_name: str
@@ -74,9 +73,6 @@ class SchoolResponse(BaseModel):
     created_at: str
     updated_at: str
 
-    class Config:
-        from_attributes = True
-
     @validator("uuid", pre=True)
     def convert_uuid_to_str(cls, value: UUID) -> str:
         if isinstance(value, UUID):
@@ -86,3 +82,6 @@ class SchoolResponse(BaseModel):
     @validator("created_at", "updated_at", pre=True)
     def format_datetime(cls, value: datetime) -> str:
         return format_date(value) if value else None
+
+    class Config:
+        from_attributes = True

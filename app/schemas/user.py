@@ -55,15 +55,28 @@ class ResendResetPasswordRequest(BaseModel):
     email: EmailStr
 
 
+class VerifyResetPasswordResponse(BaseModel):
+    date: str = Field(...)
+    status: int = Field(...)
+    message: str = Field(...)
+    payload: Optional[dict] = Field(None)
+
+
+class VerifyResetPasswordRequest(BaseModel):
+    email: EmailStr = Field(...)
+    reset_code: str = Field(...)
+
+
 class PasswordResetRequest(BaseModel):
     email: str
 
 
+
 class PasswordResetComplete(BaseModel):
     email: EmailStr
-    reset_code: str = Field(..., min_length=6, max_length=6, description="Password reset token.")
-    new_password: str = Field(..., min_length=8, description="New password.")
-    confirm_password: str = Field(..., min_length=8, description="Confirm new password.")
+    reset_code: str = Field(..., min_length=6, max_length=6)
+    new_password: str = Field(..., min_length=8)
+    confirm_password: str = Field(..., min_length=8)
 
     @validator("confirm_password")
     def passwords_match(cls, confirm_password: str, values: Any):

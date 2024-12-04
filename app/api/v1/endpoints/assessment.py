@@ -1,7 +1,10 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.dependencies import get_current_user_data
+from app.schemas.payload import BaseResponse
 from app.schemas.personality_assessment import PersonalityAssessmentResponse, PersonalityAssessmentInput
 from app.schemas.skill_assessment import SkillAssessmentInput, SkillAssessmentResponse
 from app.schemas.learning_style_assessment import LearningStyleInput, LearningStyleResponse
@@ -67,10 +70,10 @@ async def predict_skills_endpoint(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# API Endpoint for Learning Style Assessment✨
+# Updated Endpoint for Predicting Learning Style with BaseResponse
 @assessment_router.post(
     "/predict-learning-style",
-    response_model=LearningStyleResponse,
+    response_model=BaseResponse,
     summary="Predict user's learning style",
     description="Analyze learning style based on user responses. Optionally associate results with a test UUID."
 )
@@ -81,11 +84,23 @@ async def predict_learning_style_route(
     current_user: User = Depends(get_current_user_data),
 ):
     try:
-        # Use query parameter `test_uuid` if provided, otherwise use the one from the body
         final_test_uuid = test_uuid or data.test_uuid
-        return await predict_learning_style(data, final_test_uuid, db, current_user)
+
+        learning_style_result = await predict_learning_style(data, final_test_uuid, db, current_user)
+
+        return BaseResponse(
+            date=datetime.utcnow().strftime("%d-%B-%Y"),
+            status=200,
+            payload=learning_style_result,
+            message="Learning style predicted successfully.",
+        )
+    except HTTPException as e:
+        raise e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
 
 
 # API Endpoint for Interest Assessment✨

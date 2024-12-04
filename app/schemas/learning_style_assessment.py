@@ -30,7 +30,7 @@ class Technique(BaseModel):
 class DimensionDetail(BaseModel):
     dimension_name: str
     dimension_description: str
-    techniques: List[Technique]
+    level: int
 
 
 class LearningStyleChart(BaseModel):
@@ -45,4 +45,5 @@ class LearningStyleResponse(BaseModel):
     details: Dict[str, float]
     chart: LearningStyleChart
     dimensions: List[DimensionDetail]
+    recommended_techniques: List[Technique]
     related_careers: List[Dict[str, str]]

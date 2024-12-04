@@ -16,7 +16,7 @@ from app.services.auth import (
     verify_user, unset_jwt_cookies,
     resend_verification_code,
     register_new_user,
-    perform_login
+    perform_login, verify_reset_password
 )
 from app.schemas.user import (
     UserCreateRequest,
@@ -24,7 +24,7 @@ from app.schemas.user import (
     PasswordResetRequest,
     PasswordResetComplete,
     VerifyRequest,
-    ResendVerificationRequest, ResendResetPasswordRequest
+    ResendVerificationRequest, ResendResetPasswordRequest, VerifyResetPasswordResponse, VerifyResetPasswordRequest
 )
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
@@ -39,23 +39,6 @@ from app.schemas.payload import BaseResponse
 from app.services.auth import resend_reset_password_code
 
 auth_router = APIRouter()
-
-
-@auth_router.post("/resend-reset-password", response_model=BaseResponse)
-async def resend_reset_password_code_endpoint(
-    request: ResendResetPasswordRequest,
-    db: AsyncSession = Depends(get_db)
-):
-    try:
-        response = await resend_reset_password_code(request.email, db)
-        return response
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while resending the reset password code: {str(e)}",
-        )
 
 
 @auth_router.get("/google")
@@ -115,6 +98,35 @@ async def reset_password(
         db=db
     )
     return response
+
+
+@auth_router.post(
+    "/verify-reset-password",
+    response_model=VerifyResetPasswordResponse,
+    status_code=status.HTTP_200_OK
+)
+async def verify_reset_password_route(
+    request: VerifyResetPasswordRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    return await verify_reset_password(request, db)
+
+
+@auth_router.post("/resend-reset-password", response_model=BaseResponse)
+async def resend_reset_password_code_endpoint(
+    request: ResendResetPasswordRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    try:
+        response = await resend_reset_password_code(request.email, db)
+        return response
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred while resending the reset password code: {str(e)}",
+        )
 
 
 @auth_router.post("/password-reset-request", response_model=BaseResponse)

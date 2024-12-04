@@ -1,9 +1,10 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, status, HTTPException
+from fastapi import APIRouter, Depends, status, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
-from app.dependencies import get_current_user_data
+from app.dependencies import get_current_user_data, is_admin_user
+from app.schemas.payload import BaseResponse
 from app.services.feedback import (
     create_feedback,
     get_all_feedbacks, promote_feedback, get_promoted_feedbacks,
@@ -62,11 +63,30 @@ async def promote_user_feedback(
     "/all",
     summary="Fetch all feedbacks",
     tags=["Feedback"],
-    response_model=AllFeedbacksResponse,
+    response_model=BaseResponse,
+    dependencies=[Depends(is_admin_user)],
 )
-async def fetch_all_feedbacks(db: AsyncSession = Depends(get_db)):
-    feedbacks = await get_all_feedbacks(db)
-    return AllFeedbacksResponse(
+async def fetch_all_feedbacks_route(
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(10, ge=1, le=100, description="Number of items per page"),
+    search: str = Query(None, description="Search feedback content or username"),
+    is_deleted: bool = Query(None, description="Filter by deletion status"),
+    is_promoted: bool = Query(None, description="Filter by promotion status"),
+    sort_by: str = Query("created_at", description="Field to sort by"),
+    sort_order: str = Query("desc", description="Sort order: 'asc' or 'desc'"),
+    db: AsyncSession = Depends(get_db),
+):
+    feedbacks = await get_all_feedbacks(
+        db=db,
+        page=page,
+        page_size=page_size,
+        search=search,
+        is_deleted=is_deleted,
+        is_promoted=is_promoted,
+        sort_by=sort_by,
+        sort_order=sort_order,
+    )
+    return BaseResponse(
         date=datetime.utcnow().strftime("%d-%B-%Y"),
         status=200,
         message="Feedbacks retrieved successfully",

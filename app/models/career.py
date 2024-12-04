@@ -23,3 +23,4 @@ class Career(Base):
     holland_code = relationship("HollandCode", back_populates="careers")
     dimension_careers = relationship("DimensionCareer", back_populates="career")
     value_category = relationship("ValueCategory", back_populates="careers")
+    majors = relationship("CareerMajor", back_populates="career", cascade="all, delete-orphan")
