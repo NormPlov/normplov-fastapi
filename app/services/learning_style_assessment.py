@@ -35,7 +35,7 @@ async def get_assessment_type_id(name: str, db: AsyncSession) -> int:
 
 
 async def predict_learning_style(
-    data: LearningStyleInput,
+    data: dict,
     test_uuid: str | None,
     db: AsyncSession,
     current_user,
@@ -49,7 +49,12 @@ async def predict_learning_style(
         result = await db.execute(stmt)
         questions = result.scalars().all()
 
-        normalized_answers = {key.replace("/", ""): value for key, value in data.responses.items()}
+        # If data is a dictionary with responses, directly access it
+        if isinstance(data, dict):
+            normalized_answers = {key.replace("/", ""): value for key, value in data.items()}
+        else:
+            # If data is an object with 'responses' attribute
+            normalized_answers = {key.replace("/", ""): value for key, value in data.responses.items()}
 
         input_data_dict = {}
         missing_questions = []

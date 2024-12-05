@@ -2,9 +2,10 @@ from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel, Field, EmailStr, HttpUrl, validator
-from typing import Optional
+from typing import Optional, List
 from enum import Enum as PyEnum
 
+from app.schemas.major import MajorResponse
 from app.utils.format_date import format_date
 
 
@@ -15,22 +16,29 @@ class SchoolType(PyEnum):
     MAJORS_COURSES = "MAJORS_COURSES"
 
 
+class SchoolMajorsResponse(BaseModel):
+    school_uuid: str = Field(...)
+    majors: List[MajorResponse] = Field(...)
+    metadata: dict = Field(...)
+
+
 class CreateSchoolRequest(BaseModel):
-    kh_name: str = Field(..., max_length=255, description="Khmer name of the school")
-    en_name: str = Field(..., max_length=255, description="English name of the school")
-    type: SchoolType = Field(..., description="Type of the school")
-    logo_url: Optional[HttpUrl] = Field(None, description="Logo URL of the school")
-    cover_image: Optional[HttpUrl] = Field(None, description="Cover image URL of the school")
-    location: Optional[str] = Field(None, max_length=500, description="Location of the school")
-    phone: Optional[str] = Field(None, max_length=15, description="Phone number of the school")
-    lowest_price: Optional[float] = Field(None, ge=0, description="Lowest tuition fee offered by the school")
-    highest_price: Optional[float] = Field(None, ge=0, description="Highest tuition fee offered by the school")
-    map: Optional[HttpUrl] = Field(None, description="Google Maps link of the school location")
-    email: Optional[EmailStr] = Field(None, description="Contact email of the school")
-    website: Optional[HttpUrl] = Field(None, description="Website of the school")
-    description: Optional[str] = Field(None, max_length=2000, description="Description of the school")
-    mission: Optional[str] = Field(None, max_length=2000, description="Mission statement of the school")
-    vision: Optional[str] = Field(None, max_length=2000, description="Vision statement of the school")
+    province_uuid: str = Field(...)
+    kh_name: str = Field(..., max_length=255)
+    en_name: str = Field(..., max_length=255)
+    type: SchoolType = Field(...)
+    logo_url: Optional[HttpUrl] = Field(None)
+    cover_image: Optional[HttpUrl] = Field(None)
+    location: Optional[str] = Field(None, max_length=500)
+    phone: Optional[str] = Field(None, max_length=15)
+    lowest_price: Optional[float] = Field(None, ge=0)
+    highest_price: Optional[float] = Field(None, ge=0)
+    map: Optional[HttpUrl] = Field(None)
+    email: Optional[EmailStr] = Field(None)
+    website: Optional[HttpUrl] = Field(None)
+    description: Optional[str] = Field(None, max_length=2000)
+    mission: Optional[str] = Field(None, max_length=2000)
+    vision: Optional[str] = Field(None, max_length=2000)
 
 
 class UpdateSchoolRequest(BaseModel):
@@ -54,6 +62,7 @@ class UpdateSchoolRequest(BaseModel):
 
 class SchoolResponse(BaseModel):
     uuid: str
+    province_name: Optional[str]
     kh_name: str
     en_name: str
     type: str

@@ -3,11 +3,32 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import get_db, is_admin_user
 from app.models import User
 from app.schemas.major import CreateMajorRequest
-from app.services.major import create_major, delete_major_by_uuid
+from app.services.major import create_major, delete_major_by_uuid, get_careers_for_major
 from app.schemas.payload import BaseResponse
 from datetime import datetime
 
 major_router = APIRouter()
+
+
+@major_router.get(
+    "/{major_uuid}/careers",
+    response_model=BaseResponse,
+    summary="Fetch careers for a specific major",
+    description="Retrieve all careers associated with a specific major UUID."
+)
+async def fetch_careers_for_major(
+    major_uuid: str,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        return await get_careers_for_major(major_uuid, db)
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {str(e)}",
+        )
 
 
 @major_router.delete("/{major_uuid}", response_model=BaseResponse)

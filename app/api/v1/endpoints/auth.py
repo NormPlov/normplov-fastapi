@@ -1,10 +1,15 @@
 import logging
 
-from fastapi import APIRouter, BackgroundTasks, status, Request
+from fastapi import APIRouter, BackgroundTasks, status, Request, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordBearer
 from datetime import datetime
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.config import settings
+from app.core.database import get_db
+from app.schemas.payload import BaseResponse
 from app.schemas.token import RefreshTokenRequest
 from app.services.oauth import oauth
 from app.utils.email import send_verification_email, send_reset_email
@@ -16,7 +21,7 @@ from app.services.auth import (
     verify_user, unset_jwt_cookies,
     resend_verification_code,
     register_new_user,
-    perform_login, verify_reset_password
+    perform_login, verify_reset_password, resend_reset_password_code
 )
 from app.schemas.user import (
     UserCreateRequest,
@@ -29,15 +34,6 @@ from app.schemas.user import (
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 logger = logging.getLogger(__name__)
-auth_router = APIRouter()
-
-
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.database import get_db
-from app.schemas.payload import BaseResponse
-from app.services.auth import resend_reset_password_code
-
 auth_router = APIRouter()
 
 
@@ -136,7 +132,9 @@ async def request_password_reset_handler(
     db: AsyncSession = Depends(get_db)
 ):
     response = await generate_password_reset_code(data.email, db)
-    background_tasks.add_task(send_reset_email, data.email, response.payload["reset_code"])
+    username = response.payload.get("username")
+    reset_code = response.payload["reset_code"]
+    background_tasks.add_task(send_reset_email, data.email, reset_code, username)
     return response
 
 

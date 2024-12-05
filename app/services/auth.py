@@ -490,7 +490,7 @@ async def register_new_user(create_user: UserCreateRequest, db: AsyncSession) ->
         )
 
     verification_code = generate_verification_code()
-    expiration_time = datetime.utcnow() + timedelta(minutes=15)
+    expiration_time = datetime.utcnow() + timedelta(minutes=3)
 
     new_user = User(
         uuid=str(uuid.uuid4()),

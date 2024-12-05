@@ -18,7 +18,8 @@ from app.api.v1.endpoints import (
     job_category,
     school,
     faculty,
-    major
+    major,
+    job
 )
 
 
@@ -54,15 +55,16 @@ app.add_middleware(
 )
 
 
-app.include_router(auth.auth_router, prefix="/api/v1/auth", tags=["auth"])
-app.include_router(user.user_router, prefix="/api/v1/user", tags=["user"])
-app.include_router(assessment.assessment_router, prefix="/api/v1/assessment", tags=["assessment"])
-app.include_router(test.test_router, prefix="/api/v1/test", tags=["test"])
-app.include_router(ai_recommendation.ai_recommendation_router, prefix="/api/v1/ai", tags=["recommendations"])
+app.include_router(auth.auth_router, prefix="/api/v1/auth", tags=["Auth"])
+app.include_router(user.user_router, prefix="/api/v1/user", tags=["User"])
+app.include_router(assessment.assessment_router, prefix="/api/v1/assessment", tags=["Assessment"])
+app.include_router(test.test_router, prefix="/api/v1/test", tags=["Test"])
+app.include_router(ai_recommendation.ai_recommendation_router, prefix="/api/v1/ai", tags=["Recommendation"])
 app.include_router(learning_style_image_router, prefix="/api/v1/technique-image", tags=["Learning Style Images"])
 app.include_router(draft.draft_router, prefix="/api/v1/draft", tags=["Draft"])
 app.include_router(feedback.feedback_router, prefix="/api/v1/feedback", tags=["Feedback"])
 app.include_router(job_category.job_category_router, prefix="/api/v1/job-categories", tags=["Job Categories"])
-app.include_router(school.school_router, prefix="/api/v1/schools", tags=["schools"])
-app.include_router(faculty.faculty_router, prefix="/api/v1/faculties", tags=["faculties"])
-app.include_router(major.major_router, prefix="/api/v1/majors", tags=["majors"])
+app.include_router(school.school_router, prefix="/api/v1/schools", tags=["School"])
+app.include_router(faculty.faculty_router, prefix="/api/v1/faculties", tags=["Faculty"])
+app.include_router(major.major_router, prefix="/api/v1/majors", tags=["Major"])
+app.include_router(job.job_router, prefix="/api/v1/jobs", tags=["Job"])

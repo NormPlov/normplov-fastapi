@@ -240,7 +240,6 @@ async def get_test_details(test_uuid: str, user_id: int, db: AsyncSession):
 
 async def create_user_test(db: AsyncSession, user_id: int, test_name_prefix: str) -> UserTest:
     try:
-        # Query the latest test name to determine the next index
         stmt = text(
             """
             SELECT name
@@ -283,6 +282,7 @@ async def create_user_test(db: AsyncSession, user_id: int, test_name_prefix: str
 
     except Exception as e:
         raise RuntimeError(f"Failed to create user test: {e}")
+
 
 
 async def get_assessment_responses_by_test(

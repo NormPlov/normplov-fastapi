@@ -1,24 +1,25 @@
 from pydantic import BaseModel, Field
-from typing import Any, Dict
+from typing import Dict, Optional
 
 
-class DraftCreateUpdateInput(BaseModel):
-    assessment_type_uuid: str = Field(..., description="UUID of the assessment type.")
-    response_data: Dict[str, Any] = Field(
-        ..., description="Data representing the draft responses."
-    )
-
-    model_config = {
-        "arbitrary_types_allowed": True
-    }
+class DraftItem(BaseModel):
+    uuid: str = Field(...)
+    draft_name: str = Field(...)
+    assessment_name: str = Field(...)
+    created_at: str = Field(...)
+    updated_at: Optional[str] = Field(None)
+    response_data: Dict = Field(...)
 
 
-class DraftResponse(BaseModel):
-    draft_uuid: str
-    test_uuid: str
-    response_data: Any
-    message: str
+class SaveDraftRequest(BaseModel):
+    response_data: Dict = Field(...)
+    test_uuid: Optional[str] = Field(None)
 
 
-class DraftListResponse(BaseModel):
-    drafts: list[DraftResponse]
+class SaveDraftResponse(BaseModel):
+    uuid: str = Field(...)
+    message: str = Field(...)
+    draft_name: str = Field(...)
+
+
+

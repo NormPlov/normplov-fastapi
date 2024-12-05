@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
@@ -8,15 +10,31 @@ from datetime import datetime
 from app.services.school import (
     create_school,
     delete_school,
-    update_school, load_all_schools
+    update_school, load_all_schools, get_majors_for_school
 )
 from app.schemas.school import (
     CreateSchoolRequest,
     SchoolResponse,
     UpdateSchoolRequest
 )
+from app.utils.format_date import format_date
 
 school_router = APIRouter()
+
+
+@school_router.get(
+    "/{school_uuid}/majors",
+    response_model=BaseResponse,
+    summary="Get majors for a school",
+    description="Fetch all majors offered by a specific school using the school UUID."
+)
+async def fetch_majors_for_school(
+    school_uuid: str,
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(10, ge=1, le=100, description="Number of items per page"),
+    db: AsyncSession = Depends(get_db)
+):
+    return await get_majors_for_school(school_uuid, db, page, page_size)
 
 
 @school_router.get(
@@ -31,6 +49,7 @@ async def fetch_all_schools_route(
     page_size: int = Query(10, ge=1, le=100, description="Number of items per page"),
     search: str = Query(None, description="Search by Khmer name, English name, or description"),
     type: str = Query(None, description="Filter by school type"),
+    province_uuid: str = Query(None, description="Filter by province uuid"),
     sort_by: str = Query("created_at", description="Field to sort by"),
     sort_order: str = Query("desc", description="Sort order: 'asc' or 'desc'"),
     db: AsyncSession = Depends(get_db),
@@ -42,6 +61,7 @@ async def fetch_all_schools_route(
             page_size=page_size,
             search=search,
             type=type,
+            province_uuid=province_uuid,
             sort_by=sort_by,
             sort_order=sort_order,
         )
@@ -107,8 +127,9 @@ async def create_school_endpoint(
 ):
     try:
         school = await create_school(data, db)
+
         return BaseResponse(
-            date=datetime.utcnow(),
+            date=format_date(datetime.utcnow()),
             status=status.HTTP_201_CREATED,
             payload=SchoolResponse.from_orm(school),
             message="School created successfully.",
@@ -116,9 +137,8 @@ async def create_school_endpoint(
     except HTTPException as e:
         raise e
     except Exception as e:
-        return BaseResponse(
-            date=datetime.utcnow(),
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            payload=None,
-            message=f"An error occurred while creating the school: {str(e)}",
+        logging.exception("Error occurred while creating the school.")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {str(e)}"
         )

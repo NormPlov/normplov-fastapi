@@ -6,6 +6,18 @@ from typing import Optional, List
 from enum import Enum
 
 
+class CareerResponse(BaseModel):
+    uuid: str = Field(...)
+    name: str = Field(...)
+    created_at: str = Field(...)
+    updated_at: Optional[str] = Field(None)
+
+
+class MajorCareersResponse(BaseModel):
+    major_uuid: str = Field(...)
+    careers: List[CareerResponse] = Field(...)
+
+
 class DegreeTypeEnum(str, Enum):
     ASSOCIATE = "ASSOCIATE"
     BACHELOR = "BACHELOR"

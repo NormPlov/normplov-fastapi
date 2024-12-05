@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float, Text, Enum
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float, Text, Enum, ForeignKey
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
@@ -19,6 +19,7 @@ class School(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     uuid = Column(UUID(as_uuid=True), unique=True, nullable=False, default=uuid.uuid4)
+    province_id = Column(Integer, ForeignKey("provinces.id", ondelete="SET NULL"), nullable=True)  # New relationship
     kh_name = Column(String, nullable=False)
     en_name = Column(String, nullable=False)
     type = Column(Enum(SchoolType, name="school_type"), nullable=True)
@@ -39,5 +40,6 @@ class School(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # Relationships
+    province = relationship("Province", back_populates="schools")
     majors = relationship("SchoolMajor", back_populates="school", cascade="all, delete-orphan")
     faculties = relationship("Faculty", back_populates="school", cascade="all, delete-orphan")

@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     DB_PORT: str = Field(default="5433", env="POSTGRESQL_PORT")
 
     # JWT Configuration
-    JWT_SECRET: str = Field(default="supersecretkey", env="JWT_SECRET")
+    JWT_SECRET: str = Field(default="-vv7YfCkPifps-Vg7sc-dOXHzImbV3sN8NJN-vfTiBuDCmzTtCVHMHGNhQJ5FsvIbk3Q8hyKClFRW_DnZ7uswQ", env="JWT_SECRET")
     JWT_ALGORITHM: str = Field(default="HS256", env="JWT_ALGORITHM")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=3, env="JWT_TOKEN_EXPIRE_MINUTES")
     SECRET_KEY: str = Field(default="8d5f01d7a83a4c8abf0e3cb7...3c08a3f6f0e5d3d62c12345", env="SECRET_KEY")
@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str = Field(..., env="GOOGLE_CLIENT_SECRET")
     GOOGLE_REDIRECT_URI: str = Field(default="http://localhost:8000/auth/google/callback", env="GOOGLE_REDIRECT_URI")
 
-    # Google API Key
+    # Google Generative AI Key
     GOOGLE_GENERATIVE_AI_KEY: str = Field(default="AIzaSyBs8q5cZDyFDPVqiN5JJ8loS_Qt2SiHsRk", env="GOOGLE_GENERATIVE_AI_KEY")
 
     # Database URL Configuration

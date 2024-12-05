@@ -1,15 +1,15 @@
 from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from app.core.database import Base
+from sqlalchemy.dialects.postgresql import UUID
 import uuid
-
+from app.core.database import Base
 
 class UserTest(Base):
     __tablename__ = "user_tests"
 
     id = Column(Integer, primary_key=True, index=True)
-    uuid = Column(String, unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
+    uuid = Column(UUID, unique=True, nullable=False, default=uuid.uuid4)  # Change to UUID type
     name = Column(String(100), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     draft_data = Column(JSON, nullable=True)
