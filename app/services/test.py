@@ -238,7 +238,12 @@ async def get_test_details(test_uuid: str, user_id: int, db: AsyncSession):
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
 
 
-async def create_user_test(db: AsyncSession, user_id: int, test_name_prefix: str) -> UserTest:
+async def create_user_test(
+    db: AsyncSession,
+    user_id: int,
+    test_name_prefix: str,
+    assessment_type_id: int
+) -> UserTest:
     try:
         stmt = text(
             """
@@ -264,11 +269,11 @@ async def create_user_test(db: AsyncSession, user_id: int, test_name_prefix: str
 
         test_name = f"{test_name_prefix} Test {next_index}"
 
-        # Create and save the new test
         new_test = UserTest(
             uuid=str(uuid.uuid4()),
             user_id=user_id,
             name=test_name,
+            assessment_type_id=assessment_type_id,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
             is_completed=False,
@@ -282,7 +287,6 @@ async def create_user_test(db: AsyncSession, user_id: int, test_name_prefix: str
 
     except Exception as e:
         raise RuntimeError(f"Failed to create user test: {e}")
-
 
 
 async def get_assessment_responses_by_test(

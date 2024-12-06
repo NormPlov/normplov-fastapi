@@ -7,5 +7,5 @@ services:
     ports:
       - "8000:8000"  
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:password@34.142.184.99:5433/fastapi
+      DATABASE_URL: postgresql+asyncpg://postgres:password@34.142.183.32:5433/fastapi
     depends_on: []

@@ -6,7 +6,7 @@ from typing import List, Dict
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from fastapi import HTTPException, status
-from app.models import AssessmentType, UserResponse, User
+from app.models import AssessmentType, UserResponse, User, UserTest
 from datetime import datetime
 from app.services.interest_assessment import process_interest_assessment
 from app.services.learning_style_assessment import predict_learning_style
@@ -256,45 +256,40 @@ async def save_draft(
         logger.info(f"Saving draft for assessment: {assessment_name}")
         logger.debug(f"Current user: {current_user}")
 
-        # Get the assessment type ID
+        # Get the assessment type ID based on the assessment_name
         assessment_type_id = await get_assessment_type_id(assessment_name, db)
 
         # Generate the draft name
         draft_name = f"Draft for {assessment_name} on {datetime.utcnow().strftime('%d-%B-%Y %H:%M:%S')}"
 
         if test_uuid:
-            # Fetch the draft
             stmt = select(UserResponse).where(
                 UserResponse.uuid == test_uuid,
                 UserResponse.user_id == current_user.id,
                 UserResponse.is_draft == True,
             )
+
             result = await db.execute(stmt)
             existing_draft = result.scalars().first()
 
             if existing_draft:
-                # Check if the draft has already been completed (is_draft = False, is_completed = True)
-                if not existing_draft.is_draft or existing_draft.is_completed:
-                    logger.warning(f"Attempted to update an already completed draft with UUID: {test_uuid}")
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="This draft has already been submitted and cannot be updated."
-                    )
-
+                # If the draft exists, update it instead of creating a new one
                 logger.info(f"Updating existing draft with UUID: {test_uuid}")
                 existing_draft.response_data = json.dumps(data)
                 existing_draft.updated_at = datetime.utcnow()
                 existing_draft.draft_name = draft_name
                 db.add(existing_draft)
                 await db.commit()
+
                 return {"message": "Draft updated successfully.", "uuid": test_uuid, "draft_name": draft_name}
 
-        new_user_test = await create_user_test(db, current_user.id, assessment_name)
+        # If no existing draft is found, create a new user test and a new draft
+        new_user_test = await create_user_test(db, current_user.id, assessment_name, assessment_type_id)
 
         new_draft = UserResponse(
             uuid=str(uuid.uuid4()),
             user_id=current_user.id,
-            user_test_id=new_user_test.id,  # Use the user_test's ID here
+            user_test_id=new_user_test.id,
             assessment_type_id=assessment_type_id,
             response_data=json.dumps(data),
             draft_name=draft_name,
@@ -305,6 +300,7 @@ async def save_draft(
 
         db.add(new_draft)
         await db.commit()
+
         return {"message": "Draft saved successfully.", "uuid": new_draft.uuid, "draft_name": draft_name}
 
     except HTTPException as e:

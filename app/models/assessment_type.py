@@ -21,3 +21,4 @@ class AssessmentType(Base):
     user_responses = relationship("UserResponse", back_populates="assessment_type", cascade="all, delete-orphan")
     user_scores = relationship("UserAssessmentScore", back_populates="assessment_type", cascade="all, delete-orphan")
     feedbacks = relationship("UserFeedback", back_populates="assessment_type", cascade="all, delete-orphan")
+    user_tests = relationship("UserTest", back_populates="assessment_type")

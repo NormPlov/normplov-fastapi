@@ -13,6 +13,7 @@ class JobUpdateRequest(BaseModel):
     responsibilities: Optional[str] = Field(None)
     requirements: Optional[str] = Field(None)
     resources: Optional[str] = Field(None)
+    salaries: Optional[float] = Field(None, description="Salary offered by the client")
     job_category_uuid: Optional[uuid.UUID] = Field(None, description="Job Category UUID")
     province_uuid: Optional[uuid.UUID] = Field(None, description="Province UUID")
     company_uuid: Optional[uuid.UUID] = Field(None, description="Company UUID")
@@ -33,6 +34,7 @@ class JobCreateRequest(BaseModel):
     job_category_uuid: uuid.UUID = Field(...)
     province_uuid: Optional[uuid.UUID] = Field(None)
     company_uuid: Optional[uuid.UUID] = Field(None)
+    salaries: Optional[float] = Field(None, description="Salary offered by the client")
 
     class Config:
         from_attributes = True
@@ -48,6 +50,7 @@ class JobResponse(BaseModel):
     responsibilities: Optional[str] = None
     requirements: Optional[str] = None
     resources: Optional[str] = None
+    salaries: Optional[float] = None
     job_category_uuid: uuid.UUID
     company_uuid: Optional[uuid.UUID] = None
     province_uuid: Optional[uuid.UUID] = None

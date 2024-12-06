@@ -1,7 +1,6 @@
 import uuid
 from sqlalchemy.orm import relationship
 from app.core.database import Base
-from sqlalchemy import Enum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy import (
     Column,
@@ -12,6 +11,8 @@ from sqlalchemy import (
     Text,
     Boolean,
     func,
+    Enum,
+    DECIMAL
 )
 
 
@@ -29,6 +30,7 @@ class Job(Base):
     responsibilities = Column(Text, nullable=True)
     requirements = Column(Text, nullable=True)
     resources = Column(Text, nullable=True)
+    salaries = Column(DECIMAL(15, 2), nullable=True)
     job_category_id = Column(Integer, ForeignKey("job_categories.id", ondelete="SET NULL"), nullable=True)
     province_id = Column(Integer, ForeignKey("provinces.id", ondelete="SET NULL"), nullable=True)
     company_id = Column(Integer, ForeignKey("companies.id", ondelete="SET NULL"), nullable=True)

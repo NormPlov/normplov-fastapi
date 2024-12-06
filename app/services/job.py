@@ -8,6 +8,7 @@ from sqlalchemy import select
 from fastapi import HTTPException
 from app.models import Job, JobCategory, User, Province, Company
 from app.schemas.job import JobResponse
+from app.schemas.payload import BaseResponse
 from app.utils.format_date import format_date
 from app.utils.pagination import paginate_results
 from datetime import datetime
@@ -111,7 +112,7 @@ async def update_job(
     job_uuid: str,
     job_data: JobUpdateRequest,
     current_user: User
-) -> Dict[str, str]:
+) -> JobResponse:
 
     if not any(role.role.name == "ADMIN" for role in current_user.roles):
         raise HTTPException(
@@ -119,7 +120,15 @@ async def update_job(
             detail="You do not have permission to update a job. Admins only."
         )
 
-    stmt = select(Job).where(Job.uuid == job_uuid, Job.is_deleted == False)
+    stmt = (
+        select(Job)
+        .options(
+            joinedload(Job.job_category),
+            joinedload(Job.company),
+            joinedload(Job.province)
+        )
+        .where(Job.uuid == job_uuid, Job.is_deleted == False)
+    )
     result = await db.execute(stmt)
     job = result.scalars().first()
 
@@ -129,13 +138,13 @@ async def update_job(
     if job_data.published_date:
         try:
             if isinstance(job_data.published_date, str):
-                # Convert from string to datetime object
                 job_data.published_date = datetime.fromisoformat(job_data.published_date)
             elif not isinstance(job_data.published_date, datetime):
                 raise HTTPException(status_code=400, detail="Invalid format for published_date.")
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid date format for published_date.")
 
+    # Update job fields
     job.type = job_data.type or job.type
     job.position = job_data.position or job.position
     job.qualification = job_data.qualification or job.qualification
@@ -145,6 +154,7 @@ async def update_job(
     job.requirements = job_data.requirements or job.requirements
     job.resources = job_data.resources or job.resources
 
+    # Update related entities (Job Category, Province, Company)
     if job_data.job_category_uuid:
         job_category_stmt = select(JobCategory).filter(JobCategory.uuid == job_data.job_category_uuid)
         job_category_result = await db.execute(job_category_stmt)
@@ -152,7 +162,6 @@ async def update_job(
 
         if not job_category:
             raise HTTPException(status_code=404, detail="Job category not found.")
-
         job.job_category_id = job_category.id
 
     if job_data.province_uuid:
@@ -162,7 +171,6 @@ async def update_job(
 
         if not province:
             raise HTTPException(status_code=404, detail="Province not found.")
-
         job.province_id = province.id
 
     if job_data.company_uuid:
@@ -172,21 +180,37 @@ async def update_job(
 
         if not company:
             raise HTTPException(status_code=404, detail="Company not found.")
-
         job.company_id = company.id
 
     job.updated_at = datetime.utcnow()
 
-    # Commit the changes
+    # Save all the updated data to db
     db.add(job)
     await db.commit()
     await db.refresh(job)
 
-    return {
-        "date": format_date(datetime.utcnow()),
-        "status": 200,
-        "message": "Job updated successfully."
-    }
+    response = BaseResponse(
+        date=datetime.utcnow().strftime("%d-%B-%Y"),
+        status=200,
+        message="Job updated successfully",
+        payload={
+            "uuid": job.uuid,
+            "type": job.type,
+            "position": job.position,
+            "qualification": job.qualification,
+            "published_date": job.published_date.isoformat() if job.published_date else None,
+            "description": job.description,
+            "responsibilities": job.responsibilities,
+            "requirements": job.requirements,
+            "resources": job.resources,
+            "job_category_uuid": job.job_category.uuid if job.job_category else None,
+            "company_uuid": job.company.uuid if job.company else None,
+            "province_uuid": job.province.uuid if job.province else None,
+            "salaries": job.salaries
+        }
+    )
+
+    return response
 
 
 async def create_job(
@@ -230,6 +254,7 @@ async def create_job(
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid date format for published_date.")
 
+    # Create the new job with the provided data and salary
     new_job = Job(
         uuid=uuid.uuid4(),
         type=job_data["type"],
@@ -243,12 +268,14 @@ async def create_job(
         job_category_id=job_category.id,
         company_id=company.id,
         province_id=province.id,
+        salaries=job_data.get("salaries"),
         is_scraped=False,
         is_deleted=False,
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
     )
 
+    # Add the job to the session and commit
     db.add(new_job)
     await db.commit()
     await db.refresh(new_job)
@@ -265,5 +292,6 @@ async def create_job(
         resources=new_job.resources,
         job_category_uuid=job_category.uuid,
         company_uuid=company.uuid,
-        province_uuid=province.uuid
+        province_uuid=province.uuid,
+        salaries=new_job.salaries
     )
