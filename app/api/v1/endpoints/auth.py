@@ -172,15 +172,25 @@ async def resend_code(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db)
 ):
-    response = await resend_verification_code(payload.email, db)
+    try:
+        response = await resend_verification_code(payload.email, db)
 
-    background_tasks.add_task(
-        send_verification_email,
-        email=response.payload["email"],
-        verification_code=response.payload["verification_code"]
-    )
+        background_tasks.add_task(
+            send_verification_email,
+            email=response.payload["email"],
+            username=response.payload["username"],
+            verification_code=response.payload["verification_code"]
+        )
 
-    return response
+        return response
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"An error occurred while resending the verification code: {str(e)}"
+        )
 
 
 @auth_router.post("/register", response_model=BaseResponse)

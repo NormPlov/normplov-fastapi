@@ -1,10 +1,10 @@
 import smtplib
-from email.message import EmailMessage
-from jinja2 import Environment, FileSystemLoader
 import os
+import asyncio
+
+from email.message import EmailMessage
 from dotenv import load_dotenv
 from jinja2 import Environment, FileSystemLoader
-import asyncio
 
 
 load_dotenv()
@@ -56,4 +56,5 @@ def send_reset_email(email: str, reset_code: str, username: str):
             print("Password reset email sent successfully.")
     except Exception as e:
         print(f"Failed to send email: {e}")
+
 

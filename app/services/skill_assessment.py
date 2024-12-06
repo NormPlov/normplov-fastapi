@@ -51,6 +51,7 @@ async def predict_skills(
         # Fetch the dynamic assessment type ID for "Skill"
         assessment_type_id = await get_assessment_type_id("Skills", db)
 
+        # Check if the test_uuid is provided; otherwise, create a new user test
         if data.test_uuid:
             test_query = select(UserTest).where(UserTest.uuid == data.test_uuid, UserTest.user_id == user_id)
             test_result = await db.execute(test_query)
@@ -58,7 +59,8 @@ async def predict_skills(
             if not user_test:
                 raise HTTPException(status_code=404, detail="Invalid test UUID provided.")
         else:
-            user_test = await create_user_test(db, user_id, "Skills")
+            # Create a new user test for skills
+            user_test = await create_user_test(db, user_id, "Skills", assessment_type_id)
 
         input_df = pd.DataFrame([data.responses])
         logger.debug(f"Input DataFrame: {input_df}")
@@ -85,6 +87,7 @@ async def predict_skills(
                 skill_with_level = skill
             logger.debug(f"Querying for skill: {skill_with_level}")
 
+            # Query the dimension for the skill level
             dimension_query = select(Dimension).where(Dimension.name == skill_with_level)
             result = await db.execute(dimension_query)
             dimension = result.scalars().first()
@@ -93,6 +96,7 @@ async def predict_skills(
                 logger.warning(f"No dimension found for skill: {skill_with_level}")
                 continue
 
+            # Query for the skill category based on the dimension
             skill_category_query = (
                 select(SkillCategory)
                 .options(joinedload(SkillCategory.dimension))
@@ -107,6 +111,7 @@ async def predict_skills(
 
             category_name = skill_category.category_name
 
+            # Determine skill level and categorize
             if level in ["Strong", "High"]:
                 category_level = "Strong"
             elif level in ["Average", "Moderate"]:
@@ -136,6 +141,7 @@ async def predict_skills(
                         for career in careers if career.career
                     )
 
+            # Update category percentage calculations
             if category_name not in category_percentages:
                 category_percentages[category_name] = 0
                 total_skills_per_category[category_name] = 0
@@ -144,11 +150,11 @@ async def predict_skills(
             if category_level == "Strong":
                 category_percentages[category_name] += 1
 
-            # Calculate percentage for this skill's category
             category_percentage = round(
                 (category_percentages.get(category_name, 0) / total_skills_per_category.get(category_name, 1)) * 100, 2
             )
 
+            # Save the assessment score
             assessment_score = UserAssessmentScore(
                 uuid=str(uuid.uuid4()),
                 user_id=user_id,
@@ -170,6 +176,7 @@ async def predict_skills(
         logger.debug(f"Final Category Percentages: {category_percentages}")
 
         suggested_careers = list({career["career_name"]: career for career in suggested_careers}.values())
+
         response = SkillAssessmentResponse(
             category_percentages=category_percentages,
             skills_grouped=skills_by_levels,

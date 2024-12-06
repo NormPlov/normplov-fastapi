@@ -41,15 +41,18 @@ async def predict_learning_style(
     current_user,
 ):
     try:
+        # Get the assessment type ID based on the name
         assessment_type_id = await get_assessment_type_id("Learning Style", db)
 
-        user_test = await create_user_test(db, current_user.id, "Learning Style")
+        # Now calling create_user_test with assessment_type_id
+        user_test = await create_user_test(db, current_user.id, "Learning Style", assessment_type_id)
 
+        # Fetching the questions for the learning style assessment
         stmt = select(Question).options(joinedload(Question.dimension))
         result = await db.execute(stmt)
         questions = result.scalars().all()
 
-        # If data is a dictionary with responses, directly access it
+        # Normalizing the input data from the request body
         if isinstance(data, dict):
             normalized_answers = {key.replace("/", ""): value for key, value in data.items()}
         else:
@@ -59,6 +62,7 @@ async def predict_learning_style(
         input_data_dict = {}
         missing_questions = []
 
+        # Loop through all questions to prepare input data for the model
         for question in questions:
             if not question.dimension:
                 logger.error(f"Dimension missing for question ID {question.id}")
@@ -79,6 +83,7 @@ async def predict_learning_style(
         if missing_questions:
             logger.warning(f"Missing answers for questions: {missing_questions}")
 
+        # Prepare the input data for the model
         input_data = pd.DataFrame([input_data_dict]).reindex(
             columns=vark_model.feature_names_in_, fill_value=0
         )
@@ -110,6 +115,7 @@ async def predict_learning_style(
         recommended_techniques = []
         related_careers = []
 
+        # Gather dimension and career data based on the predicted scores
         for style, prob in row.items():
             dimension_name = style.replace("_Score", "")
             dimension_stmt = select(Dimension).where(Dimension.name == dimension_name)
@@ -169,6 +175,7 @@ async def predict_learning_style(
 
         unique_careers = list({c["career_name"]: c for c in related_careers}.values())
 
+        # Prepare the response
         response = LearningStyleResponse(
             user_id=current_user.uuid,
             learning_style=learning_style,
@@ -180,6 +187,7 @@ async def predict_learning_style(
             related_careers=unique_careers,
         )
 
+        # Store the user response in the database
         user_responses = UserResponse(
             uuid=str(uuid.uuid4()),
             user_id=current_user.id,

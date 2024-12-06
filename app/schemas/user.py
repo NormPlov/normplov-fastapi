@@ -71,7 +71,6 @@ class PasswordResetRequest(BaseModel):
     email: str
 
 
-
 class PasswordResetComplete(BaseModel):
     email: EmailStr
     reset_code: str = Field(..., min_length=6, max_length=6)

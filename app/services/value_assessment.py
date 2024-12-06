@@ -4,6 +4,8 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from fastapi import HTTPException
+
+from app.models import UserTest
 from app.models.value_category import ValueCategory
 from app.models.career import Career
 from app.models.user_response import UserResponse
@@ -63,11 +65,23 @@ async def get_assessment_type_id(name: str, db: AsyncSession) -> int:
     return assessment_type_id
 
 
-async def process_value_assessment(responses, db: AsyncSession, current_user) -> ValueAssessmentResponse:
+async def process_value_assessment(responses, db: AsyncSession, current_user,
+                                   test_uuid: str | None = None) -> ValueAssessmentResponse:
     try:
-        user_test = await create_user_test(db, current_user.id, "Value Assessment")
-
         assessment_type_id = await get_assessment_type_id("Values", db)
+
+        if test_uuid:
+            # Fetch the user test if it exists
+            test_query = select(UserTest).where(UserTest.uuid == test_uuid, UserTest.user_id == current_user.id)
+            test_result = await db.execute(test_query)
+            user_test = test_result.scalars().first()
+
+            if not user_test:
+                raise HTTPException(status_code=404, detail="Test not found.")
+
+            logger.info(f"Updating existing test with UUID: {test_uuid}")
+        else:
+            user_test = await create_user_test(db, current_user.id, "Value Assessment", assessment_type_id)
 
         input_data = pd.DataFrame([responses])
         logger.debug(f"User responses converted to DataFrame: {input_data}")
@@ -116,8 +130,6 @@ async def process_value_assessment(responses, db: AsyncSession, current_user) ->
                 logger.warning(f"No ValueCategory found for feature: {feature_name}")
                 continue
 
-            logger.debug(f"ValueCategory found: {value_category.name}")
-
             dimension_query = select(Dimension.id).where(
                 Dimension.name == f"{feature_name} Score"
             )
@@ -128,8 +140,8 @@ async def process_value_assessment(responses, db: AsyncSession, current_user) ->
                 logger.error(f"Dimension not found for feature: {feature_name} Score. Skipping.")
                 continue
 
-            score = normalized_feature_scores.iloc[0][feature]
-            percentage = (score / total_score) * 100
+            score_value = normalized_feature_scores.iloc[0][feature]
+            percentage = (score_value / total_score) * 100
 
             value_details.append(
                 ValueCategoryDetails(
@@ -140,17 +152,15 @@ async def process_value_assessment(responses, db: AsyncSession, current_user) ->
                 )
             )
 
-            logger.debug(f"Added to value_details: {value_category.name}")
-
             assessment_scores.append(
                 UserAssessmentScore(
                     uuid=str(uuid.uuid4()),
                     user_id=current_user.id,
                     user_test_id=user_test.id,
                     assessment_type_id=assessment_type_id,
-                    dimension_id=dimension_id,  # Use the dynamically retrieved dimension ID
+                    dimension_id=dimension_id,
                     score={
-                        "score": round(score, 2),
+                        "score": round(score_value, 2),
                         "percentage": round(percentage, 2),
                     },
                     created_at=datetime.utcnow(),
@@ -168,6 +178,7 @@ async def process_value_assessment(responses, db: AsyncSession, current_user) ->
 
             career_recommendations.extend([career.name for career in careers])
 
+        # Handle to remove duplicate careers
         career_recommendations = list(set(career_recommendations))
 
         db.add_all(assessment_scores)

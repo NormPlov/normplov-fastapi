@@ -11,7 +11,9 @@ from fastapi import HTTPException
 import logging
 
 from app.schemas.payload import BaseResponse
+from app.utils.format_date import format_date
 from app.utils.pagination import paginate_results
+from app.utils.telegram import send_telegram_message
 
 logger = logging.getLogger(__name__)
 
@@ -206,30 +208,45 @@ async def promote_feedback(feedback_uuid: str, db: AsyncSession) -> None:
 
 
 async def create_feedback(feedback: str, assessment_type_uuid: str, current_user, db: AsyncSession) -> str:
-
     try:
+        # Get the assessment type ID and name
         result = await db.execute(
-            select(AssessmentType.id).where(
+            select(AssessmentType.id, AssessmentType.name).where(
                 AssessmentType.uuid == str(uuid.UUID(assessment_type_uuid)),
                 AssessmentType.is_deleted == False,
             )
         )
-        assessment_type_id = result.scalars().first()
+        assessment_type = result.first()
 
-        if not assessment_type_id:
+        if not assessment_type:
             raise HTTPException(status_code=404, detail="Assessment type not found")
 
+        assessment_type_id, assessment_type_name = assessment_type
+
+        # Create a new feedback record
         feedback_uuid = str(uuid.uuid4())
+        created_at = datetime.utcnow()
         new_feedback = UserFeedback(
             uuid=feedback_uuid,
             user_id=current_user.id,
             assessment_type_id=assessment_type_id,
             feedback=feedback,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=created_at,
+            updated_at=created_at,
         )
         db.add(new_feedback)
         await db.commit()
+
+        # Format the date and prepare the Telegram message
+        formatted_date = format_date(created_at)
+        telegram_message = (
+            f"New Feedback Received:\n\n"
+            f"<b>Username:</b> {current_user.username}\n"
+            f"<b>Assessment Type:</b> {assessment_type_name}\n"
+            f"<b>Feedback:</b> {feedback}\n"
+            f"<b>Date:</b> {formatted_date}"
+        )
+        await send_telegram_message(telegram_message)
 
         return feedback_uuid
 

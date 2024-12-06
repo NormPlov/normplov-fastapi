@@ -4,6 +4,8 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from fastapi import HTTPException
+
+from app.models import UserTest
 from app.models.user_response import UserResponse
 from app.models.user_assessment_score import UserAssessmentScore
 from app.models.dimension import Dimension
@@ -31,17 +33,26 @@ async def get_assessment_type_id(name: str, db: AsyncSession) -> int:
 
 
 async def process_interest_assessment(
-    responses: dict,
-    db: AsyncSession,
-    current_user,
+        responses: dict,
+        db: AsyncSession,
+        current_user,
+        test_uuid: str | None = None
 ) -> InterestAssessmentResponse:
-
     try:
-        user_test = await create_user_test(db, current_user.id, "Interest")
-
         assessment_type_id = await get_assessment_type_id("Interests", db)
 
-        # Predict scores and class
+        if test_uuid:
+            test_query = select(UserTest).where(UserTest.uuid == test_uuid, UserTest.user_id == current_user.id)
+            test_result = await db.execute(test_query)
+            user_test = test_result.scalars().first()
+
+            if not user_test:
+                raise HTTPException(status_code=404, detail="Test not found.")
+
+            logger.info(f"Updating existing test with UUID: {test_uuid}")
+        else:
+            user_test = await create_user_test(db, current_user.id, "Interest", assessment_type_id)
+
         input_data = pd.DataFrame([responses])
         input_data_prob = input_data.reindex(columns=prob_model.feature_names_in_, fill_value=0)
         prob_predictions = prob_model.predict(input_data_prob)

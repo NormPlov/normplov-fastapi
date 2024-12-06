@@ -86,6 +86,13 @@ async def validate_user_credentials(db: AsyncSession, email: str, password: str)
             detail="Incorrect email or password."
         )
 
+    # Check if the password matches the stored hash
+    if not pwd_context.verify(password, user.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password."
+        )
+
     if not user.is_verified:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -221,6 +228,7 @@ async def generate_password_reset_code(email: str, db: AsyncSession) -> BaseResp
 
 
 async def reset_user_password(email: str, reset_code: str, new_password: str, db: AsyncSession) -> BaseResponse:
+    # Fetch the user by email
     stmt = select(User).where(User.email == email)
     result = await db.execute(stmt)
     user = result.scalars().first()
@@ -250,7 +258,7 @@ async def reset_user_password(email: str, reset_code: str, new_password: str, db
     return BaseResponse(
         date=datetime.utcnow().strftime("%d-%B-%Y"),
         status=status.HTTP_200_OK,
-        message="Password reset successfully.",
+        message="Password reset successfully. Please log in with your new password.",
         payload={"email": user.email}
     )
 
@@ -430,7 +438,11 @@ async def resend_verification_code(email: str, db: AsyncSession) -> BaseResponse
         date=datetime.utcnow().strftime("%d-%B-%Y"),
         status=status.HTTP_200_OK,
         message="Verification code resent successfully.",
-        payload={"email": user.email, "verification_code": new_verification_code}
+        payload={
+            "email": user.email,
+            "verification_code": new_verification_code,
+            "username": user.username
+        }
     )
 
 

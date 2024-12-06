@@ -42,11 +42,12 @@ async def process_personality_assessment(
     db: AsyncSession,
     current_user,
 ) -> PersonalityAssessmentResponse:
-
     try:
-        user_test = await create_user_test(db, current_user.id, "Personality")
-
+        # Get the assessment type ID based on the name
         assessment_type_id = await get_assessment_type_id("Personality", db)
+
+        # Now calling create_user_test with assessment_type_id
+        user_test = await create_user_test(db, current_user.id, "Personality", assessment_type_id)
 
         # Calculate dimension scores
         input_responses_df = pd.DataFrame([input_data])
@@ -136,14 +137,11 @@ async def process_personality_assessment(
                 title=personality_details.title,
                 description=personality_details.description,
             ),
-            dimensions=[
-                DimensionScore(
-                    dimension_name=dim,
-                    score=data["score"],
-                    percentage=f"{data['percentage']}%"
-                )
-                for dim, data in normalized_scores.items()
-            ],
+            dimensions=[DimensionScore(
+                dimension_name=dim,
+                score=data["score"],
+                percentage=f"{data['percentage']}%"
+            ) for dim, data in normalized_scores.items()],
             traits=PersonalityTraits(positive=positive_traits, negative=negative_traits),
             strengths=strengths,
             weaknesses=weaknesses,

@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     # Google Generative AI Key
     GOOGLE_GENERATIVE_AI_KEY: str = Field(default="AIzaSyBs8q5cZDyFDPVqiN5JJ8loS_Qt2SiHsRk", env="GOOGLE_GENERATIVE_AI_KEY")
 
+    # In the Settings class
+    TELEGRAM_BOT_TOKEN: str = Field(default="7747910734:AAHKkDzr54-oMuRs7SuEvN13MxmUBKB6QxM", env="TELEGRAM_BOT_TOKEN")
+    TELEGRAM_CHAT_ID: str = Field(default="1299615474", env="TELEGRAM_CHAT_ID")
+
     # Database URL Configuration
     @property
     def database_url(self) -> str:
