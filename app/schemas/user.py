@@ -3,6 +3,10 @@ from pydantic import BaseModel, EmailStr, validator, Field
 from typing import Optional, Any, List
 
 
+class BlockUserRequest(BaseModel):
+    is_blocked: bool
+
+
 class UpdateBio(BaseModel):
     bio: str = Field(..., min_length=1, max_length=500, description="User's bio")
 
@@ -48,7 +52,7 @@ class UserResponse(BaseModel):
     is_deleted: bool
     is_active: bool
     is_verified: bool
-    registered_at: Optional[datetime]
+    is_blocked: bool
 
 
 class ResendResetPasswordRequest(BaseModel):

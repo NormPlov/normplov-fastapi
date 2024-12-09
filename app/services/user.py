@@ -1,13 +1,14 @@
 import shutil
 import logging
-
-from fastapi import HTTPException, status, UploadFile, Query, Depends
-from sqlalchemy import or_
+from typing import Optional
+from sqlalchemy.orm import joinedload
+from fastapi import HTTPException, status, UploadFile
+from sqlalchemy import or_, desc, asc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from datetime import datetime
 
-from app.dependencies import is_admin_user
+from app.models import UserRole
 from app.models.user import User
 from app.schemas.payload import BaseResponse
 from app.schemas.user import UpdateUser, UserResponse
@@ -20,53 +21,135 @@ from app.utils.verify import is_valid_uuid
 logger = logging.getLogger(__name__)
 
 
+async def unblock_user(uuid: str, is_blocked: bool, db: AsyncSession, current_user: User) -> BaseResponse:
+    try:
+        logger.info(f"Attempting to {'unblock' if not is_blocked else 'block'} user with UUID: {uuid}")
+
+        stmt = select(User).options(joinedload(User.roles).joinedload(UserRole.role)).where(User.uuid == uuid)
+        result = await db.execute(stmt)
+        user = result.scalars().first()
+
+        if not user:
+            logger.warning(f"User with UUID {uuid} not found.")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found."
+            )
+
+        if user.uuid == current_user.uuid:
+            logger.error("Attempt to unblock oneself.")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You cannot unblock yourself."
+            )
+
+        if not is_blocked and any(role.role.name == "ADMIN" for role in user.roles):
+            logger.error(f"Attempt to unblock admin user: {user.uuid}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Admin users cannot be unblocked."
+            )
+
+        user.is_blocked = is_blocked
+        user.updated_at = datetime.utcnow()
+
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+
+        logger.info(f"User {uuid} successfully {'unblocked' if not is_blocked else 'blocked'}.")
+        return BaseResponse(
+            date=datetime.utcnow().strftime("%d-%B-%Y"),
+            status=status.HTTP_200_OK,
+            message=f"User {'unblocked' if not is_blocked else 'blocked'} successfully.",
+            payload={
+                "uuid": user.uuid,
+                "username": user.username,
+                "is_blocked": user.is_blocked,
+            },
+        )
+    except HTTPException as e:
+        logger.error(f"HTTPException occurred: {e.detail}")
+        raise e
+    except Exception as e:
+        logger.exception(f"Unexpected error occurred: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while processing the request."
+        )
+
+
 async def block_user(uuid: str, is_blocked: bool, db: AsyncSession, current_user: User) -> BaseResponse:
-    stmt = select(User).where(User.uuid == uuid)
-    result = await db.execute(stmt)
-    user = result.scalars().first()
+    try:
+        logger.info(f"Attempting to {'block' if is_blocked else 'unblock'} user with UUID: {uuid}")
 
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found."
+        # Fetch user with roles eagerly loaded
+        stmt = select(User).options(joinedload(User.roles).joinedload(UserRole.role)).where(User.uuid == uuid)
+        result = await db.execute(stmt)
+        user = result.scalars().first()
+
+        if not user:
+            logger.warning(f"User with UUID {uuid} not found.")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found."
+            )
+
+        if user.uuid == current_user.uuid:
+            logger.error("Attempt to block/unblock oneself.")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You cannot block/unblock yourself."
+            )
+
+        # Check if the user is an admin
+        if is_blocked and any(role.role.name == "ADMIN" for role in user.roles):
+            logger.error(f"Attempt to block admin user: {user.uuid}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Admin users cannot be blocked."
+            )
+
+        # Update block status
+        user.is_blocked = is_blocked
+        user.updated_at = datetime.utcnow()
+
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+
+        logger.info(f"User {uuid} successfully {'blocked' if is_blocked else 'unblocked'}.")
+        return BaseResponse(
+            date=datetime.utcnow().strftime("%d-%B-%Y"),
+            status=status.HTTP_200_OK,
+            message=f"User {'blocked' if is_blocked else 'unblocked'} successfully.",
+            payload={
+                "uuid": user.uuid,
+                "username": user.username,
+                "is_blocked": user.is_blocked,
+            },
         )
-
-    if user.uuid == current_user.uuid:
+    except HTTPException as e:
+        logger.error(f"HTTPException occurred: {e.detail}")
+        raise e
+    except Exception as e:
+        logger.exception(f"Unexpected error occurred: {e}")
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You cannot block/unblock yourself."
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while processing the request."
         )
-
-    if is_blocked and user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin users cannot be blocked."
-        )
-
-    user.is_blocked = is_blocked
-    user.updated_at = datetime.utcnow()
-
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
-
-    return BaseResponse(
-        date=datetime.utcnow().strftime("%d-%B-%Y"),
-        status=status.HTTP_200_OK,
-        message=f"User {'blocked' if is_blocked else 'unblocked'} successfully.",
-        payload={
-            "uuid": user.uuid,
-            "username": user.username,
-            "is_blocked": user.is_blocked,
-        },
-    )
 
 
 async def get_user_by_email(email: str, db: AsyncSession, current_user: User) -> UserResponse:
+
     if current_user.email != email and not any(role.role.name == "ADMIN" for role in current_user.roles):
         raise HTTPException(status_code=403, detail="Permission denied.")
 
-    stmt = select(User).where(User.email == email)
+    stmt = (
+        select(User)
+        .options(joinedload(User.roles).joinedload(UserRole.role))
+        .where(User.email == email)
+    )
     result = await db.execute(stmt)
     user = result.scalars().first()
 
@@ -87,7 +170,7 @@ async def get_user_by_email(email: str, db: AsyncSession, current_user: User) ->
         is_deleted=user.is_deleted,
         is_active=user.is_active,
         is_verified=user.is_verified,
-        registered_at=user.registered_at,
+        is_blocked=user.is_blocked,
     )
 
 
@@ -291,67 +374,77 @@ async def update_user_by_uuid(uuid: str, user_update: UpdateUser, db: AsyncSessi
 
 async def get_all_users(
     db: AsyncSession,
+    search: Optional[str] = None,
+    sort_by: Optional[str] = None,
+    sort_order: Optional[str] = "asc",
     page: int = 1,
     page_size: int = 10,
-    search: str = None,
-    is_active: bool = None,
-    sort_by: str = "created_at",
-    sort_order: str = "desc",
+    filters: Optional[dict] = None,
 ) -> BaseResponse:
     try:
-        stmt = select(User).where(User.is_deleted == False)
+        stmt = select(User)
 
+        # Apply search
         if search:
-            stmt = stmt.where(
-                or_(
-                    User.username.ilike(f"%{search}%"),
-                    User.email.ilike(f"%{search}%"),
-                    User.address.ilike(f"%{search}%"),
-                )
+            search_filter = or_(
+                User.username.ilike(f"%{search}%"),
+                User.email.ilike(f"%{search}%"),
+                User.bio.ilike(f"%{search}%"),
             )
+            stmt = stmt.where(search_filter)
 
-        if is_active is not None:
-            stmt = stmt.where(User.is_active == is_active)
+        # Apply filters
+        if filters:
+            for field, value in filters.items():
+                if hasattr(User, field):
+                    stmt = stmt.where(getattr(User, field) == value)
 
+        # Apply sorting
         if sort_by and hasattr(User, sort_by):
             sort_column = getattr(User, sort_by)
-            stmt = stmt.order_by(sort_column.asc() if sort_order.lower() == "asc" else sort_column.desc())
+            if sort_order.lower() == "desc":
+                stmt = stmt.order_by(desc(sort_column))
+            else:
+                stmt = stmt.order_by(asc(sort_column))
 
+        # Execute query
         result = await db.execute(stmt)
         users = result.scalars().all()
 
-        paginated_result = paginate_results(users, page, page_size)
+        # Paginate results
+        paginated_users = paginate_results(users, page, page_size)
+
+        # Serialize response
+        response_payload = [
+            {
+                "uuid": user.uuid,
+                "username": user.username,
+                "email": user.email,
+                "bio": user.bio,
+                "gender": user.gender,
+                "is_active": user.is_active,
+                "is_verified": user.is_verified,
+                "is_blocked": user.is_blocked,
+                "registered_at": user.registered_at,
+            }
+            for user in paginated_users["items"]
+        ]
 
         return BaseResponse(
             date=datetime.utcnow().strftime("%d-%B-%Y"),
             status=status.HTTP_200_OK,
             message="Users retrieved successfully.",
             payload={
-                "metadata": paginated_result["metadata"],
-                "users": [
-                    {
-                        "uuid": user.uuid,
-                        "username": user.username,
-                        "email": user.email,
-                        "avatar": user.avatar,
-                        "address": user.address,
-                        "phone_number": user.phone_number,
-                        "bio": user.bio,
-                        "gender": user.gender,
-                        "date_of_birth": format_date(user.date_of_birth),
-                        "is_deleted": user.is_deleted,
-                        "is_active": user.is_active,
-                        "is_verified": user.is_verified,
-                        "registered_at": format_date(user.registered_at),
-                    }
-                    for user in paginated_result["items"]
-                ],
+                "users": response_payload,
+                "metadata": paginated_users["metadata"],
             },
         )
+
     except Exception as e:
+        logger.exception("An error occurred while retrieving users.")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while retrieving users: {str(e)}",
+            detail=f"An error occurred: {str(e)}",
         )
 
 
@@ -383,7 +476,7 @@ async def get_user_by_uuid(uuid: str, db: AsyncSession) -> BaseResponse:
             "is_deleted": user.is_deleted,
             "is_active": user.is_active,
             "is_verified": user.is_verified,
-            "registered_at": user.registered_at,
+            "is_blocked": user.is_blocked
         }
     )
 

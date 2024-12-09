@@ -4,9 +4,7 @@ from fastapi import APIRouter, BackgroundTasks, status, Request, Depends, HTTPEx
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordBearer
 from datetime import datetime
-
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.core.config import settings
 from app.core.database import get_db
 from app.schemas.payload import BaseResponse

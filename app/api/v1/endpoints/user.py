@@ -1,13 +1,15 @@
-from datetime import datetime
+import logging
 
-from fastapi import APIRouter, Depends, status, UploadFile, File, Query
+from datetime import datetime
+from typing import Optional
+from fastapi import APIRouter, Depends, status, UploadFile, File, Query, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.utils.format_date import format_date
 from app.models import User
 from app.schemas.payload import BaseResponse
-from app.schemas.user import UserResponse, UpdateUser, UpdateBio, ChangePassword
+from app.schemas.user import UserResponse, UpdateUser, UpdateBio, ChangePassword, BlockUserRequest
 from app.services.user import (
     block_user,
     get_user_by_email,
@@ -18,7 +20,8 @@ from app.services.user import (
     delete_user_by_uuid,
     update_user_by_uuid,
     get_all_users,
-    get_user_by_uuid
+    get_user_by_uuid,
+    unblock_user
 )
 from app.dependencies import (
     is_admin_user,
@@ -27,27 +30,58 @@ from app.dependencies import (
 
 user_router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+logger = logging.getLogger(__name__)
 
 
-# Block or unblock a user
-@user_router.put("/block/{uuid}", response_model=BaseResponse)
-async def block_user_route(
+# Unblock User Route
+@user_router.put("/unblock/{uuid}", response_model=BaseResponse)
+async def unblock_user_endpoint(
     uuid: str,
-    is_blocked: bool = False,
+    body: BlockUserRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(is_admin_user),
 ):
-    return await block_user(uuid=uuid, is_blocked=is_blocked, db=db, current_user=current_user)
+    try:
+        return await unblock_user(uuid, body.is_blocked, db, current_user)
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as exc:
+        logger.error(f"Unexpected error in unblock_user_endpoint: {exc}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
+
+# Block User Route
+@user_router.put("/block/{uuid}", response_model=BaseResponse)
+async def block_user_endpoint(
+    uuid: str,
+    body: BlockUserRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(is_admin_user),
+):
+    try:
+        return await block_user(uuid, body.is_blocked, db, current_user)
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as exc:
+        logger.error(f"Unexpected error in block_user_endpoint: {exc}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
 # Get user by email
-@user_router.get("/email/{email}", response_model=UserResponse)
+@user_router.get("/email/{email}", response_model=BaseResponse)
 async def get_user_details_by_email(
     email: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_data),
 ):
-    return await get_user_by_email(email, db, current_user)
+    user_details = await get_user_by_email(email, db, current_user)
+
+    return BaseResponse(
+        date=datetime.utcnow().strftime("%d-%B-%Y"),
+        status=200,
+        message="User details retrieved successfully.",
+        payload=user_details
+    )
 
 
 # Get user profile
@@ -129,25 +163,40 @@ async def update_user_by_uuid_route(uuid: str, user_update: UpdateUser, db: Asyn
     return await update_user_by_uuid(uuid, user_update, db)
 
 
-@user_router.get("/list", response_model=BaseResponse)
-async def list_all_users_route(
-    page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(10, ge=1, le=100, description="Number of items per page"),
-    search: str = Query(None, description="Search query for filtering users"),
-    is_active: bool = Query(None, description="Filter by active status"),
-    sort_by: str = Query("created_at", description="Field to sort by"),
-    sort_order: str = Query("desc", description="Sort order: 'asc' or 'desc'"),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(is_admin_user),  # Ensure only admins can access
+# Load all users
+@user_router.get("/list", response_model=BaseResponse, status_code=200)
+async def get_users_route(
+        search: Optional[str] = Query(None, description="Search term for users (username, email, or bio)"),
+        sort_by: Optional[str] = Query(None, description="Field to sort by (e.g., username, email)"),
+        sort_order: Optional[str] = Query("asc", regex="^(asc|desc)$", description="Sort order (asc or desc)"),
+        page: int = Query(1, ge=1, description="Page number"),
+        page_size: int = Query(10, ge=1, le=100, description="Number of users per page"),
+        is_active: Optional[bool] = Query(None, description="Filter users by active status"),
+        is_verified: Optional[bool] = Query(None, description="Filter users by verification status"),
+        db: AsyncSession = Depends(get_db),
+        current_user=Depends(is_admin_user),  # Ensure only admins can access this
 ):
-    return await get_all_users(
+    filters = {}
+    if is_active is not None:
+        filters["is_active"] = is_active
+    if is_verified is not None:
+        filters["is_verified"] = is_verified
+
+    result = await get_all_users(
         db=db,
-        page=page,
-        page_size=page_size,
         search=search,
-        is_active=is_active,
         sort_by=sort_by,
         sort_order=sort_order,
+        page=page,
+        page_size=page_size,
+        filters=filters,
+    )
+
+    return BaseResponse(
+        date=datetime.utcnow(),
+        status=status.HTTP_200_OK,
+        payload=result.payload,
+        message="Users retrieved successfully.",
     )
 
 
