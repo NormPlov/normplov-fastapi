@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from fastapi import HTTPException
 
-from app.models import UserTest
+from app.models import UserTest, School, SchoolMajor, CareerMajor, Major
 from app.models.value_category import ValueCategory
 from app.models.career import Career
 from app.models.user_response import UserResponse
@@ -65,20 +65,17 @@ async def get_assessment_type_id(name: str, db: AsyncSession) -> int:
     return assessment_type_id
 
 
-async def process_value_assessment(responses, db: AsyncSession, current_user,
-                                   test_uuid: str | None = None) -> ValueAssessmentResponse:
+async def process_value_assessment(responses, db: AsyncSession, current_user, test_uuid: str | None = None) -> ValueAssessmentResponse:
     try:
         assessment_type_id = await get_assessment_type_id("Values", db)
 
         if test_uuid:
-            # Fetch the user test if it exists
             test_query = select(UserTest).where(UserTest.uuid == test_uuid, UserTest.user_id == current_user.id)
             test_result = await db.execute(test_query)
             user_test = test_result.scalars().first()
 
             if not user_test:
                 raise HTTPException(status_code=404, detail="Test not found.")
-
             logger.info(f"Updating existing test with UUID: {test_uuid}")
         else:
             user_test = await create_user_test(db, current_user.id, "Value Assessment", assessment_type_id)
@@ -106,6 +103,7 @@ async def process_value_assessment(responses, db: AsyncSession, current_user,
         career_recommendations = []
         assessment_scores = []
 
+        # Create chart data
         for category, score in normalized_feature_scores.iloc[0].items():
             chart_data.append(
                 ChartData(
@@ -114,15 +112,13 @@ async def process_value_assessment(responses, db: AsyncSession, current_user,
                 )
             )
 
+        # Process top 3 features
         for feature in top_3_features:
             feature_name = feature.replace(" Score", "").strip()
 
             logger.debug(f"Processing feature: {feature_name}")
 
-            category_query = select(ValueCategory).where(
-                ValueCategory.name == feature_name,
-                ValueCategory.is_deleted == False
-            )
+            category_query = select(ValueCategory).where(ValueCategory.name == feature_name, ValueCategory.is_deleted == False)
             result = await db.execute(category_query)
             value_category = result.scalars().first()
 
@@ -130,9 +126,7 @@ async def process_value_assessment(responses, db: AsyncSession, current_user,
                 logger.warning(f"No ValueCategory found for feature: {feature_name}")
                 continue
 
-            dimension_query = select(Dimension.id).where(
-                Dimension.name == f"{feature_name} Score"
-            )
+            dimension_query = select(Dimension.id).where(Dimension.name == f"{feature_name} Score")
             dimension_result = await db.execute(dimension_query)
             dimension_id = dimension_result.scalars().first()
 
@@ -167,22 +161,46 @@ async def process_value_assessment(responses, db: AsyncSession, current_user,
                 )
             )
 
-            careers_query = select(Career).where(
-                Career.value_category_id == value_category.id
-            )
+            # Fetch related careers for the value category
+            careers_query = select(Career).where(Career.value_category_id == value_category.id)
             careers_result = await db.execute(careers_query)
             careers = careers_result.scalars().all()
 
-            if not careers:
-                logger.warning(f"No careers found for ValueCategory ID: {value_category.id}")
+            for career in careers:
+                career_majors_stmt = (
+                    select(Major)
+                    .join(CareerMajor, CareerMajor.major_id == Major.id)
+                    .where(CareerMajor.career_id == career.id, CareerMajor.is_deleted == False)
+                )
+                result = await db.execute(career_majors_stmt)
+                majors = result.scalars().all()
 
-            career_recommendations.extend([career.name for career in careers])
+                majors_with_schools = []
+                for major in majors:
+                    schools_stmt = (
+                        select(School)
+                        .join(SchoolMajor, SchoolMajor.school_id == School.id)
+                        .where(SchoolMajor.major_id == major.id, SchoolMajor.is_deleted == False)
+                    )
+                    result = await db.execute(schools_stmt)
+                    schools = result.scalars().all()
+                    majors_with_schools.append({
+                        "major_name": major.name,
+                        "schools": [school.en_name for school in schools]
+                    })
 
-        # Handle to remove duplicate careers
-        career_recommendations = list(set(career_recommendations))
+                career_recommendations.append({
+                    "career_name": career.name,
+                    "majors": majors_with_schools
+                })
 
+        # Remove duplicate careers
+        career_recommendations = list({career["career_name"]: career for career in career_recommendations}.values())
+
+        # Save the assessment scores
         db.add_all(assessment_scores)
 
+        # Prepare the response
         response = ValueAssessmentResponse(
             user_id=current_user.uuid,
             chart_data=chart_data,
@@ -190,8 +208,7 @@ async def process_value_assessment(responses, db: AsyncSession, current_user,
             career_recommendations=career_recommendations,
         )
 
-        logger.debug(f"Final response prepared: {response}")
-
+        # Save user response in the database
         user_response = UserResponse(
             uuid=str(uuid.uuid4()),
             user_id=current_user.id,

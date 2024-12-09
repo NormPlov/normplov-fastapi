@@ -1,6 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
-from datetime import datetime
+
 
 class AIRecommendationCreate(BaseModel):
     query: str = Field(..., description="User's query or question")
@@ -12,15 +11,19 @@ class AIRecommendationCreate(BaseModel):
             }
         }
 
+
+class RenameAIRecommendationRequest(BaseModel):
+    new_title: str
+
+
 class AIRecommendationResponse(BaseModel):
-    id: int
     uuid: str
-    user_id: int
+    user_uuid: str
     query: str
     recommendation: str
-    is_deleted: bool
-    created_at: datetime
-    updated_at: Optional[datetime]
+    chat_title: str
+    created_at: str
+    updated_at: str | None = None
 
     class Config:
         orm_mode = True

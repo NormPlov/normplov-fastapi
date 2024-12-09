@@ -2,22 +2,51 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.schemas.payload import BaseResponse
-from app.services.job import create_job, update_job, delete_job, load_jobs
-from app.schemas.job import JobCreateRequest, JobResponse, JobUpdateRequest
+from app.services.job import create_job, update_job, delete_job, load_jobs, get_job_types, get_provinces, \
+    get_job_categories
+from app.schemas.job import JobCreateRequest, JobResponse, JobUpdateRequest, JobQueryParams
 from app.core.database import get_db
 from app.models import User
-from app.dependencies import is_admin_user
+from app.dependencies import is_admin_user, get_current_user
 
 job_router = APIRouter()
 
 
-@job_router.get("/", summary="Load all jobs with pagination")
+@job_router.get("/", response_model=dict)
 async def get_jobs(
-    db: AsyncSession = Depends(get_db),
-    page: int = 1,
-    page_size: int = 10
+    query_params: JobQueryParams = Depends(),
+    db: AsyncSession = Depends(get_db)
 ):
-    return await load_jobs(db=db, page=page, page_size=page_size)
+    try:
+        # Call the service to load jobs
+        response = await load_jobs(
+            db=db,
+            page=query_params.page,
+            page_size=query_params.page_size,
+            job_category_uuid=query_params.job_category_uuid,
+            province_uuid=query_params.province_uuid,
+            job_type=query_params.job_type
+        )
+        return response
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error loading jobs: {str(e)}")
+
+
+@job_router.get("/job-categories", response_model=BaseResponse)
+async def get_job_categories_endpoint(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return await get_job_categories(db)
+
+
+@job_router.get("/provinces", response_model=BaseResponse)
+async def get_provinces_endpoint(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return await get_provinces(db)
+
+
+@job_router.get("/job-types", response_model=BaseResponse)
+async def get_job_types_endpoint(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return await get_job_types(db)
+
 
 
 @job_router.delete("/{job_uuid}", summary="Delete a job", dependencies=[Depends(is_admin_user)])

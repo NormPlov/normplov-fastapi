@@ -5,16 +5,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload
 from fastapi import HTTPException
-
-from app.models import AssessmentType
-from app.models.user_response import UserResponse
-from app.models.user_assessment_score import UserAssessmentScore
-from app.models.learning_style_study_technique import LearningStyleStudyTechnique
-from app.models.dimension import Dimension
-from app.models.question import Question
-from app.models.dimension_career import DimensionCareer
-from app.schemas.learning_style_assessment import LearningStyleInput, LearningStyleChart, LearningStyleResponse, \
-    Technique
+from app.models import (
+    AssessmentType, Major, CareerMajor, SchoolMajor, School, UserResponse, UserAssessmentScore,
+    LearningStyleStudyTechnique, Dimension, Question, DimensionCareer
+)
+from app.schemas.learning_style_assessment import LearningStyleChart, LearningStyleResponse
 from app.services.test import create_user_test
 from ml_models.model_loader import load_vark_model
 import logging
@@ -41,7 +36,7 @@ async def predict_learning_style(
     current_user,
 ):
     try:
-        # Get the assessment type ID based on the name
+        # Get the assessment type ID
         assessment_type_id = await get_assessment_type_id("Learning Style", db)
 
         # Now calling create_user_test with assessment_type_id
@@ -141,9 +136,32 @@ async def predict_learning_style(
                 careers = await db.execute(careers_stmt)
                 careers = careers.scalars().all()
 
-                related_careers.extend(
-                    {"career_name": career.career.name} for career in careers if career.career
-                )
+                for career in careers:
+                    career_info = {"career_name": career.career.name, "majors": []}
+
+                    career_majors_stmt = (
+                        select(Major)
+                        .join(CareerMajor, CareerMajor.major_id == Major.id)
+                        .where(CareerMajor.career_id == career.career.id, CareerMajor.is_deleted == False)
+                    )
+                    result = await db.execute(career_majors_stmt)
+                    majors = result.scalars().all()
+
+                    for major in majors:
+                        major_info = {"major_name": major.name, "schools": []}
+
+                        schools_stmt = (
+                            select(School)
+                            .join(SchoolMajor, SchoolMajor.school_id == School.id)
+                            .where(SchoolMajor.major_id == major.id, SchoolMajor.is_deleted == False)
+                        )
+                        result = await db.execute(schools_stmt)
+                        schools = result.scalars().all()
+
+                        major_info["schools"] = [school.en_name for school in schools]
+                        career_info["majors"].append(major_info)
+
+                    related_careers.append(career_info)
 
                 dimension_details.append(
                     {
@@ -197,6 +215,25 @@ async def predict_learning_style(
             created_at=datetime.utcnow(),
         )
         db.add(user_responses)
+
+        # Save the scores as JSON in UserAssessmentScore
+        for style, prob in row.items():
+            dimension_name = style.replace("_Score", "")
+            dimension_stmt = select(Dimension).where(Dimension.name == dimension_name)
+            dimension = await db.execute(dimension_stmt)
+            dimension = dimension.scalars().first()
+
+            if dimension:
+                user_assessment_score = UserAssessmentScore(
+                    uuid=str(uuid.uuid4()),
+                    user_id=current_user.id,
+                    user_test_id=user_test.id,
+                    assessment_type_id=assessment_type_id,
+                    dimension_id=dimension.id,
+                    score=json.dumps({style: prob}),
+                    created_at=datetime.utcnow(),
+                )
+                db.add(user_assessment_score)
 
         await db.commit()
 

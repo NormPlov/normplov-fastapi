@@ -7,8 +7,8 @@ from app.dependencies import get_current_user_data
 from app.schemas.payload import BaseResponse
 from app.schemas.personality_assessment import PersonalityAssessmentResponse, PersonalityAssessmentInput
 from app.schemas.skill_assessment import SkillAssessmentInput, SkillAssessmentResponse
-from app.schemas.learning_style_assessment import LearningStyleInput, LearningStyleResponse
-from app.schemas.interest_assessment import InterestAssessmentInput, InterestAssessmentResponse
+from app.schemas.learning_style_assessment import LearningStyleInput
+from app.schemas.interest_assessment import InterestAssessmentInput, InterestAssessmentResponseWithBase
 from app.schemas.value_assessment import ValueAssessmentInput, ValueAssessmentResponse
 from app.services.personality_assessment import process_personality_assessment
 from app.services.skill_assessment import predict_skills
@@ -22,18 +22,23 @@ assessment_router = APIRouter()
 
 # API Endpoint for Value Assessment✨
 @assessment_router.post(
-    "/process-value-assessment",
-    response_model=ValueAssessmentResponse,
-    summary="Process user's value assessment",
-    description="Analyze user responses to determine value categories and career recommendations.",
+    "/value-assessment",
+    response_model=BaseResponse,
+    summary="Process value assessment and return detailed results.",
 )
-async def process_value_assessment_route(
+async def value_assessment_route(
     input_data: ValueAssessmentInput,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_data),
 ):
     try:
-        return await process_value_assessment(input_data.responses, db, current_user)
+        result = await process_value_assessment(input_data.responses, db, current_user)
+        return BaseResponse(
+            date=datetime.utcnow().strftime("%d-%B-%Y"),
+            status=200,
+            payload=result,
+            message="Value assessment processed successfully.",
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -41,7 +46,7 @@ async def process_value_assessment_route(
 # API Endpoint for Personality Assessment✨
 @assessment_router.post(
     "/personality-assessment",
-    response_model=PersonalityAssessmentResponse,
+    response_model=BaseResponse,
     summary="Process personality assessment and return detailed results.",
 )
 async def personality_assessment(
@@ -49,13 +54,26 @@ async def personality_assessment(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_data),
 ):
-    return await process_personality_assessment(input_data.responses, db, current_user)
+    try:
+        # Process the personality assessment
+        result = await process_personality_assessment(input_data.responses, db, current_user)
+
+        # Wrap the result in BaseResponse
+        return BaseResponse(
+            date=datetime.utcnow().strftime("%d-%B-%Y"),
+            status=200,
+            payload=result,  # The result from process_personality_assessment will be the payload
+            message="Personality assessment processed successfully.",
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # API Endpoint for Skill Assessment✨
 @assessment_router.post(
     "/predict-skills",
-    response_model=SkillAssessmentResponse,
+    response_model=BaseResponse,
     summary="Predict user's skill strengths",
     description="Analyze skill strengths and recommend careers based on the assessment.",
 )
@@ -65,7 +83,16 @@ async def predict_skills_endpoint(
     current_user: User = Depends(get_current_user_data),
 ):
     try:
-        return await predict_skills(data, db, current_user)
+        final_test_uuid = data.test_uuid
+
+        skill_result = await predict_skills(data, db, current_user)
+
+        return BaseResponse(
+            date=datetime.utcnow().strftime("%d-%B-%Y"),
+            status=200,
+            payload=skill_result,
+            message="Skill assessment completed successfully."
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -106,16 +133,24 @@ async def predict_learning_style_route(
 # API Endpoint for Interest Assessment✨
 @assessment_router.post(
     "/process-interest-assessment",
-    response_model=InterestAssessmentResponse,
+    response_model=InterestAssessmentResponseWithBase,
     summary="Process user's interest assessment",
-    description="Analyze user responses to determine Holland code, traits, and career paths.",
+    description="Analyze user responses to determine Holland code, traits, career paths, majors, and schools.",
 )
 async def process_interest_assessment_route(
-    input_data: InterestAssessmentInput,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_data),
+        input_data: InterestAssessmentInput,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user_data),
 ):
     try:
-        return await process_interest_assessment(input_data.responses, db, current_user)
+        assessment_response = await process_interest_assessment(input_data.responses, db, current_user)
+
+        return InterestAssessmentResponseWithBase(
+            date=datetime.utcnow().strftime("%d-%B-%Y"),
+            status=200,
+            message="Interest assessment processed successfully.",
+            payload=assessment_response
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+

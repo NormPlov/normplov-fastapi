@@ -1,6 +1,8 @@
 from typing import Dict, List
 from pydantic import BaseModel, Field, validator
 
+from app.schemas.payload import BaseResponse
+
 
 class InterestAssessmentInput(BaseModel):
     responses: Dict[str, int] = Field(
@@ -14,6 +16,15 @@ class InterestAssessmentInput(BaseModel):
                 raise ValueError(f"Invalid response value for {key}: {value}. Must be between 0 and 5.")
         return responses
 
+
+class MajorData(BaseModel):
+    major_name: str
+    schools: List[str]
+
+
+class CareerData(BaseModel):
+    career_name: str
+    majors: List[MajorData]
 
 
 class ChartData(BaseModel):
@@ -32,6 +43,10 @@ class InterestAssessmentResponse(BaseModel):
     type_name: str
     description: str
     key_traits: List[str]
-    career_path: List[str]
+    career_path: List[CareerData]
     chart_data: List[ChartData]
     dimension_descriptions: List[DimensionDescription]
+
+
+class InterestAssessmentResponseWithBase(BaseResponse):
+    payload: InterestAssessmentResponse

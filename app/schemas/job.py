@@ -4,6 +4,29 @@ from pydantic import BaseModel, Field
 from typing import Optional
 
 
+class JobQueryParams(BaseModel):
+    job_category_uuid: Optional[uuid.UUID] = None
+    province_uuid: Optional[uuid.UUID] = None
+    job_type: Optional[str] = None
+    page: int = 1
+    page_size: int = 10
+
+    class Config:
+        from_attributes = True
+
+
+class JobListingResponse(BaseModel):
+    uuid: uuid.UUID
+    job_type: str
+    position: Optional[str] = None
+    company_name: Optional[str] = None
+    company_logo: Optional[str] = None
+    province_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
 class JobUpdateRequest(BaseModel):
     type: Optional[str] = Field(None, description="Job type (Full-time, Part-time, etc.)")
     position: Optional[str] = Field(None, max_length=255)

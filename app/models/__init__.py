@@ -4,6 +4,7 @@ from app.models.user import User
 from app.models.assessment_type import AssessmentType
 from app.models.user_response import UserResponse
 from app.models.dimension import Dimension
+from app.models.question import Question
 from app.models.user_assessment_score import UserAssessmentScore
 from app.models.ai_recommendation import AIRecommendation
 from app.models.learning_style_study_technique import LearningStyleStudyTechnique
@@ -31,6 +32,7 @@ __all__ = ["Role",
            "User",
            "AssessmentType",
            "UserResponse",
+           "Question",
            "Dimension",
            "UserAssessmentScore",
            "AIRecommendation",

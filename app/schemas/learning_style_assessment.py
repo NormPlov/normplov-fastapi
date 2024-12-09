@@ -21,10 +21,19 @@ class LearningStyleInput(BaseModel):
         return responses
 
 
-class Technique(BaseModel):
-    technique_name: str
-    category: str
-    description: str
+class MajorWithSchools(BaseModel):
+    major_name: str
+    schools: List[str]
+
+
+class CareerWithMajors(BaseModel):
+    career_name: str
+    majors: List[MajorWithSchools]
+
+
+class LearningStyleChart(BaseModel):
+    labels: List[str]
+    values: List[float]
 
 
 class DimensionDetail(BaseModel):
@@ -33,9 +42,10 @@ class DimensionDetail(BaseModel):
     level: int
 
 
-class LearningStyleChart(BaseModel):
-    labels: List[str]
-    values: List[float]
+class Technique(BaseModel):
+    technique_name: str
+    category: str
+    description: str
 
 
 class LearningStyleResponse(BaseModel):
@@ -46,4 +56,4 @@ class LearningStyleResponse(BaseModel):
     chart: LearningStyleChart
     dimensions: List[DimensionDetail]
     recommended_techniques: List[Technique]
-    related_careers: List[Dict[str, str]]
+    related_careers: List[CareerWithMajors]

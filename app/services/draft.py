@@ -255,6 +255,7 @@ async def save_draft(
     try:
         logger.info(f"Saving draft for assessment: {assessment_name}")
         logger.debug(f"Current user: {current_user}")
+        logger.debug(f"Received test_uuid: {test_uuid}")
 
         # Get the assessment type ID based on the assessment_name
         assessment_type_id = await get_assessment_type_id(assessment_name, db)
@@ -262,34 +263,34 @@ async def save_draft(
         # Generate the draft name
         draft_name = f"Draft for {assessment_name} on {datetime.utcnow().strftime('%d-%B-%Y %H:%M:%S')}"
 
+        # Check if we are updating an existing draft in UserResponse
+        existing_draft = None
         if test_uuid:
+            logger.debug(f"Looking for existing draft with UUID: {test_uuid.strip()}")
             stmt = select(UserResponse).where(
-                UserResponse.uuid == test_uuid,
+                UserResponse.uuid == test_uuid.strip(),
                 UserResponse.user_id == current_user.id,
                 UserResponse.is_draft == True,
             )
-
             result = await db.execute(stmt)
             existing_draft = result.scalars().first()
+            logger.debug(f"Query result for existing draft: {existing_draft}")
 
-            if existing_draft:
-                # If the draft exists, update it instead of creating a new one
-                logger.info(f"Updating existing draft with UUID: {test_uuid}")
-                existing_draft.response_data = json.dumps(data)
-                existing_draft.updated_at = datetime.utcnow()
-                existing_draft.draft_name = draft_name
-                db.add(existing_draft)
-                await db.commit()
+        if existing_draft:
+            # Update existing draft
+            logger.info(f"Updating existing draft with UUID: {test_uuid}")
+            existing_draft.response_data = json.dumps(data)
+            existing_draft.updated_at = datetime.utcnow()
+            existing_draft.draft_name = draft_name
+            db.add(existing_draft)
+            await db.commit()
+            return {"message": "Draft updated successfully.", "uuid": existing_draft.uuid, "draft_name": draft_name}
 
-                return {"message": "Draft updated successfully.", "uuid": test_uuid, "draft_name": draft_name}
-
-        # If no existing draft is found, create a new user test and a new draft
-        new_user_test = await create_user_test(db, current_user.id, assessment_name, assessment_type_id)
-
+        # No existing draft found; log this case
+        logger.warning("No existing draft found. Creating a new draft.")
         new_draft = UserResponse(
             uuid=str(uuid.uuid4()),
             user_id=current_user.id,
-            user_test_id=new_user_test.id,
             assessment_type_id=assessment_type_id,
             response_data=json.dumps(data),
             draft_name=draft_name,
@@ -313,3 +314,4 @@ async def save_draft(
             status_code=500,
             detail=f"An error occurred while saving the draft: {str(e)}",
         )
+

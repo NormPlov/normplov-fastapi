@@ -13,6 +13,7 @@ class AIRecommendation(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     query = Column(Text, nullable=False)
     recommendation = Column(Text, nullable=False)
+    chat_title = Column(String, nullable=False)
     is_deleted = Column(Boolean, default=False)
     created_at = Column(DateTime, nullable=False, server_default=func.now())
     updated_at = Column(DateTime, nullable=True, onupdate=func.now())

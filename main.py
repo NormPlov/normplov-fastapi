@@ -19,7 +19,8 @@ from app.api.v1.endpoints import (
     school,
     faculty,
     major,
-    job
+    job,
+    company
 )
 
 
@@ -68,3 +69,5 @@ app.include_router(school.school_router, prefix="/api/v1/schools", tags=["School
 app.include_router(faculty.faculty_router, prefix="/api/v1/faculties", tags=["Faculty"])
 app.include_router(major.major_router, prefix="/api/v1/majors", tags=["Major"])
 app.include_router(job.job_router, prefix="/api/v1/jobs", tags=["Job"])
+app.include_router(company.company_router, prefix="/api/v1/companies", tags=["Company"])
+

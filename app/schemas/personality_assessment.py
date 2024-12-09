@@ -8,6 +8,16 @@ class PersonalityAssessmentInput(BaseModel):
     )
 
 
+class MajorData(BaseModel):
+    major_name: str
+    schools: List[str]
+
+
+class CareerData(BaseModel):
+    career_name: str
+    majors: List[MajorData]
+
+
 class PersonalityTypeDetails(BaseModel):
     name: str
     title: str
@@ -31,4 +41,4 @@ class PersonalityAssessmentResponse(BaseModel):
     traits: PersonalityTraits
     strengths: List[str]
     weaknesses: List[str]
-    career_recommendations: List[str]
+    career_recommendations: List[CareerData]

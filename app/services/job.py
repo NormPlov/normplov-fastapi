@@ -1,8 +1,8 @@
 import uuid
-from typing import Dict
+from typing import Dict, Optional
 
 from sqlalchemy.orm import joinedload
-from app.schemas.job import JobUpdateRequest
+from app.schemas.job import JobUpdateRequest, JobListingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from fastapi import HTTPException
@@ -17,38 +17,55 @@ from datetime import datetime
 async def load_jobs(
     db: AsyncSession,
     page: int = 1,
-    page_size: int = 10
+    page_size: int = 10,
+    job_category_uuid: Optional[uuid.UUID] = None,
+    province_uuid: Optional[uuid.UUID] = None,
+    job_type: Optional[str] = None
 ) -> dict:
     try:
-
+        # Start building the query
         stmt = select(Job).options(
             joinedload(Job.job_category),
             joinedload(Job.company),
             joinedload(Job.province)
         ).where(Job.is_deleted == False)
 
-        async with db.begin():
-            result = await db.execute(stmt)
-            jobs = result.scalars().all()
+        # Fetch the job_category_id if job_category_uuid is provided
+        if job_category_uuid:
+            job_category_stmt = select(JobCategory.id).filter(JobCategory.uuid == job_category_uuid)
+            result = await db.execute(job_category_stmt)
+            job_category_id = result.scalars().first()
+            if not job_category_id:
+                raise HTTPException(status_code=404, detail="Job category not found.")
+            stmt = stmt.filter(Job.job_category_id == job_category_id)
 
-        # Apply pagination
+        # Fetch the province_id if province_uuid is provided
+        if province_uuid:
+            province_stmt = select(Province.id).filter(Province.uuid == province_uuid)
+            result = await db.execute(province_stmt)
+            province_id = result.scalars().first()
+            if not province_id:
+                raise HTTPException(status_code=404, detail="Province not found.")
+            stmt = stmt.filter(Job.province_id == province_id)
+
+        # Apply job_type filter if provided
+        if job_type:
+            stmt = stmt.filter(Job.type == job_type)
+
+        result = await db.execute(stmt)
+        jobs = result.scalars().all()
+
         paginated_jobs = paginate_results(jobs, page, page_size)
 
         job_response = []
         for job in paginated_jobs['items']:
-            job_response.append(JobResponse(
+            job_response.append(JobListingResponse(
                 uuid=job.uuid,
-                type=job.type,
+                job_type=job.type,
                 position=job.position,
-                qualification=job.qualification,
-                published_date=job.published_date.isoformat() if job.published_date else None,
-                description=job.description,
-                responsibilities=job.responsibilities,
-                requirements=job.requirements,
-                resources=job.resources,
-                job_category_uuid=job.job_category.uuid if job.job_category else None,
-                company_uuid=job.company.uuid if job.company else None,
-                province_uuid=job.province.uuid if job.province else None
+                company_name=job.company.name if job.company else None,
+                company_logo=job.company.logo if job.company else None,
+                province_name=job.province.name if job.province else None
             ))
 
         return {
@@ -66,6 +83,52 @@ async def load_jobs(
             status_code=500,
             detail=f"An error occurred while loading jobs: {str(e)}"
         )
+
+
+async def get_job_categories(db: AsyncSession) -> BaseResponse:
+    try:
+        stmt = select(JobCategory).where(JobCategory.is_deleted == False)
+        result = await db.execute(stmt)
+        job_categories = result.scalars().all()
+
+        return BaseResponse(
+            date=datetime.utcnow().strftime("%d-%B-%Y"),
+            status=200,
+            message="Job categories loaded successfully.",
+            payload={"job_categories": [{"uuid": category.uuid, "name": category.name} for category in job_categories]}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching job categories: {str(e)}")
+
+
+async def get_provinces(db: AsyncSession) -> BaseResponse:
+    try:
+        stmt = select(Province).where(Province.is_deleted == False)
+        result = await db.execute(stmt)
+        provinces = result.scalars().all()
+
+        return BaseResponse(
+            date=datetime.utcnow().strftime("%d-%B-%Y"),
+            status=200,
+            message="Provinces loaded successfully.",
+            payload={"provinces": [{"uuid": province.uuid, "name": province.name} for province in provinces]}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching provinces: {str(e)}")
+
+
+async def get_job_types(db: AsyncSession) -> BaseResponse:
+    try:
+        job_types = ["Full-time", "Part-time", "Contract", "Internship", "Temporary"]
+
+        return BaseResponse(
+            date=datetime.utcnow().strftime("%d-%B-%Y"),
+            status=200,
+            message="Job types loaded successfully.",
+            payload={"job_types": job_types}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching job types: {str(e)}")
 
 
 async def delete_job(
@@ -254,7 +317,6 @@ async def create_job(
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid date format for published_date.")
 
-    # Create the new job with the provided data and salary
     new_job = Job(
         uuid=uuid.uuid4(),
         type=job_data["type"],
@@ -275,7 +337,6 @@ async def create_job(
         updated_at=datetime.utcnow(),
     )
 
-    # Add the job to the session and commit
     db.add(new_job)
     await db.commit()
     await db.refresh(new_job)

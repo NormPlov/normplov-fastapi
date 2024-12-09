@@ -12,10 +12,14 @@ from app.models import (
     UserResponse,
     AssessmentType,
     UserTest,
+    CareerMajor,
+    Major,
+    School,
+    SchoolMajor
 )
 from app.models.dimension import Dimension
 from app.services.test import create_user_test
-from app.schemas.skill_assessment import SkillAssessmentInput, SkillAssessmentResponse
+from app.schemas.skill_assessment import SkillAssessmentInput, SkillAssessmentResponse, CareerWithMajors, MajorWithSchools
 from ml_models.model_loader import load_skill_model
 import logging
 import json
@@ -87,7 +91,6 @@ async def predict_skills(
                 skill_with_level = skill
             logger.debug(f"Querying for skill: {skill_with_level}")
 
-            # Query the dimension for the skill level
             dimension_query = select(Dimension).where(Dimension.name == skill_with_level)
             result = await db.execute(dimension_query)
             dimension = result.scalars().first()
@@ -96,7 +99,6 @@ async def predict_skills(
                 logger.warning(f"No dimension found for skill: {skill_with_level}")
                 continue
 
-            # Query for the skill category based on the dimension
             skill_category_query = (
                 select(SkillCategory)
                 .options(joinedload(SkillCategory.dimension))
@@ -136,10 +138,32 @@ async def predict_skills(
                 if not careers:
                     logger.warning(f"No careers found for dimension ID: {dimension.id}")
                 else:
-                    suggested_careers.extend(
-                        {"career_name": career.career.name}
-                        for career in careers if career.career
-                    )
+                    for career in careers:
+                        career_info = {"career_name": career.career.name, "majors": []}
+
+                        career_majors_stmt = (
+                            select(Major)
+                            .join(CareerMajor, CareerMajor.major_id == Major.id)
+                            .where(CareerMajor.career_id == career.career.id, CareerMajor.is_deleted == False)
+                        )
+                        result = await db.execute(career_majors_stmt)
+                        majors = result.scalars().all()
+
+                        for major in majors:
+                            major_info = major.name
+
+                            schools_stmt = (
+                                select(School)
+                                .join(SchoolMajor, SchoolMajor.school_id == School.id)
+                                .where(SchoolMajor.major_id == major.id, SchoolMajor.is_deleted == False)
+                            )
+                            result = await db.execute(schools_stmt)
+                            schools = result.scalars().all()
+
+                            school_names = [school.en_name for school in schools]
+                            career_info["majors"].append(MajorWithSchools(major_name=major_info, schools=school_names))
+
+                        suggested_careers.append(career_info)
 
             # Update category percentage calculations
             if category_name not in category_percentages:

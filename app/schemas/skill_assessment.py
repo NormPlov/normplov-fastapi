@@ -21,6 +21,15 @@ class SkillAssessmentInput(BaseModel):
         return responses
 
 
+class MajorWithSchools(BaseModel):
+    major_name: str
+    schools: List[str]
+
+
+class CareerWithMajors(BaseModel):
+    career_name: str
+    majors: List[MajorWithSchools]
+
 
 class SkillGroupedByLevel(BaseModel):
     skill: str
@@ -30,4 +39,4 @@ class SkillGroupedByLevel(BaseModel):
 class SkillAssessmentResponse(BaseModel):
     category_percentages: Dict[str, float]
     skills_grouped: Dict[str, List[SkillGroupedByLevel]]
-    strong_careers: List[Dict[str, str]]
+    strong_careers: List[CareerWithMajors]

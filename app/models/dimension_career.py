@@ -1,8 +1,9 @@
 from sqlalchemy import Column, Integer, ForeignKey, Boolean, DateTime, String
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
-from ..core.database import Base
+from app.core.database import Base
 import uuid
+
 
 class DimensionCareer(Base):
     __tablename__ = "dimension_careers"

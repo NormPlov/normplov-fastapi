@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from fastapi import HTTPException
-from app.models import AssessmentType
+from app.models import AssessmentType, Career, CareerMajor, SchoolMajor, School, Major
 from app.models.user_response import UserResponse
 from app.models.user_assessment_score import UserAssessmentScore
 from app.models.dimension import Dimension
@@ -12,13 +12,14 @@ from app.models.personality_type import PersonalityType
 from app.models.personality_trait import PersonalityTrait
 from app.models.personality_strength import PersonalityStrength
 from app.models.personality_weakness import PersonalityWeakness
-from app.models.career import Career
 from app.services.test import create_user_test
 from app.schemas.personality_assessment import (
     PersonalityAssessmentResponse,
     PersonalityTypeDetails,
     DimensionScore,
     PersonalityTraits,
+    CareerData,
+    MajorData,
 )
 from ml_models.model_loader import load_personality_models
 import logging
@@ -124,10 +125,41 @@ async def process_personality_assessment(
         weaknesses_result = await db.execute(weaknesses_query)
         weaknesses = [w.weakness for w in weaknesses_result.scalars().all()]
 
-        # Fetch careers from career table
+        # Fetch careers from career table with majors and schools
         career_query = select(Career).where(Career.holland_code_id == personality_details.id)
         career_result = await db.execute(career_query)
-        careers = [career.name for career in career_result.scalars().all()]
+        careers = career_result.scalars().all()
+
+        career_data = []
+        for career in careers:
+            # Get the majors related to the career
+            career_majors_stmt = (
+                select(Major)
+                .join(CareerMajor, CareerMajor.major_id == Major.id)
+                .where(CareerMajor.career_id == career.id, CareerMajor.is_deleted == False)
+            )
+            result = await db.execute(career_majors_stmt)
+            majors = result.scalars().all()
+
+            majors_with_schools = []
+            for major in majors:
+                # Get schools related to the major
+                schools_stmt = (
+                    select(School)
+                    .join(SchoolMajor, SchoolMajor.school_id == School.id)
+                    .where(SchoolMajor.major_id == major.id, SchoolMajor.is_deleted == False)
+                )
+                result = await db.execute(schools_stmt)
+                schools = result.scalars().all()
+                majors_with_schools.append({
+                    "major_name": major.name,
+                    "schools": [school.en_name for school in schools]
+                })
+
+            career_data.append({
+                "career_name": career.name,
+                "majors": majors_with_schools  # Multiple majors and schools as requested
+            })
 
         # Construct the response
         response = PersonalityAssessmentResponse(
@@ -145,7 +177,7 @@ async def process_personality_assessment(
             traits=PersonalityTraits(positive=positive_traits, negative=negative_traits),
             strengths=strengths,
             weaknesses=weaknesses,
-            career_recommendations=careers,
+            career_recommendations=career_data,  # Updated career format
         )
 
         # Save user response
