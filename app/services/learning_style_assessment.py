@@ -7,7 +7,7 @@ from sqlalchemy.orm import joinedload
 from fastapi import HTTPException
 from app.models import (
     AssessmentType, Major, CareerMajor, SchoolMajor, School, UserResponse, UserAssessmentScore,
-    LearningStyleStudyTechnique, Dimension, Question, DimensionCareer
+    LearningStyleStudyTechnique, Dimension, Question, DimensionCareer, UserTest
 )
 from app.schemas.learning_style_assessment import LearningStyleChart, LearningStyleResponse
 from app.services.test import create_user_test
@@ -39,8 +39,17 @@ async def predict_learning_style(
         # Get the assessment type ID
         assessment_type_id = await get_assessment_type_id("Learning Style", db)
 
-        # Now calling create_user_test with assessment_type_id
-        user_test = await create_user_test(db, current_user.id, "Learning Style", assessment_type_id)
+        # If test_uuid is provided, fetch the test, else create a new one
+        if test_uuid:
+            test_details = await db.execute(
+                select(UserTest).where(UserTest.uuid == test_uuid)
+            )
+            user_test = test_details.scalars().first()
+
+            if not user_test:
+                raise HTTPException(status_code=404, detail="Test not found.")
+        else:
+            user_test = await create_user_test(db, current_user.id, "Learning Style", assessment_type_id)
 
         # Fetching the questions for the learning style assessment
         stmt = select(Question).options(joinedload(Question.dimension))
@@ -193,16 +202,18 @@ async def predict_learning_style(
 
         unique_careers = list({c["career_name"]: c for c in related_careers}.values())
 
-        # Prepare the response
+        # Prepare the response with test UUID and name
         response = LearningStyleResponse(
             user_id=current_user.uuid,
+            test_uuid=str(user_test.uuid),
+            test_name=user_test.name,
             learning_style=learning_style,
             probability=round(max_prob * 100, 2),
             details=row.to_dict(),
             chart=LearningStyleChart(labels=chart_data["labels"], values=chart_data["values"]),
             dimensions=dimension_details,
             recommended_techniques=recommended_techniques,
-            related_careers=unique_careers,
+            related_careers=unique_careers
         )
 
         # Store the user response in the database
