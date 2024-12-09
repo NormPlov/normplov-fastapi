@@ -7,6 +7,7 @@ from app.core.database import engine, Base, get_db
 from app.core.init import init_roles_and_admin
 from contextlib import asynccontextmanager
 from starlette.middleware.sessions import SessionMiddleware
+from fastapi.staticfiles import StaticFiles
 from app.api.v1.endpoints import (
     auth,
     user,
