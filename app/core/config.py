@@ -51,7 +51,7 @@ class Settings(BaseSettings):
     # Database URL Configuration
     @property
     def database_url(self) -> str:
-        db_host = "34.124.227.76" if self.ENVIRONMENT == "development" else self.DB_HOST
+        db_host = "136.228.158.126" if self.ENVIRONMENT == "development" else self.DB_HOST
         return f"postgresql+asyncpg://{quote_plus(self.DB_USER)}:{quote_plus(self.DB_PASSWORD)}@{db_host}:{self.DB_PORT}/{self.DB_NAME}"
 
     class Config:
