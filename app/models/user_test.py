@@ -10,7 +10,7 @@ class UserTest(Base):
     __tablename__ = "user_tests"
 
     id = Column(Integer, primary_key=True, index=True)
-    uuid = Column(UUID, unique=True, nullable=False, default=uuid.uuid4)  # Change to UUID type
+    uuid = Column(UUID, unique=True, nullable=False, default=uuid.uuid4)
     name = Column(String(100), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     assessment_type_id = Column(Integer, ForeignKey("assessment_types.id", ondelete="CASCADE"), nullable=False)

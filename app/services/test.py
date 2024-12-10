@@ -9,8 +9,11 @@ from datetime import datetime
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException
-
+from sqlalchemy import cast
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.types import String
 from app.schemas.payload import BaseResponse
+from app.utils.pagination import paginate_results
 
 
 async def get_shared_test(test_uuid: str, db: AsyncSession) -> BaseResponse:
@@ -124,116 +127,61 @@ async def delete_test(test_uuid: str, user_id: int, db: AsyncSession):
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
 
 
-async def get_tests_by_user(user_id: int, db: AsyncSession):
+async def get_tests_by_user(
+    user_id: int,
+    db: AsyncSession,
+    search: str = None,
+    sort_by: str = "created_at",
+    sort_order: str = "desc",
+    filter_by: dict = None,
+    page: int = 1,
+    page_size: int = 10,
+):
     try:
-        stmt = select(UserTest).where(
+        query = select(UserTest).where(
             UserTest.user_id == user_id,
-            UserTest.is_deleted == False
-        ).order_by(UserTest.created_at.desc())
+            UserTest.is_deleted == False,
+            UserTest.user_responses.any(is_draft=False)
+        )
 
-        result = await db.execute(stmt)
+        if search:
+            query = query.where(UserTest.name.ilike(f"%{search}%"))
+
+        if filter_by:
+            for key, value in filter_by.items():
+                if hasattr(UserTest, key):
+                    query = query.where(getattr(UserTest, key) == value)
+
+        if hasattr(UserTest, sort_by):
+            sort_column = getattr(UserTest, sort_by)
+            if sort_order.lower() == "asc":
+                query = query.order_by(sort_column.asc())
+            else:
+                query = query.order_by(sort_column.desc())
+
+        result = await db.execute(query)
         tests = result.scalars().all()
 
         if not tests:
             raise HTTPException(status_code=404, detail="No tests found for this user.")
 
-        return [
+        formatted_tests = [
             {
-                "test_uuid": test.uuid,
+                "test_uuid": str(test.uuid),
                 "test_name": test.name,
                 "is_completed": test.is_completed,
                 "is_deleted": test.is_deleted,
-                "created_at": test.created_at,
+                "created_at": test.created_at.strftime("%d-%B-%Y"),
+                "updated_at": test.updated_at.strftime("%d-%B-%Y") if test.updated_at else None,
             }
             for test in tests
         ]
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+        # Paginate results
+        paginated_results = paginate_results(formatted_tests, page, page_size)
 
+        return paginated_results
 
-async def get_test_details(test_uuid: str, user_id: int, db: AsyncSession):
-    try:
-        # Validate test_uuid and fetch UserTest
-        stmt = select(UserTest).where(
-            UserTest.uuid == test_uuid,
-            UserTest.user_id == user_id,
-            UserTest.is_deleted == False
-        )
-        result = await db.execute(stmt)
-        user_test = result.scalars().first()
-
-        if not user_test:
-            raise HTTPException(status_code=404, detail="Test not found.")
-
-        # Fetch all assessment types
-        assessment_types_stmt = select(AssessmentType).where(
-            AssessmentType.is_deleted == False
-        )
-        assessment_types_result = await db.execute(assessment_types_stmt)
-        assessment_types = assessment_types_result.scalars().all()
-
-        if not assessment_types:
-            raise HTTPException(status_code=404, detail="No assessment types found.")
-
-        assessments_data = []
-
-        for assessment_type in assessment_types:
-            # Check if a draft exists for this assessment type
-            draft_stmt = select(UserResponse).where(
-                UserResponse.user_test_id == user_test.id,
-                UserResponse.assessment_type_id == assessment_type.id,
-                UserResponse.is_draft == True,
-                UserResponse.is_deleted == False
-            )
-            draft_result = await db.execute(draft_stmt)
-            draft = draft_result.scalars().first()
-
-            # Determine completion status
-            if draft:
-                completion_status = "in_progress"
-            else:
-                response_stmt = select(UserResponse).where(
-                    UserResponse.user_test_id == user_test.id,
-                    UserResponse.assessment_type_id == assessment_type.id,
-                    UserResponse.is_draft == False,
-                    UserResponse.is_deleted == False
-                )
-                response_result = await db.execute(response_stmt)
-                response = response_result.scalars().first()
-                completion_status = "completed" if response else "not_started"
-
-            # Parse draft response data if available
-            draft_data = None
-            if draft and draft.response_data:
-                try:
-                    if isinstance(draft.response_data, str):
-                        draft_data = json.loads(draft.response_data)
-                    else:
-                        draft_data = draft.response_data
-
-                    if isinstance(draft_data, dict) and not draft_data.get("responses"):
-                        draft_data = {"responses": draft_data}
-                except json.JSONDecodeError as e:
-                    print("JSON Decode Error:", str(e))
-                    draft_data = {"responses": {}}
-
-            assessments_data.append({
-                "assessment_type_uuid": assessment_type.uuid,
-                "assessment_type_name": assessment_type.name,
-                "is_draft": bool(draft),
-                "draft_data": draft_data,
-                "completion_status": completion_status
-            })
-
-        return {
-            "test_uuid": user_test.uuid,
-            "test_name": user_test.name,
-            "assessments": assessments_data
-        }
-
-    except HTTPException as e:
-        raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
 
@@ -295,11 +243,14 @@ async def get_assessment_responses_by_test(
     user_id: int
 ) -> list[AssessmentResponseData]:
     try:
+        # Ensure explicit casting of test_uuid to UUID for compatibility
         stmt = (
             select(UserResponse)
             .options(joinedload(UserResponse.assessment_type))
             .where(
-                UserResponse.user_test.has(uuid=test_uuid),
+                UserResponse.user_test.has(
+                    cast(UserTest.uuid, UUID) == cast(test_uuid, UUID)
+                ),
                 UserResponse.user_id == user_id,
                 UserResponse.is_deleted == False
             )
