@@ -1,7 +1,6 @@
 import logging
 
-from typing import Dict
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import get_db, get_current_user_data
 from app.models import AssessmentType, User
@@ -11,6 +10,7 @@ from app.schemas.draft import SaveDraftRequest
 from app.services.draft import load_drafts, retrieve_draft_by_uuid, submit_assessment, delete_draft, \
     save_user_response_as_draft, update_user_response_draft
 from datetime import datetime
+from typing import Optional, Dict
 
 logger = logging.getLogger(__name__)
 draft_router = APIRouter()
@@ -136,43 +136,55 @@ async def retrieve_draft_endpoint(
 @draft_router.get(
     "/load-drafts",
     response_model=BaseResponse,
-    summary="Load all drafts for the current user.",
+    summary="Load all drafts for the current user."
 )
 async def load_drafts_endpoint(
-        db: AsyncSession = Depends(get_db),
-        current_user=Depends(get_current_user_data),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user_data),
+    search: Optional[str] = Query(None, description="Search drafts by name or assessment name."),
+    sort_by: Optional[str] = Query("created_at", description="Sort drafts by a field (default: created_at)."),
+    sort_order: Optional[str] = Query("desc", description="Sort order: asc or desc (default: desc)."),
+    page: int = Query(1, ge=1, description="Page number (default: 1)."),
+    page_size: int = Query(10, ge=1, le=100, description="Number of items per page (default: 10)."),
+    filters: Optional[str] = Query(None, description="Additional filters as a JSON string.")
 ):
     try:
-        if not current_user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User is not authenticated."
-            )
+        parsed_filters = None
+        if filters:
+            import json
+            try:
+                parsed_filters = json.loads(filters)
+            except json.JSONDecodeError:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid filters format. Must be a valid JSON string."
+                )
 
-        drafts = await load_drafts(db=db, current_user=current_user)
-
-        if not drafts:
-            return BaseResponse(
-                status=status.HTTP_200_OK,
-                message="No drafts found.",
-                date=datetime.utcnow().strftime("%d-%B-%Y"),
-                payload={"drafts": []}
-            )
+        result = await load_drafts(
+            db=db,
+            current_user=current_user,
+            search=search,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            page=page,
+            page_size=page_size,
+            filters=parsed_filters
+        )
 
         return BaseResponse(
             status=status.HTTP_200_OK,
             message="Drafts loaded successfully.",
             date=datetime.utcnow().strftime("%d-%B-%Y"),
-            payload={"drafts": drafts}
+            payload=result
         )
-
     except HTTPException as e:
+        logger.warning(f"HTTPException in load_drafts_endpoint: {e.detail}")
         raise e
     except Exception as e:
         logger.error(f"Unexpected error in load_drafts_endpoint: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while loading drafts: {str(e)}",
+            detail=f"An unexpected error occurred while loading drafts: {str(e)}"
         )
 
 

@@ -2,7 +2,8 @@ import uuid
 import json
 import logging
 
-from typing import List, Dict
+from sqlalchemy.sql.expression import or_
+from typing import Dict, Optional
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,6 +15,7 @@ from app.services.learning_style_assessment import predict_learning_style
 from app.services.personality_assessment import process_personality_assessment
 from app.services.skill_assessment import predict_skills
 from app.services.value_assessment import process_value_assessment
+from app.utils.pagination import paginate_results
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -160,12 +162,13 @@ async def retrieve_draft_by_uuid(db: AsyncSession, current_user: User, draft_uui
         stmt = select(
             UserResponse.uuid,
             UserResponse.draft_name,
+            UserResponse.response_data,
             UserResponse.created_at,
             UserResponse.updated_at,
-            UserResponse.response_data,
+            UserResponse.is_completed,
             AssessmentType.name
         ).join(AssessmentType).where(
-            UserResponse.uuid == draft_uuid,
+            UserResponse.uuid == str(draft_uuid),
             UserResponse.user_id == current_user.id,
             UserResponse.is_draft == True,
             UserResponse.is_deleted == False
@@ -180,13 +183,18 @@ async def retrieve_draft_by_uuid(db: AsyncSession, current_user: User, draft_uui
                 detail="Draft not found."
             )
 
+        response_data = draft.response_data
+        if isinstance(response_data, str):
+            response_data = json.loads(response_data)
+
         draft_item = {
             "uuid": draft.uuid,
             "draft_name": draft.draft_name,
             "assessment_name": draft.name,
+            "response_data": response_data,
             "created_at": draft.created_at.strftime("%d-%B-%Y %H:%M:%S"),
             "updated_at": draft.updated_at.strftime("%d-%B-%Y %H:%M:%S") if draft.updated_at else None,
-            "response_data": json.loads(draft.response_data)
+            "is_completed": draft.is_completed,
         }
 
         return draft_item
@@ -200,51 +208,102 @@ async def retrieve_draft_by_uuid(db: AsyncSession, current_user: User, draft_uui
         )
 
 
-async def load_drafts(db: AsyncSession, current_user: User) -> List[Dict]:
+async def load_drafts(
+    db: AsyncSession,
+    current_user: User,
+    search: Optional[str] = None,
+    sort_by: Optional[str] = "created_at",
+    sort_order: Optional[str] = "desc",
+    page: int = 1,
+    page_size: int = 10,
+    filters: Optional[Dict[str, str]] = None
+) -> dict:
     try:
-        stmt = select(
-            UserResponse.uuid,
-            UserResponse.draft_name,
-            UserResponse.created_at,
-            AssessmentType.name,
-            UserResponse.is_draft,
-            UserResponse.updated_at
-        ).join(AssessmentType).where(
-            UserResponse.user_id == current_user.id,
-            UserResponse.is_deleted == False
+        stmt = (
+            select(
+                UserResponse.uuid.label("uuid"),
+                UserResponse.draft_name.label("draft_name"),
+                UserResponse.created_at.label("created_at"),
+                AssessmentType.name.label("assessment_name"),
+                UserResponse.is_draft.label("is_draft"),
+                UserResponse.updated_at.label("updated_at")
+            )
+            .join(AssessmentType)
+            .where(
+                UserResponse.user_id == current_user.id,
+                UserResponse.is_deleted == False
+            )
         )
+
+        if search:
+            stmt = stmt.where(
+                or_(
+                    UserResponse.draft_name.ilike(f"%{search}%"),
+                    AssessmentType.name.ilike(f"%{search}%")
+                )
+            )
+
+        if filters:
+            for key, value in filters.items():
+                if hasattr(UserResponse, key):
+                    stmt = stmt.where(getattr(UserResponse, key) == value)
+                else:
+                    raise ValueError(f"Invalid filter key: {key}")
+
+        sort_column = getattr(UserResponse, sort_by, None)
+        if not sort_column:
+            raise ValueError(f"Invalid sort column: {sort_by}")
+        if sort_order == "desc":
+            stmt = stmt.order_by(sort_column.desc())
+        else:
+            stmt = stmt.order_by(sort_column.asc())
+
+        offset = (page - 1) * page_size
+        stmt = stmt.offset(offset).limit(page_size)
+
         result = await db.execute(stmt)
         drafts = result.fetchall()
 
-        if not drafts:
-            return []
+        count_stmt = select(func.count(UserResponse.id)).where(
+            UserResponse.user_id == current_user.id,
+            UserResponse.is_deleted == False
+        )
+        total_items = (await db.execute(count_stmt)).scalar()
 
         draft_items = []
         for draft in drafts:
-            draft_name = draft[1] if draft[4] else None
-            if draft[4] and not draft_name:
-                logger.warning(f"Draft with missing name: {draft[0]} - {draft[3]}")
-                # I set Default to a placeholder name if it's missing
+            draft_name = draft.draft_name if draft.is_draft else None
+            if draft.is_draft and not draft_name:
                 draft_name = "Unnamed Draft"
 
-            draft_item = {
-                "uuid": draft[0],
+            draft_items.append({
+                "uuid": draft.uuid,
                 "draft_name": draft_name,
-                "assessment_name": draft[3],
-                "created_at": draft[2].strftime("%d-%B-%Y %H:%M:%S"),
-                "updated_at": draft[5].strftime("%d-%B-%Y %H:%M:%S") if draft[5] else None
-            }
+                "assessment_name": draft.assessment_name,
+                "created_at": draft.created_at.strftime("%d-%B-%Y %H:%M:%S"),
+                "updated_at": draft.updated_at.strftime("%d-%B-%Y %H:%M:%S") if draft.updated_at else None
+            })
 
-            draft_items.append(draft_item)
+        # Prepare metadata
+        metadata = {
+            "page": page,
+            "page_size": page_size,
+            "total_items": total_items,
+            "total_pages": (total_items + page_size - 1) // page_size
+        }
 
-        return draft_items
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        logger.error(f"Error loading drafts: {str(e)}")
+        return {"items": draft_items, "metadata": metadata}
+
+    except ValueError as ve:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while loading drafts: {str(e)}",
+            status_code=400,
+            detail=f"Invalid parameter: {str(ve)}"
+        )
+    except Exception as e:
+        logger.error(f"Error in load_drafts: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"An error occurred while loading drafts: {str(e)}"
         )
 
 

@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, status, HTTPException, Query
@@ -7,15 +8,42 @@ from app.dependencies import get_current_user_data, is_admin_user
 from app.schemas.payload import BaseResponse
 from app.services.feedback import (
     create_feedback,
-    get_all_feedbacks, promote_feedback, get_promoted_feedbacks,
+    get_all_feedbacks, promote_feedback, get_promoted_feedbacks, delete_user_feedback,
 )
 from app.schemas.feedback import (
     CreateFeedbackRequest,
     CreateFeedbackResponse,
-    AllFeedbacksResponse, PromotedFeedbacksResponse
+    PromotedFeedbacksResponse
 )
 
 feedback_router = APIRouter()
+logger = logging.getLogger(__name__)
+
+
+@feedback_router.delete(
+    "/{feedback_uuid}",
+    status_code=status.HTTP_200_OK,
+    summary="Delete user feedback",
+    tags=["Feedback"],
+)
+async def delete_feedback(
+        feedback_uuid: str,
+        db: AsyncSession = Depends(get_db),
+        current_user=Depends(get_current_user_data),
+):
+    try:
+        response = await delete_user_feedback(feedback_uuid, db)
+
+        return response
+
+    except HTTPException as e:
+        logger.warning(f"HTTPException in delete_feedback: {e.detail}")
+        raise e
+    except Exception as e:
+        logger.error(f"Unexpected error in delete_feedback: {e}")
+        raise HTTPException(
+            status_code=500, detail="An unexpected error occurred while deleting feedback."
+        )
 
 
 @feedback_router.get(
@@ -79,7 +107,7 @@ async def fetch_all_feedbacks_route(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        feedbacks = await get_all_feedbacks(
+        feedbacks, total_count = await get_all_feedbacks(
             db=db,
             page=page,
             page_size=page_size,
@@ -94,7 +122,10 @@ async def fetch_all_feedbacks_route(
             date=datetime.utcnow().strftime("%d-%B-%Y"),
             status=200,
             message="Feedbacks retrieved successfully",
-            payload=feedbacks,
+            payload={
+                "total_count": total_count,
+                "feedbacks": feedbacks,
+            },
         )
 
     except HTTPException as e:

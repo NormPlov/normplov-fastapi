@@ -7,6 +7,7 @@ from app.dependencies import is_admin_user
 from app.models import User
 from app.schemas.payload import BaseResponse
 from datetime import datetime
+from app.utils.format_date import format_date
 from app.services.school import (
     create_school,
     delete_school,
@@ -17,7 +18,7 @@ from app.schemas.school import (
     SchoolResponse,
     UpdateSchoolRequest
 )
-from app.utils.format_date import format_date
+
 
 school_router = APIRouter()
 

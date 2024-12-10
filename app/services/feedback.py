@@ -1,24 +1,61 @@
 import uuid
+import logging
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload
 from datetime import datetime
-
-from sqlalchemy.sql.functions import current_user
-
+from sqlalchemy.sql.functions import current_user, func
 from app.models import AssessmentType
 from app.models.user_feedback import UserFeedback
 from fastapi import HTTPException
-import logging
-
 from app.schemas.payload import BaseResponse
 from app.utils.format_date import format_date
 from app.utils.pagination import paginate_results
 from app.utils.telegram import send_telegram_message
 
 logger = logging.getLogger(__name__)
+
+
+async def delete_user_feedback(feedback_uuid: str, db: AsyncSession) -> dict:
+    try:
+        stmt = select(UserFeedback).where(
+            UserFeedback.uuid == feedback_uuid,
+            UserFeedback.is_deleted == False
+        )
+        result = await db.execute(stmt)
+        feedback = result.scalars().first()
+
+        if not feedback:
+            raise HTTPException(
+                status_code=404,
+                detail="Feedback not found"
+            )
+
+        feedback.is_deleted = True
+        feedback.updated_at = datetime.utcnow()
+
+        db.add(feedback)
+        await db.commit()
+
+        return {
+            "date": datetime.utcnow().strftime("%d-%B-%Y"),
+            "status": 200,
+            "message": "Feedback deleted successfully",
+            "payload": {"feedback_uuid": feedback_uuid},
+        }
+
+    except HTTPException as e:
+        logger.warning(f"HTTPException in delete_user_feedback: {e.detail}")
+        raise e
+    except Exception as e:
+        logger.exception(f"Error deleting feedback: {e}")
+        await db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to delete feedback due to an unexpected error."
+        )
 
 
 async def get_user_feedback_by_uuid(user_uuid: str, db: AsyncSession) -> BaseResponse:
@@ -143,7 +180,7 @@ async def get_all_feedbacks(
     is_promoted: bool = None,
     sort_by: str = "created_at",
     sort_order: str = "desc",
-) -> dict:
+) -> tuple:
     try:
         query = select(UserFeedback).options(joinedload(UserFeedback.user))
 
@@ -157,6 +194,10 @@ async def get_all_feedbacks(
 
         query = query.where(*filters)
 
+        # Count total feedbacks matching the filters
+        count_query = select(func.count(UserFeedback.id)).where(*filters)
+        total_count = (await db.execute(count_query)).scalar()
+
         sort_column = getattr(UserFeedback, sort_by, None)
         if sort_column is None:
             raise HTTPException(
@@ -168,10 +209,10 @@ async def get_all_feedbacks(
         else:
             query = query.order_by(sort_column.asc())
 
+        query = query.offset((page - 1) * page_size).limit(page_size)
+
         result = await db.execute(query)
         feedbacks = result.scalars().all()
-
-        paginated_feedbacks = paginate_results(feedbacks, page, page_size)
 
         formatted_feedbacks = [
             {
@@ -184,13 +225,10 @@ async def get_all_feedbacks(
                 "is_deleted": feedback.is_deleted,
                 "is_promoted": feedback.is_promoted,
             }
-            for feedback in paginated_feedbacks["items"]
+            for feedback in feedbacks
         ]
 
-        return {
-            "items": formatted_feedbacks,
-            "metadata": paginated_feedbacks["metadata"],
-        }
+        return formatted_feedbacks, total_count
 
     except Exception as e:
         logger.exception("Error fetching feedbacks")
