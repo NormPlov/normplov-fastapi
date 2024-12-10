@@ -56,17 +56,14 @@ async def predict_learning_style(
         result = await db.execute(stmt)
         questions = result.scalars().all()
 
-        # Normalizing the input data from the request body
         if isinstance(data, dict):
             normalized_answers = {key.replace("/", ""): value for key, value in data.items()}
         else:
-            # If data is an object with 'responses' attribute
             normalized_answers = {key.replace("/", ""): value for key, value in data.responses.items()}
 
         input_data_dict = {}
         missing_questions = []
 
-        # Loop through all questions to prepare input data for the model
         for question in questions:
             if not question.dimension:
                 logger.error(f"Dimension missing for question ID {question.id}")
@@ -87,7 +84,6 @@ async def predict_learning_style(
         if missing_questions:
             logger.warning(f"Missing answers for questions: {missing_questions}")
 
-        # Prepare the input data for the model
         input_data = pd.DataFrame([input_data_dict]).reindex(
             columns=vark_model.feature_names_in_, fill_value=0
         )
@@ -119,7 +115,6 @@ async def predict_learning_style(
         recommended_techniques = []
         related_careers = []
 
-        # Gather dimension and career data based on the predicted scores
         for style, prob in row.items():
             dimension_name = style.replace("_Score", "")
             dimension_stmt = select(Dimension).where(Dimension.name == dimension_name)
@@ -129,7 +124,6 @@ async def predict_learning_style(
             if dimension:
                 percentage = round(prob * 100, 2)
 
-                # Assign level based on score
                 if prob > 0.6:
                     level = 3
                 elif prob >= 0.3:
@@ -180,7 +174,6 @@ async def predict_learning_style(
                     }
                 )
 
-        # Fetch techniques for the highest-scoring learning style
         highest_scoring_dimension_stmt = select(Dimension).where(Dimension.name == learning_style)
         highest_scoring_dimension = await db.execute(highest_scoring_dimension_stmt)
         highest_scoring_dimension = highest_scoring_dimension.scalars().first()
@@ -202,7 +195,6 @@ async def predict_learning_style(
 
         unique_careers = list({c["career_name"]: c for c in related_careers}.values())
 
-        # Prepare the response with test UUID and name
         response = LearningStyleResponse(
             user_id=current_user.uuid,
             test_uuid=str(user_test.uuid),
@@ -216,7 +208,6 @@ async def predict_learning_style(
             related_careers=unique_careers
         )
 
-        # Store the user response in the database
         user_responses = UserResponse(
             uuid=str(uuid.uuid4()),
             user_id=current_user.id,
@@ -227,7 +218,6 @@ async def predict_learning_style(
         )
         db.add(user_responses)
 
-        # Save the scores as JSON in UserAssessmentScore
         for style, prob in row.items():
             dimension_name = style.replace("_Score", "")
             dimension_stmt = select(Dimension).where(Dimension.name == dimension_name)

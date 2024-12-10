@@ -1,12 +1,15 @@
 import shutil
 import logging
+
 from typing import Optional
 from sqlalchemy.orm import joinedload
 from fastapi import HTTPException, status, UploadFile
 from sqlalchemy import or_, desc, asc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from datetime import datetime
+from datetime import datetime, timedelta
+
+from sqlalchemy.sql.functions import current_user
 
 from app.models import UserRole
 from app.models.user import User
@@ -83,7 +86,6 @@ async def block_user(uuid: str, is_blocked: bool, db: AsyncSession, current_user
     try:
         logger.info(f"Attempting to {'block' if is_blocked else 'unblock'} user with UUID: {uuid}")
 
-        # Fetch user with roles eagerly loaded
         stmt = select(User).options(joinedload(User.roles).joinedload(UserRole.role)).where(User.uuid == uuid)
         result = await db.execute(stmt)
         user = result.scalars().first()
@@ -102,7 +104,13 @@ async def block_user(uuid: str, is_blocked: bool, db: AsyncSession, current_user
                 detail="You cannot block/unblock yourself."
             )
 
-        # Check if the user is an admin
+        if is_blocked and not user.is_verified:
+            logger.error(f"Attempt to block unverified user: {user.uuid}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot block an unverified user."
+            )
+
         if is_blocked and any(role.role.name == "ADMIN" for role in user.roles):
             logger.error(f"Attempt to block admin user: {user.uuid}")
             raise HTTPException(
@@ -110,7 +118,6 @@ async def block_user(uuid: str, is_blocked: bool, db: AsyncSession, current_user
                 detail="Admin users cannot be blocked."
             )
 
-        # Update block status
         user.is_blocked = is_blocked
         user.updated_at = datetime.utcnow()
 
@@ -175,6 +182,7 @@ async def get_user_by_email(email: str, db: AsyncSession, current_user: User) ->
 
 
 async def change_password(user: User, old_password: str, new_password: str, db: AsyncSession) -> BaseResponse:
+
     if not verify_password(old_password, user.password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -182,6 +190,12 @@ async def change_password(user: User, old_password: str, new_password: str, db: 
         )
 
     validate_password(new_password)
+
+    if verify_password(new_password, user.password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be different from the old password."
+        )
 
     user.password = hash_password(new_password)
     user.updated_at = datetime.utcnow()
@@ -277,6 +291,30 @@ async def update_user_profile(uuid: str, profile_update: UpdateUser, db: AsyncSe
         )
 
     update_data = profile_update.dict(exclude_unset=True)
+
+    if "date_of_birth" in update_data:
+        try:
+            date_of_birth = datetime.strptime(update_data["date_of_birth"], "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid date_of_birth format. Use YYYY-MM-DD."
+            )
+
+        if date_of_birth > datetime.utcnow():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="date_of_birth cannot be in the future."
+            )
+
+        min_age_date = datetime.utcnow() - timedelta(days=13 * 365)
+        if date_of_birth > min_age_date:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User must be at least 13 years old."
+            )
+
+    # Update user attributes
     for key, value in update_data.items():
         setattr(user, key, value)
 
@@ -315,6 +353,18 @@ async def delete_user_by_uuid(uuid: str, db: AsyncSession) -> BaseResponse:
             detail="User not found."
         )
 
+    if user.uuid == current_user.uuid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot delete yourself."
+        )
+
+    if any(role.role.name == "ADMIN" for role in user.roles):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin users cannot be deleted."
+        )
+
     user.is_deleted = True
     user.updated_at = datetime.utcnow()
 
@@ -340,7 +390,6 @@ async def update_user_by_uuid(uuid: str, user_update: UpdateUser, db: AsyncSessi
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
 
-    # Apply updates
     update_data = user_update.dict(exclude_unset=True)
     for key, value in update_data.items():
         setattr(user, key, value)
@@ -384,7 +433,6 @@ async def get_all_users(
     try:
         stmt = select(User)
 
-        # Apply search
         if search:
             search_filter = or_(
                 User.username.ilike(f"%{search}%"),
@@ -393,13 +441,11 @@ async def get_all_users(
             )
             stmt = stmt.where(search_filter)
 
-        # Apply filters
         if filters:
             for field, value in filters.items():
                 if hasattr(User, field):
                     stmt = stmt.where(getattr(User, field) == value)
 
-        # Apply sorting
         if sort_by and hasattr(User, sort_by):
             sort_column = getattr(User, sort_by)
             if sort_order.lower() == "desc":
@@ -407,14 +453,11 @@ async def get_all_users(
             else:
                 stmt = stmt.order_by(asc(sort_column))
 
-        # Execute query
         result = await db.execute(stmt)
         users = result.scalars().all()
 
-        # Paginate results
         paginated_users = paginate_results(users, page, page_size)
 
-        # Serialize response
         response_payload = [
             {
                 "uuid": user.uuid,
@@ -422,6 +465,7 @@ async def get_all_users(
                 "email": user.email,
                 "bio": user.bio,
                 "gender": user.gender,
+                "avatar": user.avatar,
                 "is_active": user.is_active,
                 "is_verified": user.is_verified,
                 "is_blocked": user.is_blocked,

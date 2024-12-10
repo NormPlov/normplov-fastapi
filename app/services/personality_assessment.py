@@ -17,9 +17,7 @@ from app.schemas.personality_assessment import (
     PersonalityAssessmentResponse,
     PersonalityTypeDetails,
     DimensionScore,
-    PersonalityTraits,
-    CareerData,
-    MajorData,
+    PersonalityTraits
 )
 from ml_models.model_loader import load_personality_models
 import logging
@@ -44,13 +42,10 @@ async def process_personality_assessment(
     current_user,
 ) -> PersonalityAssessmentResponse:
     try:
-        # Get the assessment type ID based on the name
         assessment_type_id = await get_assessment_type_id("Personality", db)
 
-        # Now calling create_user_test with assessment_type_id
         user_test = await create_user_test(db, current_user.id, "Personality", assessment_type_id)
 
-        # Calculate dimension scores
         input_responses_df = pd.DataFrame([input_data])
         dimension_scores = {}
         for dimension, model in dimension_models.items():
@@ -66,7 +61,6 @@ async def process_personality_assessment(
             for dim, score in dimension_scores.items()
         }
 
-        # Predict personality type
         input_data_for_prediction = pd.DataFrame([dimension_scores])
         predicted_class = personality_predictor.predict(input_data_for_prediction)
         predicted_personality = label_encoder.inverse_transform(predicted_class)[0]
@@ -78,7 +72,6 @@ async def process_personality_assessment(
         if not personality_details:
             raise HTTPException(status_code=400, detail="Personality details not found for the predicted class.")
 
-        # Save assessment scores
         assessment_scores = []
         for dimension_name, score_data in normalized_scores.items():
             dimension_query = select(Dimension).where(Dimension.name == dimension_name)
@@ -109,14 +102,12 @@ async def process_personality_assessment(
 
         db.add_all(assessment_scores)
 
-        # Fetch personality traits
         traits_query = select(PersonalityTrait).where(PersonalityTrait.personality_type_id == personality_details.id)
         traits_result = await db.execute(traits_query)
         traits = traits_result.scalars().all()
         positive_traits = [trait.trait for trait in traits if trait.is_positive]
         negative_traits = [trait.trait for trait in traits if not trait.is_positive]
 
-        # Fetch strengths and weaknesses
         strengths_query = select(PersonalityStrength).where(PersonalityStrength.personality_type_id == personality_details.id)
         strengths_result = await db.execute(strengths_query)
         strengths = [s.strength for s in strengths_result.scalars().all()]
@@ -125,14 +116,12 @@ async def process_personality_assessment(
         weaknesses_result = await db.execute(weaknesses_query)
         weaknesses = [w.weakness for w in weaknesses_result.scalars().all()]
 
-        # Fetch careers from career table with majors and schools
         career_query = select(Career).where(Career.holland_code_id == personality_details.id)
         career_result = await db.execute(career_query)
         careers = career_result.scalars().all()
 
         career_data = []
         for career in careers:
-            # Get the majors related to the career
             career_majors_stmt = (
                 select(Major)
                 .join(CareerMajor, CareerMajor.major_id == Major.id)
@@ -143,7 +132,6 @@ async def process_personality_assessment(
 
             majors_with_schools = []
             for major in majors:
-                # Get schools related to the major
                 schools_stmt = (
                     select(School)
                     .join(SchoolMajor, SchoolMajor.school_id == School.id)
@@ -158,10 +146,9 @@ async def process_personality_assessment(
 
             career_data.append({
                 "career_name": career.name,
-                "majors": majors_with_schools  # Multiple majors and schools as requested
+                "majors": majors_with_schools
             })
 
-        # Construct the response
         response = PersonalityAssessmentResponse(
             user_uuid=current_user.uuid,
             personality_type=PersonalityTypeDetails(
@@ -177,10 +164,9 @@ async def process_personality_assessment(
             traits=PersonalityTraits(positive=positive_traits, negative=negative_traits),
             strengths=strengths,
             weaknesses=weaknesses,
-            career_recommendations=career_data,  # Updated career format
+            career_recommendations=career_data,
         )
 
-        # Save user response
         user_response = UserResponse(
             uuid=str(uuid.uuid4()),
             user_id=current_user.id,

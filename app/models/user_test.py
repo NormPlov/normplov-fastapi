@@ -5,6 +5,7 @@ from sqlalchemy.dialects.postgresql import UUID
 import uuid
 from app.core.database import Base
 
+
 class UserTest(Base):
     __tablename__ = "user_tests"
 

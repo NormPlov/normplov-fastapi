@@ -1,9 +1,14 @@
+from typing import Optional, Dict
+
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import get_db, get_current_user_data
+from app.models import AssessmentType, User
+from sqlalchemy.future import select
 from app.schemas.payload import BaseResponse
-from app.schemas.draft import SaveDraftRequest
-from app.services.draft import save_draft, load_drafts, retrieve_draft_by_uuid, submit_assessment, delete_draft
+from app.schemas.draft import SaveDraftRequest, DraftResponse
+from app.services.draft import load_drafts, retrieve_draft_by_uuid, submit_assessment, delete_draft, \
+    save_user_response_as_draft, update_user_response_draft
 from datetime import datetime
 import logging
 
@@ -171,39 +176,97 @@ async def load_drafts_endpoint(
         )
 
 
-@draft_router.post(
-    "/save-draft",
-    response_model=BaseResponse,
-    summary="Save or update a draft for any assessment type.",
-)
-async def save_draft_endpoint(
-    assessment_name: str = Query(..., description="The name of the assessment type."),
-    draft_data: SaveDraftRequest = Depends(),
+@draft_router.put("/update_draft/{draft_uuid}", response_model=BaseResponse)
+async def update_draft(
+    draft_uuid: str,
+    update_request: Dict[str, dict],
+    current_user: User = Depends(get_current_user_data),
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user_data),
 ):
     try:
-        result = await save_draft(
-            data=draft_data.response_data,
-            assessment_name=assessment_name,
+        if "response_data" not in update_request:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Missing 'response_data' in request body.",
+            )
+
+        updated_draft = await update_user_response_draft(
             db=db,
+            draft_uuid=draft_uuid,
+            updated_data=update_request["response_data"],
             current_user=current_user,
-            test_uuid=draft_data.test_uuid,
         )
+
+        response_payload = {
+            "uuid": str(updated_draft.uuid),
+            "draft_name": updated_draft.draft_name,
+            "response_data": updated_draft.response_data,
+            "created_at": updated_draft.created_at.strftime("%d-%B-%Y %H:%M:%S"),
+            "updated_at": updated_draft.updated_at.strftime("%d-%B-%Y %H:%M:%S") if updated_draft.updated_at else None,
+        }
+
         return BaseResponse(
-            date=datetime.utcnow().strftime("%d-%B-%Y"),
-            status=status.HTTP_200_OK,
-            message=result["message"],
-            payload={
-                "uuid": result["uuid"],
-                "draft_name": result["draft_name"],
-            },
+            date=updated_draft.updated_at,
+            status=200,
+            payload=response_payload,
+            message="Draft updated successfully",
         )
+
     except HTTPException as e:
+        logger.warning(f"HTTPException in update_draft route: {e.detail}")
         raise e
     except Exception as e:
-        logger.error(f"Unexpected error in save_draft_endpoint: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while saving the draft: {str(e)}",
+        logger.error(f"Unexpected error in update_draft route: {e}")
+        raise HTTPException(status_code=500, detail="An unexpected error occurred.")
+
+
+@draft_router.post("/save_draft/{assessment_type_name}", response_model=BaseResponse)
+async def save_draft(
+    assessment_type_name: str,
+    draft_request: SaveDraftRequest,
+    current_user: User = Depends(get_current_user_data),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        assessment_type = (
+            await db.execute(
+                select(AssessmentType).where(AssessmentType.name == assessment_type_name)
+            )
+        ).scalar_one_or_none()
+
+        if not assessment_type:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Assessment type not found.",
+            )
+
+        draft = await save_user_response_as_draft(
+            db=db,
+            response_data=draft_request.response_data,
+            assessment_type_name=assessment_type_name,
+            assessment_type_id=assessment_type.id,
+            current_user=current_user,
         )
+
+        # Prepare the response
+        response_payload = {
+            "uuid": str(draft.uuid),
+            "draft_name": draft.draft_name,
+            "response_data": draft.response_data,
+            "created_at": draft.created_at.strftime("%d-%B-%Y %H:%M:%S"),
+            "updated_at": draft.updated_at.strftime("%d-%B-%Y %H:%M:%S") if draft.updated_at else None,
+        }
+
+        return BaseResponse(
+            date=draft.created_at,
+            status=200,
+            payload=response_payload,
+            message="Draft saved successfully",
+        )
+
+    except HTTPException as e:
+        logger.warning(f"HTTPException in save_draft route: {e.detail}")
+        raise e
+    except Exception as e:
+        logger.error(f"Unexpected error in save_draft route: {e}")
+        raise HTTPException(status_code=500, detail="An unexpected error occurred.")

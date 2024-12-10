@@ -3,18 +3,22 @@ import json
 import logging
 
 from typing import List, Dict
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from fastapi import HTTPException, status
-from app.models import AssessmentType, UserResponse, User, UserTest
-from datetime import datetime
+from app.models import AssessmentType, UserResponse, User
 from app.services.interest_assessment import process_interest_assessment
 from app.services.learning_style_assessment import predict_learning_style
 from app.services.personality_assessment import process_personality_assessment
 from app.services.skill_assessment import predict_skills
-from app.services.test import create_user_test
 from app.services.value_assessment import process_value_assessment
 
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+)
 logger = logging.getLogger(__name__)
 
 
@@ -38,7 +42,7 @@ async def delete_draft(
 ) -> dict:
     try:
         stmt = select(UserResponse).where(
-            UserResponse.uuid == draft_uuid,
+            UserResponse.uuid.cast(UUID) == draft_uuid,
             UserResponse.user_id == current_user.id,
             UserResponse.is_draft == True,
             UserResponse.is_deleted == False
@@ -96,7 +100,7 @@ async def submit_assessment(
             UserResponse.updated_at,
             UserResponse.assessment_type_id
         ).where(
-            UserResponse.uuid == draft_uuid,
+            UserResponse.uuid.cast(UUID) == draft_uuid,
             UserResponse.user_id == current_user.id,
             UserResponse.is_draft == True,
             UserResponse.is_deleted == False
@@ -112,9 +116,8 @@ async def submit_assessment(
             )
 
         assessment_type_id = draft.assessment_type_id
-        responses = json.loads(draft.response_data)
+        responses = draft.response_data if isinstance(draft.response_data, dict) else json.loads(draft.response_data)
 
-        # Call the correct assessment processing function based on assessment type
         if assessment_type_id == 1:
             response_data = await process_personality_assessment(responses, db, current_user)
         elif assessment_type_id == 2:
@@ -133,7 +136,7 @@ async def submit_assessment(
 
         return {
             "message": "Assessment submitted successfully.",
-            "uuid": draft.uuid,
+            "uuid": str(draft.uuid),
             "draft_name": draft.draft_name,
             "response_data": response_data,
             "is_draft": draft.is_draft,
@@ -245,73 +248,117 @@ async def load_drafts(db: AsyncSession, current_user: User) -> List[Dict]:
         )
 
 
-async def save_draft(
-    data: dict,
-    assessment_name: str,
+async def update_user_response_draft(
     db: AsyncSession,
+    draft_uuid: str,
+    updated_data: dict,
     current_user: User,
-    test_uuid: str | None = None,
-) -> dict:
+):
     try:
-        logger.info(f"Saving draft for assessment: {assessment_name}")
-        logger.debug(f"Current user: {current_user}")
-        logger.debug(f"Received test_uuid: {test_uuid}")
-
-        # Get the assessment type ID based on the assessment_name
-        assessment_type_id = await get_assessment_type_id(assessment_name, db)
-
-        # Generate the draft name
-        draft_name = f"Draft for {assessment_name} on {datetime.utcnow().strftime('%d-%B-%Y %H:%M:%S')}"
-
-        # Check if we are updating an existing draft in UserResponse
-        existing_draft = None
-        if test_uuid:
-            logger.debug(f"Looking for existing draft with UUID: {test_uuid.strip()}")
-            stmt = select(UserResponse).where(
-                UserResponse.uuid == test_uuid.strip(),
-                UserResponse.user_id == current_user.id,
-                UserResponse.is_draft == True,
+        draft = (
+            await db.execute(
+                select(UserResponse).where(
+                    UserResponse.uuid.cast(UUID) == draft_uuid,
+                    UserResponse.user_id == current_user.id,
+                    UserResponse.is_draft == True,
+                    UserResponse.is_deleted == False,
+                )
             )
-            result = await db.execute(stmt)
-            existing_draft = result.scalars().first()
-            logger.debug(f"Query result for existing draft: {existing_draft}")
+        ).scalar_one_or_none()
 
-        if existing_draft:
-            # Update existing draft
-            logger.info(f"Updating existing draft with UUID: {test_uuid}")
-            existing_draft.response_data = json.dumps(data)
-            existing_draft.updated_at = datetime.utcnow()
-            existing_draft.draft_name = draft_name
-            db.add(existing_draft)
-            await db.commit()
-            return {"message": "Draft updated successfully.", "uuid": existing_draft.uuid, "draft_name": draft_name}
+        if not draft:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Draft not found or does not belong to the current user.",
+            )
 
-        # No existing draft found; log this case
-        logger.warning("No existing draft found. Creating a new draft.")
-        new_draft = UserResponse(
-            uuid=str(uuid.uuid4()),
+        draft.response_data = updated_data
+        draft.updated_at = func.now()
+
+        await db.commit()
+        await db.refresh(draft)
+        return draft
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating draft {draft_uuid} for user {current_user.id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred.",
+        )
+
+
+async def save_user_response_as_draft(
+    db: AsyncSession,
+    response_data: dict,
+    assessment_type_name: str,
+    assessment_type_id: int,
+    current_user: User,
+):
+
+    try:
+        if not current_user or not current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User is not authenticated.",
+            )
+
+        assessment_type = (
+            await db.execute(
+                select(AssessmentType).where(AssessmentType.id == assessment_type_id)
+            )
+        ).scalar_one_or_none()
+
+        if not assessment_type:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Assessment type not found.",
+            )
+
+        draft_name_prefix = f"{assessment_type_name} Draft"
+        latest_draft = (
+            await db.execute(
+                select(UserResponse.draft_name).where(
+                    UserResponse.user_id == current_user.id,
+                    UserResponse.assessment_type_id == assessment_type_id,
+                    UserResponse.is_draft == True,
+                    UserResponse.is_deleted == False,
+                    UserResponse.draft_name.like(f"{draft_name_prefix}%"),
+                ).order_by(UserResponse.created_at.desc()).limit(1)
+            )
+        ).scalar_one_or_none()
+
+        if latest_draft:
+            try:
+                latest_number = int(latest_draft.replace(draft_name_prefix, "").strip())
+                next_number = latest_number + 1
+            except ValueError:
+                next_number = 1
+        else:
+            next_number = 1
+
+        draft_name = f"{draft_name_prefix} {next_number}"
+
+        draft = UserResponse(
+            uuid=uuid.uuid4(),
             user_id=current_user.id,
             assessment_type_id=assessment_type_id,
-            response_data=json.dumps(data),
             draft_name=draft_name,
+            response_data=response_data,
             is_draft=True,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
         )
+        db.add(draft)
 
-        db.add(new_draft)
         await db.commit()
+        await db.refresh(draft)
+        return draft
 
-        return {"message": "Draft saved successfully.", "uuid": new_draft.uuid, "draft_name": draft_name}
-
-    except HTTPException as e:
-        logger.error(f"HTTP exception during save_draft: {e.detail}")
-        raise e
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.exception("Unexpected error during save_draft.")
-        await db.rollback()
+        logger.error(f"Error saving draft for user {current_user.id}: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"An error occurred while saving the draft: {str(e)}",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while saving the draft.",
         )
-
