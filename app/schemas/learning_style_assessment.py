@@ -49,7 +49,7 @@ class Technique(BaseModel):
 
 
 class LearningStyleResponse(BaseModel):
-    user_id: str
+    user_uuid: str
     test_uuid: str
     test_name: str
     learning_style: str

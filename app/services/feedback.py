@@ -5,6 +5,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload
 from datetime import datetime
+
+from sqlalchemy.sql.functions import current_user
+
 from app.models import AssessmentType
 from app.models.user_feedback import UserFeedback
 from fastapi import HTTPException
@@ -154,17 +157,23 @@ async def get_all_feedbacks(
 
         query = query.where(*filters)
 
-        # Sorting
+        sort_column = getattr(UserFeedback, sort_by, None)
+        if sort_column is None:
+            raise HTTPException(
+                status_code=400, detail=f"Invalid sort_by field: {sort_by}"
+            )
+
         if sort_order.lower() == "desc":
-            query = query.order_by(getattr(UserFeedback, sort_by).desc())
+            query = query.order_by(sort_column.desc())
         else:
-            query = query.order_by(getattr(UserFeedback, sort_by).asc())
+            query = query.order_by(sort_column.asc())
 
         result = await db.execute(query)
         feedbacks = result.scalars().all()
+
         paginated_feedbacks = paginate_results(feedbacks, page, page_size)
 
-        return [
+        formatted_feedbacks = [
             {
                 "feedback_uuid": str(feedback.uuid),
                 "username": feedback.user.username,
@@ -176,7 +185,13 @@ async def get_all_feedbacks(
                 "is_promoted": feedback.is_promoted,
             }
             for feedback in paginated_feedbacks["items"]
-        ], paginated_feedbacks["metadata"]
+        ]
+
+        return {
+            "items": formatted_feedbacks,
+            "metadata": paginated_feedbacks["metadata"],
+        }
+
     except Exception as e:
         logger.exception("Error fetching feedbacks")
         raise HTTPException(status_code=500, detail="Failed to fetch feedbacks")
@@ -195,6 +210,12 @@ async def promote_feedback(feedback_uuid: str, db: AsyncSession) -> None:
         if not feedback:
             raise HTTPException(status_code=404, detail="Feedback not found")
 
+        if feedback.user_id == current_user.id:
+            raise HTTPException(
+                status_code=403,
+                detail="You cannot promote your own feedback."
+            )
+
         # Here I just change the status of the feedback
         feedback.is_promoted = True
         feedback.updated_at = datetime.utcnow()
@@ -209,7 +230,6 @@ async def promote_feedback(feedback_uuid: str, db: AsyncSession) -> None:
 
 async def create_feedback(feedback: str, assessment_type_uuid: str, current_user, db: AsyncSession) -> str:
     try:
-        # Get the assessment type ID and name
         result = await db.execute(
             select(AssessmentType.id, AssessmentType.name).where(
                 AssessmentType.uuid == str(uuid.UUID(assessment_type_uuid)),
@@ -223,7 +243,6 @@ async def create_feedback(feedback: str, assessment_type_uuid: str, current_user
 
         assessment_type_id, assessment_type_name = assessment_type
 
-        # Create a new feedback record
         feedback_uuid = str(uuid.uuid4())
         created_at = datetime.utcnow()
         new_feedback = UserFeedback(
@@ -237,7 +256,6 @@ async def create_feedback(feedback: str, assessment_type_uuid: str, current_user
         db.add(new_feedback)
         await db.commit()
 
-        # Format the date and prepare the Telegram message
         formatted_date = format_date(created_at)
         telegram_message = (
             f"New Feedback Received:\n\n"

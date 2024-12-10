@@ -21,7 +21,8 @@ from app.api.v1.endpoints import (
     faculty,
     major,
     job,
-    company
+    company,
+    dimension
 )
 
 
@@ -61,6 +62,7 @@ app.add_middleware(
 app.include_router(auth.auth_router, prefix="/api/v1/auth", tags=["Auth"])
 app.include_router(user.user_router, prefix="/api/v1/user", tags=["User"])
 app.include_router(assessment.assessment_router, prefix="/api/v1/assessment", tags=["Assessment"])
+app.include_router(dimension.dimension_router, prefix="/api/v1/dimension", tags=["Dimension"])
 app.include_router(test.test_router, prefix="/api/v1/test", tags=["Test"])
 app.include_router(ai_recommendation.ai_recommendation_router, prefix="/api/v1/ai", tags=["Recommendation"])
 app.include_router(learning_style_image_router, prefix="/api/v1/technique-image", tags=["Learning Style Images"])

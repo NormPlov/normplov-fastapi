@@ -31,7 +31,9 @@ class ValueCategoryDetails(BaseModel):
 
 
 class ValueAssessmentResponse(BaseModel):
-    user_id: str
+    user_uuid: str
+    test_uuid: str
+    test_name: str
     chart_data: List[ChartData]
     value_details: List[ValueCategoryDetails]
     career_recommendations: List[CareerData]

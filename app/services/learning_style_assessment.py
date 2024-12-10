@@ -196,7 +196,7 @@ async def predict_learning_style(
         unique_careers = list({c["career_name"]: c for c in related_careers}.values())
 
         response = LearningStyleResponse(
-            user_id=current_user.uuid,
+            user_uuid=current_user.uuid,
             test_uuid=str(user_test.uuid),
             test_name=user_test.name,
             learning_style=learning_style,

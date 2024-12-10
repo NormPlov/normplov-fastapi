@@ -12,6 +12,7 @@ class Dimension(Base):
     assessment_type_id = Column(Integer, ForeignKey("assessment_types.id", ondelete="CASCADE"), nullable=False)
     name = Column(String(100), unique=True, nullable=False)
     description = Column(Text, nullable=True)
+    image = Column(String, nullable=True)
     is_deleted = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=None, onupdate=datetime.utcnow)

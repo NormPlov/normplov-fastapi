@@ -35,10 +35,13 @@ class ChartData(BaseModel):
 class DimensionDescription(BaseModel):
     dimension_name: str
     description: str
+    image_url: str
 
 
 class InterestAssessmentResponse(BaseModel):
-    user_id: str
+    user_uuid: str
+    test_uuid: str
+    test_name: str
     holland_code: str
     type_name: str
     description: str

@@ -1,16 +1,18 @@
 import pandas as pd
 import uuid
+import logging
+import json
+
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from fastapi import HTTPException
-
-from app.models import UserTest, School, SchoolMajor, CareerMajor, Major
 from app.models.value_category import ValueCategory
 from app.models.career import Career
 from app.models.user_response import UserResponse
 from app.models.user_assessment_score import UserAssessmentScore
 from app.models.assessment_type import AssessmentType
+from app.models import UserTest, School, SchoolMajor, CareerMajor, Major
 from app.models.dimension import Dimension
 from app.schemas.value_assessment import (
     ValueAssessmentResponse,
@@ -19,8 +21,7 @@ from app.schemas.value_assessment import (
 )
 from app.services.test import create_user_test
 from ml_models.model_loader import load_feature_score_models, load_target_value_model
-import logging
-import json
+
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +104,6 @@ async def process_value_assessment(responses, db: AsyncSession, current_user, te
         career_recommendations = []
         assessment_scores = []
 
-        # Create chart data
         for category, score in normalized_feature_scores.iloc[0].items():
             chart_data.append(
                 ChartData(
@@ -112,7 +112,6 @@ async def process_value_assessment(responses, db: AsyncSession, current_user, te
                 )
             )
 
-        # Process top 3 features
         for feature in top_3_features:
             feature_name = feature.replace(" Score", "").strip()
 
@@ -161,7 +160,6 @@ async def process_value_assessment(responses, db: AsyncSession, current_user, te
                 )
             )
 
-            # Fetch related careers for the value category
             careers_query = select(Career).where(Career.value_category_id == value_category.id)
             careers_result = await db.execute(careers_query)
             careers = careers_result.scalars().all()
@@ -194,21 +192,19 @@ async def process_value_assessment(responses, db: AsyncSession, current_user, te
                     "majors": majors_with_schools
                 })
 
-        # Remove duplicate careers
         career_recommendations = list({career["career_name"]: career for career in career_recommendations}.values())
 
-        # Save the assessment scores
         db.add_all(assessment_scores)
 
-        # Prepare the response
         response = ValueAssessmentResponse(
-            user_id=current_user.uuid,
+            user_uuid=current_user.uuid,
+            test_uuid=str(user_test.uuid),
+            test_name=user_test.name,
             chart_data=chart_data,
             value_details=value_details,
             career_recommendations=career_recommendations,
         )
 
-        # Save user response in the database
         user_response = UserResponse(
             uuid=str(uuid.uuid4()),
             user_id=current_user.id,

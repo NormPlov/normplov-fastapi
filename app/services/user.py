@@ -8,9 +8,7 @@ from sqlalchemy import or_, desc, asc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from datetime import datetime, timedelta
-
 from sqlalchemy.sql.functions import current_user
-
 from app.models import UserRole
 from app.models.user import User
 from app.schemas.payload import BaseResponse

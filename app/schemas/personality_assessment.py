@@ -36,6 +36,8 @@ class PersonalityTraits(BaseModel):
 
 class PersonalityAssessmentResponse(BaseModel):
     user_uuid: str
+    test_uuid: str
+    test_name: str
     personality_type: PersonalityTypeDetails
     dimensions: List[DimensionScore]
     traits: PersonalityTraits

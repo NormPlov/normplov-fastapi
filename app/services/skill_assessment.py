@@ -51,11 +51,10 @@ async def predict_skills(
 
     try:
         user_id = current_user.id
+        user_uuid = current_user.uuid
 
-        # Fetch the dynamic assessment type ID for "Skill"
         assessment_type_id = await get_assessment_type_id("Skills", db)
 
-        # Check if the test_uuid is provided; otherwise, create a new user test
         if data.test_uuid:
             test_query = select(UserTest).where(UserTest.uuid == data.test_uuid, UserTest.user_id == user_id)
             test_result = await db.execute(test_query)
@@ -63,7 +62,6 @@ async def predict_skills(
             if not user_test:
                 raise HTTPException(status_code=404, detail="Invalid test UUID provided.")
         else:
-            # Create a new user test for skills
             user_test = await create_user_test(db, user_id, "Skills", assessment_type_id)
 
         input_df = pd.DataFrame([data.responses])
@@ -85,12 +83,7 @@ async def predict_skills(
         total_skills_per_category = {}
 
         for skill, level in predicted_labels.items():
-            if not skill.endswith("Level"):
-                skill_with_level = f"{skill} Level"
-            else:
-                skill_with_level = skill
-            logger.debug(f"Querying for skill: {skill_with_level}")
-
+            skill_with_level = f"{skill} Level" if not skill.endswith("Level") else skill
             dimension_query = select(Dimension).where(Dimension.name == skill_with_level)
             result = await db.execute(dimension_query)
             dimension = result.scalars().first()
@@ -113,14 +106,7 @@ async def predict_skills(
 
             category_name = skill_category.category_name
 
-            # Determine skill level and categorize
-            if level in ["Strong", "High"]:
-                category_level = "Strong"
-            elif level in ["Average", "Moderate"]:
-                category_level = "Average"
-            else:
-                category_level = "Weak"
-
+            category_level = "Strong" if level in ["Strong", "High"] else "Average" if level in ["Average", "Moderate"] else "Weak"
             skills_by_levels[category_level].append({
                 "skill": skill_with_level,
                 "description": dimension.description,
@@ -135,37 +121,33 @@ async def predict_skills(
                 result = await db.execute(careers_query)
                 careers = result.scalars().all()
 
-                if not careers:
-                    logger.warning(f"No careers found for dimension ID: {dimension.id}")
-                else:
-                    for career in careers:
-                        career_info = {"career_name": career.career.name, "majors": []}
+                for career in careers:
+                    career_info = {"career_name": career.career.name, "majors": []}
 
-                        career_majors_stmt = (
-                            select(Major)
-                            .join(CareerMajor, CareerMajor.major_id == Major.id)
-                            .where(CareerMajor.career_id == career.career.id, CareerMajor.is_deleted == False)
+                    career_majors_stmt = (
+                        select(Major)
+                        .join(CareerMajor, CareerMajor.major_id == Major.id)
+                        .where(CareerMajor.career_id == career.career.id, CareerMajor.is_deleted == False)
+                    )
+                    result = await db.execute(career_majors_stmt)
+                    majors = result.scalars().all()
+
+                    for major in majors:
+                        schools_stmt = (
+                            select(School)
+                            .join(SchoolMajor, SchoolMajor.school_id == School.id)
+                            .where(SchoolMajor.major_id == major.id, SchoolMajor.is_deleted == False)
                         )
-                        result = await db.execute(career_majors_stmt)
-                        majors = result.scalars().all()
+                        result = await db.execute(schools_stmt)
+                        schools = result.scalars().all()
 
-                        for major in majors:
-                            major_info = major.name
+                        career_info["majors"].append(MajorWithSchools(
+                            major_name=major.name,
+                            schools=[school.en_name for school in schools]
+                        ))
 
-                            schools_stmt = (
-                                select(School)
-                                .join(SchoolMajor, SchoolMajor.school_id == School.id)
-                                .where(SchoolMajor.major_id == major.id, SchoolMajor.is_deleted == False)
-                            )
-                            result = await db.execute(schools_stmt)
-                            schools = result.scalars().all()
+                    suggested_careers.append(career_info)
 
-                            school_names = [school.en_name for school in schools]
-                            career_info["majors"].append(MajorWithSchools(major_name=major_info, schools=school_names))
-
-                        suggested_careers.append(career_info)
-
-            # Update category percentage calculations
             if category_name not in category_percentages:
                 category_percentages[category_name] = 0
                 total_skills_per_category[category_name] = 0
@@ -178,7 +160,6 @@ async def predict_skills(
                 (category_percentages.get(category_name, 0) / total_skills_per_category.get(category_name, 1)) * 100, 2
             )
 
-            # Save the assessment score
             assessment_score = UserAssessmentScore(
                 uuid=str(uuid.uuid4()),
                 user_id=user_id,
@@ -197,11 +178,13 @@ async def predict_skills(
             category_percentages[category] = round(
                 (category_percentages[category] / total_skills_per_category[category]) * 100, 2
             )
-        logger.debug(f"Final Category Percentages: {category_percentages}")
 
         suggested_careers = list({career["career_name"]: career for career in suggested_careers}.values())
 
         response = SkillAssessmentResponse(
+            user_uuid=user_uuid,
+            test_uuid=str(user_test.uuid),
+            test_name=user_test.name,
             category_percentages=category_percentages,
             skills_grouped=skills_by_levels,
             strong_careers=suggested_careers,

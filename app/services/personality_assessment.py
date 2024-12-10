@@ -151,6 +151,8 @@ async def process_personality_assessment(
 
         response = PersonalityAssessmentResponse(
             user_uuid=current_user.uuid,
+            test_uuid=str(user_test.uuid),
+            test_name=user_test.name,
             personality_type=PersonalityTypeDetails(
                 name=personality_details.name,
                 title=personality_details.title,

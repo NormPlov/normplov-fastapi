@@ -37,6 +37,9 @@ class SkillGroupedByLevel(BaseModel):
 
 
 class SkillAssessmentResponse(BaseModel):
+    user_uuid: str
+    test_uuid: str
+    test_name: str
     category_percentages: Dict[str, float]
     skills_grouped: Dict[str, List[SkillGroupedByLevel]]
     strong_careers: List[CareerWithMajors]

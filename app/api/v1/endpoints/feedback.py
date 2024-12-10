@@ -45,9 +45,11 @@ async def promote_user_feedback(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user_data),
 ):
-    if not any(role.name == "ADMIN" for role in current_user.roles):
+    # Corrected attribute access
+    if not any(role.role.name == "ADMIN" for role in current_user.roles):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="User does not have permission to promote feedback."
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User does not have permission to promote feedback.",
         )
 
     await promote_feedback(feedback_uuid, db)
@@ -55,7 +57,7 @@ async def promote_user_feedback(
     return {
         "date": datetime.utcnow().strftime("%d-%B-%Y"),
         "status": 200,
-        "message": "Feedback promoted successfully"
+        "message": "Feedback promoted successfully",
     }
 
 
@@ -76,22 +78,33 @@ async def fetch_all_feedbacks_route(
     sort_order: str = Query("desc", description="Sort order: 'asc' or 'desc'"),
     db: AsyncSession = Depends(get_db),
 ):
-    feedbacks = await get_all_feedbacks(
-        db=db,
-        page=page,
-        page_size=page_size,
-        search=search,
-        is_deleted=is_deleted,
-        is_promoted=is_promoted,
-        sort_by=sort_by,
-        sort_order=sort_order,
-    )
-    return BaseResponse(
-        date=datetime.utcnow().strftime("%d-%B-%Y"),
-        status=200,
-        message="Feedbacks retrieved successfully",
-        payload=feedbacks,
-    )
+    try:
+        feedbacks = await get_all_feedbacks(
+            db=db,
+            page=page,
+            page_size=page_size,
+            search=search,
+            is_deleted=is_deleted,
+            is_promoted=is_promoted,
+            sort_by=sort_by,
+            sort_order=sort_order,
+        )
+
+        return BaseResponse(
+            date=datetime.utcnow().strftime("%d-%B-%Y"),
+            status=200,
+            message="Feedbacks retrieved successfully",
+            payload=feedbacks,
+        )
+
+    except HTTPException as e:
+        logger.warning(f"HTTPException in fetch_all_feedbacks_route: {e.detail}")
+        raise e
+    except Exception as e:
+        logger.error(f"Unexpected error in fetch_all_feedbacks_route: {e}")
+        raise HTTPException(
+            status_code=500, detail="An unexpected error occurred while fetching feedbacks."
+        )
 
 
 @feedback_router.post(

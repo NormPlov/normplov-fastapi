@@ -1,16 +1,16 @@
-from typing import Optional, Dict
+import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from typing import Dict
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import get_db, get_current_user_data
 from app.models import AssessmentType, User
 from sqlalchemy.future import select
 from app.schemas.payload import BaseResponse
-from app.schemas.draft import SaveDraftRequest, DraftResponse
+from app.schemas.draft import SaveDraftRequest
 from app.services.draft import load_drafts, retrieve_draft_by_uuid, submit_assessment, delete_draft, \
     save_user_response_as_draft, update_user_response_draft
 from datetime import datetime
-import logging
 
 logger = logging.getLogger(__name__)
 draft_router = APIRouter()
@@ -250,7 +250,7 @@ async def save_draft(
 
         # Prepare the response
         response_payload = {
-            "uuid": str(draft.uuid),
+            "draft_uuid": str(draft.uuid),
             "draft_name": draft.draft_name,
             "response_data": draft.response_data,
             "created_at": draft.created_at.strftime("%d-%B-%Y %H:%M:%S"),
