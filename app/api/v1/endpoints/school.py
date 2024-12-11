@@ -109,7 +109,7 @@ async def fetch_all_schools_route(
         )
 
 
-@school_router.put("/{school_uuid}", response_model=BaseResponse)
+@school_router.patch("/{school_uuid}", response_model=BaseResponse)
 async def update_school_endpoint(
     school_uuid: str,
     data: UpdateSchoolRequest,
@@ -161,7 +161,7 @@ async def create_school_endpoint(
         return BaseResponse(
             date=date.today().strftime("%d-%B-%Y"),
             status=status.HTTP_201_CREATED,
-            payload={"uuid": school.uuid},  # Only the UUID is returned
+            payload={"uuid": school.uuid},
             message="School created successfully"
         )
     except HTTPException as e:

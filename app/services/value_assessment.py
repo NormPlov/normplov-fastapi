@@ -189,6 +189,7 @@ async def process_value_assessment(responses, db: AsyncSession, current_user, te
 
                 career_recommendations.append({
                     "career_name": career.name,
+                    "description": career.description,
                     "majors": majors_with_schools
                 })
 

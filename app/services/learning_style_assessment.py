@@ -182,7 +182,11 @@ async def predict_learning_style(
                 careers = careers.scalars().all()
 
                 for career in careers:
-                    career_info = {"career_name": career.career.name, "majors": []}
+                    career_info = {
+                        "career_name": career.career.name,
+                        "description": career.career.description,
+                        "majors": [],
+                    }
 
                     career_majors_stmt = (
                         select(Major)

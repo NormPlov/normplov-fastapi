@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 
 class PersonalityAssessmentInput(BaseModel):
@@ -15,6 +15,7 @@ class MajorData(BaseModel):
 
 class CareerData(BaseModel):
     career_name: str
+    description: Optional[str] = None
     majors: List[MajorData]
 
 

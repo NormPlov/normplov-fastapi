@@ -113,6 +113,7 @@ async def process_interest_assessment(
 
             career_data.append({
                 "career_name": career.name,
+                "description": career.description,
                 "majors": majors_with_schools
             })
 

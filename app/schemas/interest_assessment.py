@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Optional
 from pydantic import BaseModel, Field, validator
 
 from app.schemas.payload import BaseResponse
@@ -24,6 +24,7 @@ class MajorData(BaseModel):
 
 class CareerData(BaseModel):
     career_name: str
+    description: Optional[str] = None
     majors: List[MajorData]
 
 

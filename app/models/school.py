@@ -22,6 +22,7 @@ class School(Base):
     province_id = Column(Integer, ForeignKey("provinces.id", ondelete="SET NULL"), nullable=True)  # New relationship
     kh_name = Column(String, nullable=False)
     en_name = Column(String, nullable=False)
+    popular_major = Column(String, nullable=True)
     type = Column(Enum(SchoolType, name="school_type"), nullable=True)
     logo_url = Column(String, nullable=True)
     cover_image = Column(String, nullable=True)

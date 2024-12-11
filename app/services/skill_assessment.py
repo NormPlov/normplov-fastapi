@@ -146,7 +146,7 @@ async def predict_skills(
                 for career in careers:
                     career_info = {
                         "career_name": career.career.name,
-                        "career_description": career.career.description,
+                        "description": career.career.description,
                         "majors": []
                     }
 

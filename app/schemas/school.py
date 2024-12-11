@@ -19,6 +19,7 @@ class SchoolDetailsResponse(BaseModel):
     kh_name: str = Field(...)
     en_name: str = Field(...)
     type: SchoolType = Field(...)
+    popular_major: str = Field(...)
     logo_url: Optional[str] = Field(None)
     cover_image: Optional[str] = Field(None)
     location: Optional[str] = Field(None)
@@ -60,6 +61,7 @@ class CreateSchoolRequest(BaseModel):
     kh_name: str = Field(..., max_length=255)
     en_name: str = Field(..., max_length=255)
     type: SchoolType = Field(...)
+    popular_major: str = Field(..., max_length=255)
     logo_url: Optional[HttpUrl] = Field(None)
     cover_image: Optional[HttpUrl] = Field(None)
     location: Optional[str] = Field(None, max_length=500)
@@ -78,6 +80,7 @@ class UpdateSchoolRequest(BaseModel):
 
     kh_name: Optional[str] = Field(None)
     en_name: Optional[str] = Field(None)
+    popular_major: Optional[str] = Field(None)
     type: Optional[SchoolType] = Field(None)
     logo_url: Optional[HttpUrl] = Field(None)
     cover_image: Optional[HttpUrl] = Field(None)
@@ -98,6 +101,7 @@ class SchoolResponse(BaseModel):
     province_name: Optional[str] = None
     kh_name: str
     en_name: str
+    popular_major: str
     type: str
     logo_url: Optional[str]
     cover_image: Optional[str]
