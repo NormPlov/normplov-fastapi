@@ -1,8 +1,9 @@
+import uuid
+
 from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
-import uuid
 
 
 class Career(Base):
@@ -11,6 +12,7 @@ class Career(Base):
     id = Column(Integer, primary_key=True, index=True)
     uuid = Column(String, unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
     name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
     personality_type_id = Column(Integer, ForeignKey("personality_types.id", ondelete="SET NULL"), nullable=True)
     holland_code_id = Column(Integer, ForeignKey("holland_codes.id", ondelete="SET NULL"), nullable=True)
     value_category_id = Column(Integer, ForeignKey("value_categories.id", ondelete="SET NULL"), nullable=True)

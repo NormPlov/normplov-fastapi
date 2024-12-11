@@ -1,3 +1,5 @@
+from pydantic import BaseModel, Field, validator
+from typing import Dict, List, Optional
 import pandas as pd
 import uuid
 from datetime import datetime
@@ -78,9 +80,10 @@ async def predict_skills(
         logger.debug(f"Predicted Labels: {predicted_labels}")
 
         category_percentages = {}
+        total_skills_per_category = {}
+        top_category = None
         skills_by_levels = {"Strong": [], "Average": [], "Weak": []}
         suggested_careers = []
-        total_skills_per_category = {}
 
         for skill, level in predicted_labels.items():
             skill_with_level = f"{skill} Level" if not skill.endswith("Level") else skill
@@ -105,12 +108,31 @@ async def predict_skills(
                 continue
 
             category_name = skill_category.category_name
-
             category_level = "Strong" if level in ["Strong", "High"] else "Average" if level in ["Average", "Moderate"] else "Weak"
+
+            # Update skills_by_levels to group skills by their level
             skills_by_levels[category_level].append({
                 "skill": skill_with_level,
                 "description": dimension.description,
             })
+
+            if category_name not in category_percentages:
+                category_percentages[category_name] = 0
+                total_skills_per_category[category_name] = 0
+
+            total_skills_per_category[category_name] += 1
+            if category_level == "Strong":
+                category_percentages[category_name] += 1
+
+            category_percentage = round(
+                (category_percentages[category_name] / total_skills_per_category[category_name]) * 100, 2
+            )
+
+            if top_category is None or category_percentages[category_name] > category_percentages[top_category['name']]:
+                top_category = {
+                    "name": category_name,
+                    "description": skill_category.category_description
+                }
 
             if category_level == "Strong":
                 careers_query = (
@@ -122,7 +144,11 @@ async def predict_skills(
                 careers = result.scalars().all()
 
                 for career in careers:
-                    career_info = {"career_name": career.career.name, "majors": []}
+                    career_info = {
+                        "career_name": career.career.name,
+                        "career_description": career.career.description,
+                        "majors": []
+                    }
 
                     career_majors_stmt = (
                         select(Major)
@@ -147,14 +173,6 @@ async def predict_skills(
                         ))
 
                     suggested_careers.append(career_info)
-
-            if category_name not in category_percentages:
-                category_percentages[category_name] = 0
-                total_skills_per_category[category_name] = 0
-
-            total_skills_per_category[category_name] += 1
-            if category_level == "Strong":
-                category_percentages[category_name] += 1
 
             category_percentage = round(
                 (category_percentages.get(category_name, 0) / total_skills_per_category.get(category_name, 1)) * 100, 2
@@ -181,10 +199,12 @@ async def predict_skills(
 
         suggested_careers = list({career["career_name"]: career for career in suggested_careers}.values())
 
+        # Final response
         response = SkillAssessmentResponse(
             user_uuid=user_uuid,
             test_uuid=str(user_test.uuid),
             test_name=user_test.name,
+            top_category=top_category,
             category_percentages=category_percentages,
             skills_grouped=skills_by_levels,
             strong_careers=suggested_careers,

@@ -28,6 +28,7 @@ class MajorWithSchools(BaseModel):
 
 class CareerWithMajors(BaseModel):
     career_name: str
+    career_description: str
     majors: List[MajorWithSchools]
 
 
@@ -40,6 +41,7 @@ class SkillAssessmentResponse(BaseModel):
     user_uuid: str
     test_uuid: str
     test_name: str
+    top_category: dict
     category_percentages: Dict[str, float]
     skills_grouped: Dict[str, List[SkillGroupedByLevel]]
     strong_careers: List[CareerWithMajors]
