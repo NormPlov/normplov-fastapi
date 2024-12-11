@@ -335,8 +335,12 @@ async def update_user_profile(uuid: str, profile_update: UpdateUser, db: AsyncSe
     )
 
 
-async def delete_user_by_uuid(uuid: str, db: AsyncSession) -> BaseResponse:
-    stmt = select(User).where(User.uuid == uuid)
+async def delete_user_by_uuid(uuid: str, db: AsyncSession, current_user: User) -> BaseResponse:
+    stmt = (
+        select(User)
+        .options(joinedload(User.roles).joinedload(UserRole.role))  # Eager load roles
+        .where(User.uuid == uuid, User.is_deleted == False)
+    )
     result = await db.execute(stmt)
     user = result.scalars().first()
 
@@ -363,6 +367,7 @@ async def delete_user_by_uuid(uuid: str, db: AsyncSession) -> BaseResponse:
 
     db.add(user)
     await db.commit()
+    await db.refresh(user)
 
     return BaseResponse(
         date=datetime.utcnow().strftime("%d-%B-%Y"),
@@ -462,7 +467,7 @@ async def get_all_users(
                 "is_active": user.is_active,
                 "is_verified": user.is_verified,
                 "is_blocked": user.is_blocked,
-                "registered_at": user.registered_at,
+                "is_deleted": user.is_deleted,
             }
             for user in paginated_users["items"]
         ]

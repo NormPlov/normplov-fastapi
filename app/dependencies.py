@@ -4,7 +4,6 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload
-
 from app.models import UserRole
 from app.utils.auth import decode_jwt_token
 from app.core.database import get_db

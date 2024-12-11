@@ -3,8 +3,7 @@ import os
 import shutil
 
 from datetime import datetime
-from typing import Optional
-
+from uuid import uuid4
 from sqlalchemy import func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -12,7 +11,7 @@ from app.models import Major, SchoolMajor, Province
 from app.models.school import School
 from app.schemas.major import MajorResponse
 from app.schemas.payload import BaseResponse
-from app.schemas.school import CreateSchoolRequest, UpdateSchoolRequest
+from app.schemas.school import CreateSchoolRequest, UpdateSchoolRequest, SchoolResponse
 from fastapi import HTTPException, status, UploadFile
 from sqlalchemy.future import select
 from app.utils.format_date import format_date
@@ -329,19 +328,8 @@ async def delete_school(school_uuid: str, db: AsyncSession):
 
 
 async def create_school(data: CreateSchoolRequest, db: AsyncSession):
-    from uuid import uuid4
-    from sqlalchemy.future import select
-    import uuid
-
     try:
-        try:
-            province_uuid = uuid.UUID(data.province_uuid)
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid province UUID format."
-            )
-
+        province_uuid = data.province_uuid
         province_stmt = select(Province).where(Province.uuid == province_uuid, Province.is_deleted == False)
         province_result = await db.execute(province_stmt)
         province = province_result.scalars().first()
@@ -349,7 +337,7 @@ async def create_school(data: CreateSchoolRequest, db: AsyncSession):
         if not province:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Province not found or already deleted."
+                detail="Province not found or has been deleted."
             )
 
         stmt = select(School).where(School.en_name == data.en_name, School.is_deleted == False)
@@ -362,14 +350,11 @@ async def create_school(data: CreateSchoolRequest, db: AsyncSession):
                 detail="A school with this name already exists.",
             )
 
-        # Create the school
         new_school = School(
             uuid=uuid4(),
             kh_name=data.kh_name,
             en_name=data.en_name,
             type=data.type.value,
-            logo_url=str(data.logo_url) if data.logo_url else None,
-            cover_image=str(data.cover_image) if data.cover_image else None,
             location=data.location,
             phone=data.phone,
             lowest_price=data.lowest_price,
@@ -383,19 +368,24 @@ async def create_school(data: CreateSchoolRequest, db: AsyncSession):
             province_id=province.id,
         )
 
-        db.add(new_school)
-        await db.commit()
-        await db.refresh(new_school)
+        try:
+            db.add(new_school)
+            await db.commit()
+            await db.refresh(new_school)
+        except Exception as e:
+            logger.error(f"Error creating school: {e}")
+            await db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="An error occurred while creating the school."
+            )
 
         return new_school
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error creating school: {e}")
-        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred while creating the school.",
         )
-

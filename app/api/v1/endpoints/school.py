@@ -6,7 +6,7 @@ from app.core.database import get_db
 from app.dependencies import is_admin_user
 from app.models import User
 from app.schemas.payload import BaseResponse
-from datetime import datetime
+from datetime import datetime, date
 from app.utils.format_date import format_date
 from app.services.school import (
     create_school,
@@ -142,21 +142,19 @@ async def delete_school_endpoint(
 async def create_school_endpoint(
     data: CreateSchoolRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(is_admin_user),
 ):
     try:
         school = await create_school(data, db)
 
         return BaseResponse(
-            date=format_date(datetime.utcnow()),
+            date=date.today().strftime("%d-%B-%Y"),
             status=status.HTTP_201_CREATED,
-            payload=SchoolResponse.from_orm(school),
-            message="School created successfully.",
+            payload={"uuid": school.uuid},  # Only the UUID is returned
+            message="School created successfully"
         )
     except HTTPException as e:
         raise e
     except Exception as e:
-        logging.exception("Error occurred while creating the school.")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An unexpected error occurred: {str(e)}"

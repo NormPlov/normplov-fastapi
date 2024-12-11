@@ -1,10 +1,8 @@
 from datetime import datetime
 from uuid import UUID
-
-from pydantic import BaseModel, Field, EmailStr, HttpUrl, validator
+from pydantic import BaseModel, Field, EmailStr, HttpUrl, validator, root_validator
 from typing import Optional, List
 from enum import Enum as PyEnum
-
 from app.schemas.major import MajorResponse
 from app.utils.format_date import format_date
 
@@ -67,7 +65,7 @@ class UpdateSchoolRequest(BaseModel):
 
 class SchoolResponse(BaseModel):
     uuid: str
-    province_name: Optional[str]
+    province_name: Optional[str] = None
     kh_name: str
     en_name: str
     type: str
@@ -94,7 +92,7 @@ class SchoolResponse(BaseModel):
         return value
 
     @validator("created_at", "updated_at", pre=True)
-    def format_datetime(cls, value: datetime) -> str:
+    def format_datetime(cls, value: Optional[datetime]) -> Optional[str]:
         return format_date(value) if value else None
 
     class Config:

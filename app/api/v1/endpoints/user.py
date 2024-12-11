@@ -25,7 +25,7 @@ from app.services.user import (
 )
 from app.dependencies import (
     is_admin_user,
-    get_current_user_data
+    get_current_user_data, get_current_user
 )
 
 user_router = APIRouter()
@@ -153,8 +153,12 @@ async def update_profile_route(uuid: str, profile_update: UpdateUser, db: AsyncS
 
 # Soft-delete a user
 @user_router.delete("/delete/{uuid}", response_model=BaseResponse)
-async def delete_user_by_uuid_route(uuid: str, db: AsyncSession = Depends(get_db)):
-    return await delete_user_by_uuid(uuid, db)
+async def delete_user_by_uuid_route(
+    uuid: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user_data)
+):
+    return await delete_user_by_uuid(uuid, db, current_user)
 
 
 # Update a user by UUID
