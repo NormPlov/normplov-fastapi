@@ -1,9 +1,11 @@
-import json
+import logging
 import uuid
+
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.sql import text
 from datetime import date
 from sqlalchemy.orm import joinedload
-from app.models import UserResponse, UserTest, AssessmentType
+from app.models import UserResponse, UserTest
 from app.schemas.assessment import AssessmentResponseData
 from datetime import datetime
 from sqlalchemy.future import select
@@ -11,15 +13,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException
 from sqlalchemy import cast
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.types import String
 from app.schemas.payload import BaseResponse
 from app.utils.pagination import paginate_results
+
+logger = logging.getLogger(__name__)
 
 
 async def get_shared_test(test_uuid: str, db: AsyncSession) -> BaseResponse:
     try:
         stmt = select(UserTest).where(
-            UserTest.uuid == test_uuid,
+            cast(UserTest.uuid, UUID) == cast(test_uuid, UUID),
             UserTest.is_deleted == False
         )
         result = await db.execute(stmt)
@@ -39,7 +42,7 @@ async def get_shared_test(test_uuid: str, db: AsyncSession) -> BaseResponse:
             raise HTTPException(status_code=404, detail="No response found for the test.")
 
         response_payload = {
-            "response_id": user_response.id,
+            "response_uuid": user_response.uuid,
             "uuid": user_response.uuid,
             "response_data": user_response.response_data,
             "is_draft": user_response.is_draft,
@@ -68,9 +71,8 @@ async def generate_shareable_link(
     test_uuid: str, user_id: int, base_url: str, db: AsyncSession
 ) -> BaseResponse:
     try:
-        # Validate the test
         stmt = select(UserTest).where(
-            UserTest.uuid == test_uuid,
+            cast(UserTest.uuid, UUID) == cast(test_uuid, UUID),
             UserTest.user_id == user_id,
             UserTest.is_deleted == False
         )
@@ -80,10 +82,8 @@ async def generate_shareable_link(
         if not user_test:
             raise HTTPException(status_code=404, detail="Test not found or already deleted.")
 
-        # Construct the shareable link
         shareable_link = f"{base_url}/shared-tests/{test_uuid}"
 
-        # Prepare and return the response
         return BaseResponse(
             date=date.today(),
             status=200,
@@ -91,8 +91,18 @@ async def generate_shareable_link(
             message="Shareable link generated successfully."
         )
 
+    except SQLAlchemyError as e:
+        logger.error(f"Database error during test fetch: {str(e)}")
+        raise HTTPException(
+            status_code=400,
+            detail="There was a problem with the database query. Please check the data types or parameters."
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+        logger.error(f"Unexpected error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="An unexpected error occurred while generating the shareable link."
+        )
 
 
 async def delete_test(test_uuid: str, user_id: int, db: AsyncSession):

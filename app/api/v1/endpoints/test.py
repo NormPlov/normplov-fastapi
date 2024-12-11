@@ -1,8 +1,10 @@
 import logging
 from datetime import datetime
-from typing import Optional, Dict
+from typing import Optional
 
+import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import get_current_user_data
 from app.schemas.assessment import AssessmentResponseList
@@ -17,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 @test_router.get(
-    "/{test_uuid}/response",
+    "/{test_uuid}",
     response_model=BaseResponse,
     summary="Retrieve the user response for a specific test"
 )
@@ -39,17 +41,28 @@ async def get_user_response_route(
     summary="Generate a shareable link for a test",
 )
 async def generate_shareable_link_route(
-    test_uuid: str,
-    db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user_data)
+        test_uuid: str,
+        db: AsyncSession = Depends(get_db),
+        current_user=Depends(get_current_user_data)
 ):
     try:
         base_url = "http://127.0.0.1:8000"
         return await generate_shareable_link(test_uuid, current_user.id, base_url, db)
+
     except HTTPException as e:
         raise e
+    except SQLAlchemyError as e:
+        logger.error(f"Database error: {str(e)}")
+        raise HTTPException(
+            status_code=400,
+            detail="There was a problem with the database query. Please check the data types and try again."
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Unexpected error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"An unexpected error occurred: {str(e)}"
+        )
 
 
 @test_router.delete(
