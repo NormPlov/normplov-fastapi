@@ -1,6 +1,10 @@
 import logging
+import os
+import shutil
 
 from datetime import datetime
+from typing import Optional
+
 from sqlalchemy import func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -9,12 +13,77 @@ from app.models.school import School
 from app.schemas.major import MajorResponse
 from app.schemas.payload import BaseResponse
 from app.schemas.school import CreateSchoolRequest, UpdateSchoolRequest
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status, UploadFile
 from sqlalchemy.future import select
 from app.utils.format_date import format_date
 from app.utils.pagination import paginate_results
 
 logger = logging.getLogger(__name__)
+
+
+async def upload_school_logo_cover(
+    school_uuid: str,
+    logo: UploadFile = None,
+    cover_image: UploadFile = None,
+    db: AsyncSession = None
+) -> BaseResponse:
+
+    stmt = select(School).where(School.uuid == school_uuid, School.is_deleted == False)
+    result = await db.execute(stmt)
+    school = result.scalars().first()
+
+    if not school:
+        raise HTTPException(
+            status_code=404,
+            detail="School not found or has been deleted."
+        )
+
+    logo_directory = "uploads/school_logos"
+    cover_image_directory = "uploads/school_cover_images"
+
+    os.makedirs(logo_directory, exist_ok=True)
+    os.makedirs(cover_image_directory, exist_ok=True)
+
+    if logo:
+        logo_location = f"{logo_directory}/{school.uuid}_{logo.filename}"
+        try:
+            with open(logo_location, "wb") as buffer:
+                shutil.copyfileobj(logo.file, buffer)
+            school.logo_url = logo_location
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error saving logo: {str(e)}"
+            )
+
+    if cover_image:
+        cover_image_location = f"{cover_image_directory}/{school.uuid}_{cover_image.filename}"
+        try:
+            with open(cover_image_location, "wb") as buffer:
+                shutil.copyfileobj(cover_image.file, buffer)
+            school.cover_image = cover_image_location
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error saving cover image: {str(e)}"
+            )
+
+    school.updated_at = datetime.utcnow()
+
+    db.add(school)
+    await db.commit()
+    await db.refresh(school)
+
+    return BaseResponse(
+        date=datetime.utcnow().strftime("%d-%B-%Y"),
+        status=200,
+        message="School logo and cover image updated successfully.",
+        payload={
+            "uuid": str(school.uuid),
+            "logo_url": school.logo_url,
+            "cover_image": school.cover_image
+        }
+    )
 
 
 async def get_majors_for_school(

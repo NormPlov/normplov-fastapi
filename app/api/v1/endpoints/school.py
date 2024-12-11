@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.dependencies import is_admin_user
@@ -11,7 +11,7 @@ from app.utils.format_date import format_date
 from app.services.school import (
     create_school,
     delete_school,
-    update_school, load_all_schools, get_majors_for_school
+    update_school, load_all_schools, get_majors_for_school, upload_school_logo_cover
 )
 from app.schemas.school import (
     CreateSchoolRequest,
@@ -21,6 +21,24 @@ from app.schemas.school import (
 
 
 school_router = APIRouter()
+
+
+@school_router.patch("/{school_uuid}/logo-cover", response_model=BaseResponse)
+async def upload_school_logo_cover_route(
+    school_uuid: str,
+    logo: UploadFile = File(None),
+    cover_image: UploadFile = File(None),
+    db: AsyncSession = Depends(get_db)
+) -> BaseResponse:
+    try:
+        return await upload_school_logo_cover(school_uuid, logo, cover_image, db)
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred while uploading the logo and cover image: {str(e)}"
+        )
 
 
 @school_router.get(

@@ -9,6 +9,11 @@ from app.schemas.major import MajorResponse
 from app.utils.format_date import format_date
 
 
+class UploadSchoolLogoCoverRequest(BaseModel):
+    logo: Optional[str] = None
+    cover_image: Optional[str] = None
+
+
 class SchoolType(PyEnum):
     PRIVATE = "PRIVATE"
     PUBLIC = "PUBLIC"
