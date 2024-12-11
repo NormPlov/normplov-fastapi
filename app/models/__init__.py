@@ -10,7 +10,6 @@ from app.models.ai_recommendation import AIRecommendation
 from app.models.learning_style_study_technique import LearningStyleStudyTechnique
 from app.models.dimension_career import DimensionCareer
 from app.models.skill_category import SkillCategory
-from app.models.learning_style_technique_image import LearningStyleTechniqueImage
 from app.models.user_test import UserTest
 from app.models.career import Career
 from app.models.user_feedback import UserFeedback
@@ -39,7 +38,6 @@ __all__ = ["Role",
            "LearningStyleStudyTechnique",
            "DimensionCareer",
            "SkillCategory",
-           "LearningStyleTechniqueImage",
            "UserTest",
            "UserFeedback",
            "Job",

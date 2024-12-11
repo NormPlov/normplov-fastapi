@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.dependencies import get_current_user_data
@@ -12,12 +12,28 @@ from app.schemas.interest_assessment import InterestAssessmentInput, InterestAss
 from app.schemas.value_assessment import ValueAssessmentInput, ValueAssessmentResponse
 from app.services.personality_assessment import process_personality_assessment
 from app.services.skill_assessment import predict_skills
-from app.services.learning_style_assessment import predict_learning_style
+from app.services.learning_style_assessment import predict_learning_style, upload_technique_image
 from app.services.interest_assessment import process_interest_assessment
 from app.models.user import User
 from app.services.value_assessment import process_value_assessment
 
 assessment_router = APIRouter()
+
+
+# API Endpoint for Uploading Learning Technique Image✨
+@assessment_router.post("/techniques/{technique_uuid}/upload-image", tags=["Techniques"])
+async def upload_technique_image_route(
+    technique_uuid: str,
+    file: UploadFile,
+    db: AsyncSession = Depends(get_db)
+) -> BaseResponse:
+    result = await upload_technique_image(db, technique_uuid, file)
+    return BaseResponse(
+        date=datetime.utcnow().strftime("%Y-%m-%d"),
+        status=200,
+        message="Technique image uploaded successfully.",
+        payload=result
+    )
 
 
 # API Endpoint for Value Assessment✨

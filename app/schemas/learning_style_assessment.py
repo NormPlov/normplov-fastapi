@@ -46,6 +46,7 @@ class Technique(BaseModel):
     technique_name: str
     category: str
     description: str
+    image_url: Optional[str] = Field(None, description="URL of the technique's image")
 
 
 class LearningStyleResponse(BaseModel):

@@ -1,10 +1,13 @@
 import pandas as pd
 import uuid
+import os
+
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload
-from fastapi import HTTPException
+from app.core.config import settings
+from fastapi import HTTPException, UploadFile
 from app.models import (
     AssessmentType, Major, CareerMajor, SchoolMajor, School, UserResponse, UserAssessmentScore,
     LearningStyleStudyTechnique, Dimension, Question, DimensionCareer, UserTest
@@ -17,6 +20,47 @@ import json
 
 logger = logging.getLogger(__name__)
 vark_model = load_vark_model()
+
+
+async def upload_technique_image(db: AsyncSession, technique_uuid: str, file: UploadFile):
+    try:
+        technique_query = select(LearningStyleStudyTechnique).where(
+            LearningStyleStudyTechnique.uuid == technique_uuid,
+            LearningStyleStudyTechnique.is_deleted == False
+        )
+        technique_result = await db.execute(technique_query)
+        technique = technique_result.scalars().first()
+
+        if not technique:
+            raise HTTPException(status_code=404, detail="Technique not found.")
+
+        upload_folder = os.path.join(settings.BASE_UPLOAD_FOLDER, "techniques")
+        os.makedirs(upload_folder, exist_ok=True)
+
+        file_name = f"{technique.uuid}_{file.filename}"
+        file_path = os.path.join(upload_folder, file_name)
+
+        try:
+            with open(file_path, "wb") as f:
+                content = await file.read()
+                f.write(content)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
+
+        technique.image_url = os.path.join("techniques", file_name)
+        await db.commit()
+        await db.refresh(technique)
+
+        return {
+            "technique_uuid": technique.uuid,
+            "image_url": f"/{settings.BASE_UPLOAD_FOLDER}/techniques/{file_name}",
+        }
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
 
 
 async def get_assessment_type_id(name: str, db: AsyncSession) -> int:
@@ -36,10 +80,8 @@ async def predict_learning_style(
     current_user,
 ):
     try:
-        # Get the assessment type ID
         assessment_type_id = await get_assessment_type_id("Learning Style", db)
 
-        # If test_uuid is provided, fetch the test, else create a new one
         if test_uuid:
             test_details = await db.execute(
                 select(UserTest).where(UserTest.uuid == test_uuid)
@@ -189,6 +231,7 @@ async def predict_learning_style(
                     "technique_name": t.technique_name,
                     "category": t.category,
                     "description": t.description,
+                    "image_url": t.image_url,
                 }
                 for t in techniques.scalars().all()
             ]
@@ -205,7 +248,7 @@ async def predict_learning_style(
             chart=LearningStyleChart(labels=chart_data["labels"], values=chart_data["values"]),
             dimensions=dimension_details,
             recommended_techniques=recommended_techniques,
-            related_careers=unique_careers
+            related_careers=unique_careers,
         )
 
         user_responses = UserResponse(

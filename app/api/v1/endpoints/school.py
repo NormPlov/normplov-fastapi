@@ -3,24 +3,36 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
-from app.dependencies import is_admin_user
+from app.dependencies import is_admin_user, get_current_user_data
 from app.models import User
 from app.schemas.payload import BaseResponse
 from datetime import datetime, date
-from app.utils.format_date import format_date
 from app.services.school import (
     create_school,
     delete_school,
-    update_school, load_all_schools, get_majors_for_school, upload_school_logo_cover
+    update_school, load_all_schools, get_majors_for_school, upload_school_logo_cover, get_school_with_majors
 )
 from app.schemas.school import (
     CreateSchoolRequest,
-    SchoolResponse,
     UpdateSchoolRequest
 )
 
 
 school_router = APIRouter()
+
+
+@school_router.get(
+    "/{school_uuid}/details",
+    summary="Get school details and majors by UUID",
+    response_model=BaseResponse,
+    tags=["School"],
+)
+async def get_school_details_route(
+    school_uuid: str,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user_data),
+):
+    return await get_school_with_majors(school_uuid, db)
 
 
 @school_router.patch("/{school_uuid}/logo-cover", response_model=BaseResponse)

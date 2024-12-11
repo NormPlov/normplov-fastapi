@@ -42,8 +42,6 @@ class MajorResponse(BaseModel):
     fee_per_year: Optional[float]
     duration_years: Optional[int]
     degree: DegreeTypeEnum
-    created_at: datetime
-    updated_at: datetime
 
     @validator("uuid", pre=True)
     def uuid_to_string(cls, value):

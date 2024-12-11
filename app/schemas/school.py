@@ -7,6 +7,36 @@ from app.schemas.major import MajorResponse
 from app.utils.format_date import format_date
 
 
+class SchoolType(str, PyEnum):
+    PRIVATE = "PRIVATE"
+    PUBLIC = "PUBLIC"
+    TVET = "TVET"
+    MAJORS_COURSES = "MAJORS_COURSES"
+
+
+class SchoolDetailsResponse(BaseModel):
+    uuid: str = Field(...)
+    kh_name: str = Field(...)
+    en_name: str = Field(...)
+    type: SchoolType = Field(...)
+    logo_url: Optional[str] = Field(None)
+    cover_image: Optional[str] = Field(None)
+    location: Optional[str] = Field(None)
+    phone: Optional[str] = Field(None)
+    lowest_price: Optional[float] = Field(None)
+    highest_price: Optional[float] = Field(None)
+    map: Optional[str] = Field(None)
+    email: Optional[str] = Field(None)
+    website: Optional[str] = Field(None)
+    description: Optional[str] = Field(None)
+    mission: Optional[str] = Field(None)
+    vision: Optional[str] = Field(None)
+    majors: List[MajorResponse] = Field(...)
+
+    class Config:
+        orm_mode = True
+
+
 class UploadSchoolLogoCoverRequest(BaseModel):
     logo: Optional[str] = None
     cover_image: Optional[str] = None
