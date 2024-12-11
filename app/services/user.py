@@ -288,16 +288,11 @@ async def update_user_profile(uuid: str, profile_update: UpdateUser, db: AsyncSe
             detail="User not found."
         )
 
-    update_data = profile_update.dict(exclude_unset=True)
+    update_data = profile_update.dict(exclude_unset=True)  # Only include fields that are updated
 
+    # Validate the date_of_birth field if it's provided
     if "date_of_birth" in update_data:
-        try:
-            date_of_birth = datetime.strptime(update_data["date_of_birth"], "%Y-%m-%d")
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid date_of_birth format. Use YYYY-MM-DD."
-            )
+        date_of_birth = update_data["date_of_birth"]
 
         if date_of_birth > datetime.utcnow():
             raise HTTPException(
