@@ -245,7 +245,6 @@ async def load_all_schools(
     try:
         query = select(School).options(joinedload(School.province)).where(School.is_deleted == False)
 
-        # Apply province filter
         if province_uuid:
             query = query.where(School.province.has(uuid=province_uuid))
 

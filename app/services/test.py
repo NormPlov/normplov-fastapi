@@ -1,12 +1,12 @@
 import logging
 import uuid
+from typing import List, Dict, Any, Optional
 
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import joinedload
 from sqlalchemy.sql import text
 from datetime import date
-from sqlalchemy.orm import joinedload
 from app.models import UserResponse, UserTest
-from app.schemas.assessment import AssessmentResponseData
 from datetime import datetime
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +17,104 @@ from app.schemas.payload import BaseResponse
 from app.utils.pagination import paginate_results
 
 logger = logging.getLogger(__name__)
+
+
+async def get_user_responses(
+    db: AsyncSession,
+    user_id: int,
+    test_uuid: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    try:
+        query = select(UserResponse).options(
+            joinedload(UserResponse.user_test),
+            joinedload(UserResponse.assessment_type)
+        ).where(
+            UserResponse.user_id == user_id,
+            UserResponse.is_deleted == False
+        )
+
+        if test_uuid:
+            query = query.where(UserResponse.user_test.has(UserTest.uuid == test_uuid))
+
+        result = await db.execute(query)
+        responses = result.scalars().all()
+
+        return [
+            {
+                "test_uuid": str(response.user_test.uuid),
+                "test_name": response.user_test.name,
+                "assessment_type_name": response.assessment_type.name,
+                "user_response_data": response.response_data,
+                "created_at": response.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                "is_deleted": response.is_deleted,
+            }
+            for response in responses
+        ]
+
+    except Exception as e:
+        logger.error(f"Error fetching user responses: {e}")
+        raise HTTPException(status_code=500, detail="An error occurred while fetching user responses.")
+
+
+async def get_user_tests(
+    db: AsyncSession,
+    user_id: int,
+    search: str = None,
+    sort_by: str = "created_at",
+    sort_order: str = "desc",
+    filter_by: str = None,
+    page: int = 1,
+    page_size: int = 10,
+):
+    try:
+        query = select(UserTest).where(
+            UserTest.user_id == user_id,
+            UserTest.is_deleted == False
+        )
+
+        if search:
+            query = query.where(UserTest.name.ilike(f"%{search}%"))
+
+        if filter_by:
+            try:
+                import json
+                filters = json.loads(filter_by)
+                if not isinstance(filters, dict):
+                    raise ValueError("Filter must be a JSON object.")
+                for key, value in filters.items():
+                    if hasattr(UserTest, key):
+                        query = query.where(getattr(UserTest, key) == value)
+            except (ValueError, TypeError) as e:
+                raise HTTPException(status_code=400, detail=f"Invalid filter format: {e}")
+
+        if hasattr(UserTest, sort_by):
+            sort_column = getattr(UserTest, sort_by)
+            query = query.order_by(sort_column.asc() if sort_order == "asc" else sort_column.desc())
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid sort_by field. Choose a valid field from UserTest."
+            )
+
+        result = await db.execute(query)
+        tests = result.scalars().all()
+
+        formatted_tests = [
+            {
+                "test_uuid": str(test.uuid),
+                "name": test.name,
+                "created_at": test.created_at.strftime("%d-%B-%Y %H:%M:%S"),
+            }
+            for test in tests
+        ]
+
+        paginated_results = paginate_results(formatted_tests, page, page_size)
+
+        return paginated_results
+
+    except Exception as e:
+        logger.error(f"Error fetching user tests: {e}")
+        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
 
 
 async def get_shared_test(test_uuid: str, db: AsyncSession) -> BaseResponse:
@@ -71,8 +169,10 @@ async def generate_shareable_link(
     test_uuid: str, user_id: int, base_url: str, db: AsyncSession
 ) -> BaseResponse:
     try:
+
+        # Query the database
         stmt = select(UserTest).where(
-            cast(UserTest.uuid, UUID) == cast(test_uuid, UUID),
+            UserTest.uuid == test_uuid,
             UserTest.user_id == user_id,
             UserTest.is_deleted == False
         )
@@ -107,9 +207,8 @@ async def generate_shareable_link(
 
 async def delete_test(test_uuid: str, user_id: int, db: AsyncSession):
     try:
-        # Fetch the test
         stmt = select(UserTest).where(
-            UserTest.uuid == test_uuid,
+            UserTest.uuid == cast(test_uuid, UUID),
             UserTest.user_id == user_id,
             UserTest.is_deleted == False
         )
@@ -127,72 +226,13 @@ async def delete_test(test_uuid: str, user_id: int, db: AsyncSession):
         response = BaseResponse(
             date=date.today(),
             status=200,
-            payload={"test_uuid": test_uuid},
+            payload={"test_uuid": str(test_uuid)},
             message="Test deleted successfully."
         )
         return response
 
     except Exception as e:
         await db.rollback()
-        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
-
-
-async def get_tests_by_user(
-    user_id: int,
-    db: AsyncSession,
-    search: str = None,
-    sort_by: str = "created_at",
-    sort_order: str = "desc",
-    filter_by: dict = None,
-    page: int = 1,
-    page_size: int = 10,
-):
-    try:
-        query = select(UserTest).where(
-            UserTest.user_id == user_id,
-            UserTest.is_deleted == False,
-            UserTest.user_responses.any(is_draft=False)
-        )
-
-        if search:
-            query = query.where(UserTest.name.ilike(f"%{search}%"))
-
-        if filter_by:
-            for key, value in filter_by.items():
-                if hasattr(UserTest, key):
-                    query = query.where(getattr(UserTest, key) == value)
-
-        if hasattr(UserTest, sort_by):
-            sort_column = getattr(UserTest, sort_by)
-            if sort_order.lower() == "asc":
-                query = query.order_by(sort_column.asc())
-            else:
-                query = query.order_by(sort_column.desc())
-
-        result = await db.execute(query)
-        tests = result.scalars().all()
-
-        if not tests:
-            raise HTTPException(status_code=404, detail="No tests found for this user.")
-
-        formatted_tests = [
-            {
-                "test_uuid": str(test.uuid),
-                "test_name": test.name,
-                "is_completed": test.is_completed,
-                "is_deleted": test.is_deleted,
-                "created_at": test.created_at.strftime("%d-%B-%Y"),
-                "updated_at": test.updated_at.strftime("%d-%B-%Y") if test.updated_at else None,
-            }
-            for test in tests
-        ]
-
-        # Paginate results
-        paginated_results = paginate_results(formatted_tests, page, page_size)
-
-        return paginated_results
-
-    except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
 
 
@@ -228,7 +268,7 @@ async def create_user_test(
         test_name = f"{test_name_prefix} Test {next_index}"
 
         new_test = UserTest(
-            uuid=str(uuid.uuid4()),
+            uuid=uuid.uuid4(),
             user_id=user_id,
             name=test_name,
             assessment_type_id=assessment_type_id,
@@ -246,45 +286,3 @@ async def create_user_test(
     except Exception as e:
         raise RuntimeError(f"Failed to create user test: {e}")
 
-
-async def get_assessment_responses_by_test(
-    test_uuid: str,
-    db: AsyncSession,
-    user_id: int
-) -> list[AssessmentResponseData]:
-    try:
-        # Ensure explicit casting of test_uuid to UUID for compatibility
-        stmt = (
-            select(UserResponse)
-            .options(joinedload(UserResponse.assessment_type))
-            .where(
-                UserResponse.user_test.has(
-                    cast(UserTest.uuid, UUID) == cast(test_uuid, UUID)
-                ),
-                UserResponse.user_id == user_id,
-                UserResponse.is_deleted == False
-            )
-        )
-        result = await db.execute(stmt)
-        user_responses = result.scalars().all()
-
-        if not user_responses:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No assessment responses found for test UUID: {test_uuid}"
-            )
-
-        # Map responses to schema and format
-        response_data = [
-            AssessmentResponseData(
-                assessment_type=response.assessment_type.name,
-                response_data=response.response_data,
-                created_at=response.created_at.strftime("%A, %d, %Y")
-            )
-            for response in user_responses
-        ]
-
-        return response_data
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")

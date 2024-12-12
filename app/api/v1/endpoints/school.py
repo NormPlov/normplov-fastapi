@@ -73,7 +73,6 @@ async def fetch_majors_for_school(
     summary="Fetch all schools",
     tags=["School"],
     response_model=BaseResponse,
-    dependencies=[Depends(is_admin_user)],
 )
 async def fetch_all_schools_route(
     page: int = Query(1, ge=1, description="Page number"),
