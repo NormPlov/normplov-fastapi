@@ -26,4 +26,4 @@ class Company(Base):
     website = Column(String(255), nullable=True)
 
     # Relationships
-    jobs = relationship("Job", back_populates="company")
+    # jobs = relationship("Job", back_populates="company")

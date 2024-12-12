@@ -26,5 +26,5 @@ class JobImage(Base):
     updated_at = Column(DateTime, nullable=True, onupdate=func.now())
 
     # Relationships
-    job = relationship("Job", back_populates="images")
+    # job = relationship("Job", back_populates="images")
 

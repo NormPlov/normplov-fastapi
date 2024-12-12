@@ -16,4 +16,4 @@ class Province(Base):
 
     # Relationships
     schools = relationship("School", back_populates="province")
-    jobs = relationship("Job", back_populates="province")
+    # jobs = relationship("Job", back_populates="province")
