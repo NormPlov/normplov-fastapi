@@ -63,7 +63,6 @@ async def get_school_with_majors(
             for major in majors
         ]
 
-        # Create the response payload
         response_payload = SchoolDetailsResponse(
             uuid=str(school.uuid),
             kh_name=school.kh_name,

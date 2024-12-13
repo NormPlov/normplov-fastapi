@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, validator
 from datetime import datetime
 from typing import Optional, List, Dict
 
@@ -22,10 +22,6 @@ class UserTestsResponse(BaseModel):
     tests: List[TestSummary]
 
 
-class GetTestDetailsInput(BaseModel):
-    test_uuid: str = Field(..., description="Unique identifier for the test")
-
-
 class AssessmentDraftData(BaseModel):
     responses: Dict[str, int]
 
@@ -37,8 +33,3 @@ class AssessmentData(BaseModel):
     draft_data: Optional[AssessmentDraftData]
     completion_status: str
 
-
-class GetTestDetailsResponse(BaseModel):
-    test_uuid: str
-    test_name: str
-    assessments: List[AssessmentData]

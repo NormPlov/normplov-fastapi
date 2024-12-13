@@ -14,16 +14,13 @@ from app.models.user_test import UserTest
 from app.models.career import Career
 from app.models.user_feedback import UserFeedback
 from app.models.job import Job
-from app.models.job_scraping_log import JobScrapingLog
-from app.models.job_category import JobCategory
-from app.models.job_image import JobImage
 from app.models.province import Province
 from app.models.school import School
 from app.models.major import Major
 from app.models.school_major import SchoolMajor
 from app.models.career_major import CareerMajor
 from app.models.faculty import Faculty
-from app.models.company import Company
+from app.models.job_category import JobCategory
 
 
 __all__ = ["Role",
@@ -41,15 +38,12 @@ __all__ = ["Role",
            "UserTest",
            "UserFeedback",
            "Job",
-           "JobScrapingLog",
-           "JobCategory",
-           "JobImage",
            "School",
            "Major",
            "SchoolMajor",
            "Faculty",
            "CareerMajor",
            "Province",
-           "Company"
+           "JobCategory"
            ]
 

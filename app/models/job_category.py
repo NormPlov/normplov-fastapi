@@ -25,7 +25,7 @@ class JobCategory(Base):
     updated_at = Column(DateTime, nullable=True, onupdate=func.now())
 
     # Relationships
-    # jobs = relationship("Job", back_populates="job_category")
+    jobs = relationship("Job", back_populates="job_category")
 
 
 
