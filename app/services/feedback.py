@@ -171,6 +171,14 @@ async def get_promoted_feedbacks(db: AsyncSession) -> list:
         raise HTTPException(status_code=500, detail="Failed to fetch promoted feedbacks")
 
 
+from sqlalchemy.future import select
+from sqlalchemy.orm import joinedload
+from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import HTTPException
+from app.models import UserFeedback
+from app.utils.pagination import paginate_results  # Assuming the utility is here
+
+
 async def get_all_feedbacks(
     db: AsyncSession,
     page: int,
@@ -180,11 +188,11 @@ async def get_all_feedbacks(
     is_promoted: bool = None,
     sort_by: str = "created_at",
     sort_order: str = "desc",
-) -> tuple:
+) -> dict:
     try:
         query = select(UserFeedback).options(joinedload(UserFeedback.user))
 
-        filters = [UserFeedback.is_deleted == False]
+        filters = []
         if is_deleted is not None:
             filters.append(UserFeedback.is_deleted == is_deleted)
         if is_promoted is not None:
@@ -193,23 +201,6 @@ async def get_all_feedbacks(
             filters.append(UserFeedback.feedback.ilike(f"%{search}%"))
 
         query = query.where(*filters)
-
-        # Count total feedbacks matching the filters
-        count_query = select(func.count(UserFeedback.id)).where(*filters)
-        total_count = (await db.execute(count_query)).scalar()
-
-        sort_column = getattr(UserFeedback, sort_by, None)
-        if sort_column is None:
-            raise HTTPException(
-                status_code=400, detail=f"Invalid sort_by field: {sort_by}"
-            )
-
-        if sort_order.lower() == "desc":
-            query = query.order_by(sort_column.desc())
-        else:
-            query = query.order_by(sort_column.asc())
-
-        query = query.offset((page - 1) * page_size).limit(page_size)
 
         result = await db.execute(query)
         feedbacks = result.scalars().all()
@@ -228,7 +219,17 @@ async def get_all_feedbacks(
             for feedback in feedbacks
         ]
 
-        return formatted_feedbacks, total_count
+        if sort_by:
+            sort_column = getattr(UserFeedback, sort_by, None)
+            if not sort_column:
+                raise HTTPException(status_code=400, detail=f"Invalid sort_by field: {sort_by}")
+            formatted_feedbacks.sort(
+                key=lambda x: x[sort_by], reverse=(sort_order.lower() == "desc")
+            )
+
+        paginated_results = paginate_results(formatted_feedbacks, page, page_size)
+
+        return paginated_results
 
     except Exception as e:
         logger.exception("Error fetching feedbacks")

@@ -107,7 +107,7 @@ async def fetch_all_feedbacks_route(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        feedbacks, total_count = await get_all_feedbacks(
+        paginated_feedbacks = await get_all_feedbacks(
             db=db,
             page=page,
             page_size=page_size,
@@ -122,10 +122,7 @@ async def fetch_all_feedbacks_route(
             date=datetime.utcnow().strftime("%d-%B-%Y"),
             status=200,
             message="Feedbacks retrieved successfully",
-            payload={
-                "total_count": total_count,
-                "feedbacks": feedbacks,
-            },
+            payload=paginated_feedbacks,
         )
 
     except HTTPException as e:
