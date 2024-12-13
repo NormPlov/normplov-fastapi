@@ -109,9 +109,8 @@ async def predict_skills(
             category_name = skill_category.category_name
             category_level = "Strong" if level in ["Strong", "High"] else "Average" if level in ["Average", "Moderate"] else "Weak"
 
-            # Update skills_by_levels to group skills by their level
             skills_by_levels[category_level].append({
-                "skill": skill_with_level,
+                "skill": skill_with_level.replace(" Level", ""),
                 "description": dimension.description,
             })
 

@@ -22,7 +22,7 @@ school_router = APIRouter()
 
 
 @school_router.get(
-    "/{school_uuid}/details",
+    "/{school_uuid}",
     summary="Get school details and majors by UUID",
     response_model=BaseResponse,
     tags=["School"],
