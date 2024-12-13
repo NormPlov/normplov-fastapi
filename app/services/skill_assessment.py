@@ -1,5 +1,7 @@
 import pandas as pd
+import logging
 import uuid
+import json
 
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,8 +24,6 @@ from app.models.dimension import Dimension
 from app.services.test import create_user_test
 from app.schemas.skill_assessment import SkillAssessmentInput, SkillAssessmentResponse, CareerWithMajors, MajorWithSchools
 from ml_models.model_loader import load_skill_model
-import logging
-import json
 
 logger = logging.getLogger(__name__)
 

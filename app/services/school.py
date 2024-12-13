@@ -25,7 +25,7 @@ async def get_school_with_majors(
     db: AsyncSession,
 ) -> BaseResponse:
     try:
-        # Query the school
+        # Query the school with majors
         school_stmt = (
             select(School)
             .options(
@@ -42,10 +42,14 @@ async def get_school_with_majors(
                 detail="School not found or has been deleted.",
             )
 
-        # Extract majors
-        majors = [major.major for major in school.majors if not major.is_deleted and not major.major.is_deleted]
+        # Extract and filter majors
+        majors = [
+            major.major
+            for major in school.majors
+            if not major.is_deleted and not major.major.is_deleted
+        ]
 
-        # Map majors to MajorResponse schema
+        # Map majors to response format
         major_responses = [
             {
                 "uuid": str(major.uuid),
@@ -59,7 +63,7 @@ async def get_school_with_majors(
             for major in majors
         ]
 
-        # Format response
+        # Create the response payload
         response_payload = SchoolDetailsResponse(
             uuid=str(school.uuid),
             kh_name=school.kh_name,
@@ -329,7 +333,6 @@ async def load_all_schools(
 
 
 async def update_school(school_uuid: str, data: UpdateSchoolRequest, db: AsyncSession):
-
     stmt = select(School).where(School.uuid == school_uuid, School.is_deleted == False)
     result = await db.execute(stmt)
     school = result.scalars().first()

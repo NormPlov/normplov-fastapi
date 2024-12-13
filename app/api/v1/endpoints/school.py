@@ -30,7 +30,6 @@ school_router = APIRouter()
 async def get_school_details_route(
     school_uuid: str,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user_data),
 ):
     return await get_school_with_majors(school_uuid, db)
 
@@ -113,7 +112,6 @@ async def update_school_endpoint(
     school_uuid: str,
     data: UpdateSchoolRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(is_admin_user),
 ):
     try:
         response = await update_school(school_uuid, data, db)
