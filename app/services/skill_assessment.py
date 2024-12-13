@@ -63,7 +63,7 @@ async def predict_skills(
             if not user_test:
                 raise HTTPException(status_code=404, detail="Invalid test UUID provided.")
         else:
-            user_test = await create_user_test(db, user_id, "Skills", assessment_type_id)
+            user_test = await create_user_test(db, current_user.id, assessment_type_id)
 
         input_df = pd.DataFrame([data.responses])
         logger.debug(f"Input DataFrame: {input_df}")

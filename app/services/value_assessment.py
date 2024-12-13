@@ -79,7 +79,7 @@ async def process_value_assessment(responses, db: AsyncSession, current_user, te
                 raise HTTPException(status_code=404, detail="Test not found.")
             logger.info(f"Updating existing test with UUID: {test_uuid}")
         else:
-            user_test = await create_user_test(db, current_user.id, "Value Assessment", assessment_type_id)
+            user_test = await create_user_test(db, current_user.id, assessment_type_id)
 
         input_data = pd.DataFrame([responses])
         logger.debug(f"User responses converted to DataFrame: {input_data}")

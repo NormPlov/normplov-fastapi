@@ -1,7 +1,7 @@
 import logging
 import uuid
-from typing import List, Dict, Any, Optional
 
+from typing import List, Dict, Any, Optional
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import joinedload
 from sqlalchemy.sql import text
@@ -136,7 +136,7 @@ async def get_user_tests(
 ) -> Dict[str, Any]:
     try:
         query = select(UserTest).options(
-            joinedload(UserTest.user)
+            joinedload(UserTest.user), joinedload(UserTest.assessment_type)
         ).where(
             UserTest.user_id == user_id,
             UserTest.is_deleted == False
@@ -173,6 +173,7 @@ async def get_user_tests(
             {
                 "test_uuid": str(test.uuid),
                 "test_name": test.name,
+                "assessment_type_name": test.assessment_type.name if test.assessment_type else None,
                 "is_completed": test.is_completed,
                 "is_deleted": test.is_deleted,
                 "created_at": test.created_at.strftime("%d-%B-%Y"),
@@ -242,7 +243,6 @@ async def generate_shareable_link(
 ) -> BaseResponse:
     try:
 
-        # Query the database
         stmt = select(UserTest).where(
             UserTest.uuid == test_uuid,
             UserTest.user_id == user_id,
@@ -311,7 +311,6 @@ async def delete_test(test_uuid: str, user_id: int, db: AsyncSession):
 async def create_user_test(
     db: AsyncSession,
     user_id: int,
-    test_name_prefix: str,
     assessment_type_id: int
 ) -> UserTest:
     try:
@@ -327,17 +326,16 @@ async def create_user_test(
         result = await db.execute(stmt, {"user_id": user_id})
         latest_test = result.scalar()
 
-        # Determine the next test index
-        if latest_test and latest_test.startswith(test_name_prefix):
+        if latest_test and latest_test.startswith("Test "):
             try:
-                latest_index = int(latest_test.split(" ")[-1])
+                latest_index = int(latest_test.replace("Test ", "").strip())
                 next_index = latest_index + 1
             except ValueError:
                 next_index = 1
         else:
             next_index = 1
 
-        test_name = f"{test_name_prefix} Test {next_index}"
+        test_name = f"Test {next_index}"
 
         new_test = UserTest(
             uuid=uuid.uuid4(),
@@ -346,9 +344,10 @@ async def create_user_test(
             assessment_type_id=assessment_type_id,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
-            is_completed=False,
+            is_completed=True,
             is_deleted=False,
         )
+
         db.add(new_test)
         await db.commit()
         await db.refresh(new_test)

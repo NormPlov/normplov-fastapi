@@ -51,7 +51,7 @@ async def process_interest_assessment(
 
             logger.info(f"Updating existing test with UUID: {test_uuid}")
         else:
-            user_test = await create_user_test(db, current_user.id, "Interest", assessment_type_id)
+            user_test = await create_user_test(db, current_user.id, assessment_type_id)
 
         score_mapping = {
             "R_Score": ["q1", "q2"],

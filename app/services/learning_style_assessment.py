@@ -91,9 +91,8 @@ async def predict_learning_style(
             if not user_test:
                 raise HTTPException(status_code=404, detail="Test not found.")
         else:
-            user_test = await create_user_test(db, current_user.id, "Learning Style", assessment_type_id)
+            user_test = await create_user_test(db, current_user.id, assessment_type_id)
 
-        # Fetching the questions for the learning style assessment
         stmt = select(Question).options(joinedload(Question.dimension))
         result = await db.execute(stmt)
         questions = result.scalars().all()

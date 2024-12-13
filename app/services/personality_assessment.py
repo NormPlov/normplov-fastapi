@@ -44,7 +44,7 @@ async def process_personality_assessment(
     try:
         assessment_type_id = await get_assessment_type_id("Personality", db)
 
-        user_test = await create_user_test(db, current_user.id, "Personality", assessment_type_id)
+        user_test = await create_user_test(db, current_user.id, assessment_type_id)
 
         input_responses_df = pd.DataFrame([input_data])
         dimension_scores = {}
