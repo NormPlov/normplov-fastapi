@@ -3,10 +3,11 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import engine, Base, get_db
-from app.core.init import init_roles_and_admin
+from app.core.init import init_roles_and_admin, create_static_users_batched
 from contextlib import asynccontextmanager
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.future import select
 from app.api.v1.endpoints import (
     auth,
     user,
@@ -23,6 +24,7 @@ from app.api.v1.endpoints import (
     dimension,
     province
 )
+from app.models.app_metadata import AppMetadata
 
 
 @asynccontextmanager
@@ -31,7 +33,23 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
 
     async for db in get_db():
-        await init_roles_and_admin(db)
+        metadata_stmt = select(AppMetadata).limit(1)
+        result = await db.execute(metadata_stmt)
+        metadata = result.scalars().first()
+
+        if not metadata:
+            metadata = AppMetadata(initialized=False)
+            db.add(metadata)
+            await db.commit()
+            await db.refresh(metadata)
+
+        if not metadata.initialized:
+            await init_roles_and_admin(db)
+            await create_static_users_batched(db, num_users=100)
+
+            metadata.initialized = True
+            await db.commit()
+
         break
 
     yield

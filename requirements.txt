@@ -55,3 +55,5 @@ itsdangerous==2.2.0
 google-ai-generativelanguage==0.6.10
 pyjwt==2.8.0
 google-generativeai==0.8.3
+Faker==33.1.0
+
