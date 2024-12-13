@@ -6,7 +6,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import joinedload
 from sqlalchemy.sql import text
 from datetime import date
-from app.models import UserResponse, UserTest
+from app.models import UserResponse, UserTest, User
 from datetime import datetime
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +17,74 @@ from app.schemas.payload import BaseResponse
 from app.utils.pagination import paginate_results
 
 logger = logging.getLogger(__name__)
+
+
+async def get_all_tests(
+    db: AsyncSession,
+    search: Optional[str] = None,
+    sort_by: str = "created_at",
+    sort_order: str = "desc",
+    filter_by: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 10,
+) -> Dict[str, Any]:
+    try:
+        query = select(UserTest).join(User).options(joinedload(UserTest.user)).where(UserTest.is_deleted == False)
+
+        # Apply search
+        if search:
+            query = query.where(
+                UserTest.name.ilike(f"%{search}%") | User.username.ilike(f"%{search}%")
+            )
+
+        if filter_by:
+            try:
+                import json
+                filters = json.loads(filter_by)
+                if not isinstance(filters, dict):
+                    raise ValueError("Filter must be a JSON object.")
+                for key, value in filters.items():
+                    if hasattr(UserTest, key):
+                        query = query.where(getattr(UserTest, key) == value)
+            except (ValueError, TypeError) as e:
+                raise HTTPException(status_code=400, detail=f"Invalid filter format: {e}")
+
+        # Apply sorting
+        if hasattr(UserTest, sort_by):
+            sort_column = getattr(UserTest, sort_by)
+            query = query.order_by(sort_column.asc() if sort_order == "asc" else sort_column.desc())
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid sort_by field. Choose a valid field from UserTest or User.",
+            )
+
+        result = await db.execute(query)
+        tests = result.scalars().all()
+
+        formatted_tests = [
+            {
+                "test_uuid": str(test.uuid),
+                "test_name": test.name,
+                "is_completed": test.is_completed,
+                "is_deleted": test.is_deleted,
+                "created_at": test.created_at.strftime("%d-%B-%Y"),
+                "user": {
+                    "username": test.user.username,
+                    "avatar": test.user.avatar,
+                    "email": test.user.email,
+                },
+            }
+            for test in tests
+        ]
+
+        paginated_results = paginate_results(formatted_tests, page, page_size)
+
+        return paginated_results
+
+    except Exception as e:
+        logger.error(f"Error fetching all tests: {e}")
+        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
 
 
 async def get_user_responses(
@@ -59,15 +127,17 @@ async def get_user_responses(
 async def get_user_tests(
     db: AsyncSession,
     user_id: int,
-    search: str = None,
+    search: Optional[str] = None,
     sort_by: str = "created_at",
     sort_order: str = "desc",
-    filter_by: str = None,
+    filter_by: Optional[str] = None,
     page: int = 1,
     page_size: int = 10,
-):
+) -> Dict[str, Any]:
     try:
-        query = select(UserTest).where(
+        query = select(UserTest).options(
+            joinedload(UserTest.user)
+        ).where(
             UserTest.user_id == user_id,
             UserTest.is_deleted == False
         )
@@ -93,7 +163,7 @@ async def get_user_tests(
         else:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid sort_by field. Choose a valid field from UserTest."
+                detail=f"Invalid sort_by field. Choose a valid field from UserTest.",
             )
 
         result = await db.execute(query)
@@ -102,8 +172,10 @@ async def get_user_tests(
         formatted_tests = [
             {
                 "test_uuid": str(test.uuid),
-                "name": test.name,
-                "created_at": test.created_at.strftime("%d-%B-%Y %H:%M:%S"),
+                "test_name": test.name,
+                "is_completed": test.is_completed,
+                "is_deleted": test.is_deleted,
+                "created_at": test.created_at.strftime("%d-%B-%Y"),
             }
             for test in tests
         ]

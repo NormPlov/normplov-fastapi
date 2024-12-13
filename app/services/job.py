@@ -405,8 +405,8 @@ async def update_job(uuid: uuid.UUID, db: AsyncSession, update_data: dict) -> Jo
 
 
 async def create_job(
-        db: AsyncSession,
-        job_data: dict,
+    db: AsyncSession,
+    job_data: dict,
 ) -> JobResponse:
     try:
         posted_at = job_data.get("posted_at")
@@ -461,7 +461,7 @@ async def create_job(
         await db.refresh(new_job)
 
         return JobResponse(
-            uuid=new_job.uuid,
+            uuid=str(new_job.uuid),
             title=new_job.title,
             company=new_job.company,
             logo=new_job.logo,
