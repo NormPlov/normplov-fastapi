@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import uuid
 import logging
@@ -53,16 +54,13 @@ async def process_interest_assessment(
         else:
             user_test = await create_user_test(db, current_user.id, assessment_type_id)
 
-        score_mapping = {
-            "R_Score": ["q1", "q2"],
-            "I_Score": ["q3", "q4"],
-            "A_Score": ["q5", "q6"],
-            "S_Score": ["q7", "q8"],
-            "E_Score": ["q9", "q10"],
-            "C_Score": ["q11", "q12"]
-        }
+        response_values = [responses[f"q{i}"] for i in range(1, 13)]
+        input_data = np.array(response_values).reshape(1, -1)
 
-        scores = {key: sum(responses[q] for q in questions) for key, questions in score_mapping.items()}
+        predicted_scores = prob_model.predict(input_data)
+
+        score_keys = ["R_Score", "I_Score", "A_Score", "S_Score", "E_Score", "C_Score"]
+        scores = {key: value for key, value in zip(score_keys, predicted_scores[0])}
         scores_df = pd.DataFrame([scores])
 
         top_dimensions = scores_df.iloc[0].sort_values(ascending=False).index[:2]
@@ -174,7 +172,7 @@ async def process_interest_assessment(
             logger.error("No assessment scores to save.")
             raise HTTPException(
                 status_code=500,
-                detail="Failed to resolve dimension IDs for interest assessment scores.",
+                detail="Failed to resolve dimension IDs for interest assessment scores."
             )
 
         db.add_all(assessment_scores)

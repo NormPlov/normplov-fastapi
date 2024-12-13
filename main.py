@@ -21,7 +21,8 @@ from app.api.v1.endpoints import (
     major,
     job,
     company,
-    dimension
+    dimension,
+    province
 )
 
 
@@ -67,6 +68,7 @@ app.include_router(ai_recommendation.ai_recommendation_router, prefix="/api/v1/a
 app.include_router(draft.draft_router, prefix="/api/v1/draft", tags=["Draft"])
 app.include_router(feedback.feedback_router, prefix="/api/v1/feedback", tags=["Feedback"])
 app.include_router(job_category.job_category_router, prefix="/api/v1/job-categories", tags=["Job Categories"])
+app.include_router(province.province_router, prefix="/api/v1/provinces", tags=["Province"])
 app.include_router(school.school_router, prefix="/api/v1/schools", tags=["School"])
 app.include_router(faculty.faculty_router, prefix="/api/v1/faculties", tags=["Faculty"])
 app.include_router(major.major_router, prefix="/api/v1/majors", tags=["Major"])
