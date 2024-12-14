@@ -25,7 +25,7 @@ from app.services.user import (
 )
 from app.dependencies import (
     is_admin_user,
-    get_current_user_data, get_current_user
+    get_current_user_data
 )
 
 user_router = APIRouter()

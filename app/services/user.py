@@ -1,3 +1,4 @@
+import os
 import shutil
 import logging
 
@@ -9,6 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from datetime import datetime, timedelta
 from sqlalchemy.sql.functions import current_user
+
+from app.core.config import settings
+from app.exceptions.file_exceptions import FileExtensionError, handle_file_error, FileSizeError
 from app.models import UserRole
 from app.models.user import User
 from app.schemas.payload import BaseResponse
@@ -242,39 +246,64 @@ async def update_user_bio(uuid: str, bio: str, db: AsyncSession) -> BaseResponse
 
 
 async def upload_profile_picture(uuid: str, file: UploadFile, db: AsyncSession) -> BaseResponse:
-    stmt = select(User).where(User.uuid == uuid)
-    result = await db.execute(stmt)
-    user = result.scalars().first()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found."
-        )
-
-    file_location = f"uploads/profile_pictures/{uuid}_{file.filename}"
     try:
-        with open(file_location, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error saving file: {str(e)}"
+        extension = file.filename.split(".")[-1].lower()
+        if extension not in settings.ALLOWED_EXTENSIONS:
+            raise FileExtensionError(settings.ALLOWED_EXTENSIONS)
+
+        file_size = file.file.seek(0, os.SEEK_END)
+        file.file.seek(0)
+        if file_size > settings.MAX_FILE_SIZE:
+            raise FileSizeError(settings.MAX_FILE_SIZE)
+
+        stmt = select(User).where(User.uuid == uuid)
+        result = await db.execute(stmt)
+        user = result.scalars().first()
+
+        if not user:
+            raise HTTPException(
+                status_code=404,
+                detail="User not found."
+            )
+
+        upload_folder = os.path.join(settings.BASE_UPLOAD_FOLDER, "profile_pictures")
+        os.makedirs(upload_folder, exist_ok=True)
+
+        file_name = f"{uuid}_{file.filename}"
+        file_path = os.path.join(upload_folder, file_name)
+        try:
+            with open(file_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error saving file: {str(e)}"
+            )
+
+        user.avatar = os.path.join("profile_pictures", file_name)
+        user.updated_at = datetime.utcnow()
+
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+
+        return BaseResponse(
+            date=datetime.utcnow().strftime("%Y-%m-%d"),
+            status=200,
+            message="Profile picture uploaded successfully.",
+            payload={"avatar_url": f"/{settings.BASE_UPLOAD_FOLDER}/profile_pictures/{file_name}"},
         )
 
-    user.avatar = file_location
-    user.updated_at = datetime.utcnow()
-
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
-
-    return BaseResponse(
-        date=datetime.utcnow().strftime("%d-%B-%Y"),
-        status=status.HTTP_200_OK,
-        message="Profile picture uploaded successfully.",
-        payload={"avatar_url": file_location},
-    )
+    except (FileExtensionError, FileSizeError) as e:
+        raise handle_file_error(e)
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"An unexpected error occurred: {str(e)}"
+        )
 
 
 async def update_user_profile(uuid: str, profile_update: UpdateUser, db: AsyncSession) -> BaseResponse:

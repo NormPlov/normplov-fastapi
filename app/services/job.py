@@ -1,12 +1,76 @@
 import uuid
+from typing import List
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from fastapi import HTTPException
+from sqlalchemy.orm import joinedload
 from app.models import Job
-from app.schemas.job import JobResponse
+from app.schemas.job import JobResponse, JobListingResponse
 from datetime import datetime
 from sqlalchemy.exc import IntegrityError
+
+
+async def delete_job(uuid: str, db: AsyncSession) -> dict:
+    try:
+        stmt = select(Job).where(Job.uuid == uuid, Job.is_deleted == False)
+        result = await db.execute(stmt)
+        job = result.scalars().first()
+
+        if not job:
+            raise HTTPException(
+                status_code=404,
+                detail="Job not found or already deleted."
+            )
+
+        job.is_deleted = True
+        db.add(job)
+        await db.commit()
+
+        return {"message": f"Job with UUID {uuid} deleted successfully."}
+
+    except HTTPException as exc:
+        raise exc
+    except Exception as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"An error occurred while deleting the job: {str(exc)}"
+        )
+
+
+async def load_all_jobs(db: AsyncSession, page: int = 1, page_size: int = 10) -> List[JobListingResponse]:
+    try:
+        offset = (page - 1) * page_size
+        stmt = (
+            select(Job)
+            .where(Job.is_deleted == False)
+            .order_by(Job.created_at.desc())
+            .offset(offset)
+            .limit(page_size)
+            .options(joinedload(Job.job_category))
+        )
+
+        result = await db.execute(stmt)
+        jobs = result.scalars().all()
+
+        return [
+            JobListingResponse(
+                uuid=job.uuid,
+                job_type=job.job_type,
+                title=job.title,
+                company_name=job.company,
+                company_logo=job.logo,
+                province_name=job.location,
+                closing_date=job.closing_date,
+            )
+            for job in jobs
+        ]
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"An error occurred while loading jobs: {str(exc)}",
+        )
 
 
 async def update_job(uuid: uuid.UUID, db: AsyncSession, update_data: dict) -> JobResponse:

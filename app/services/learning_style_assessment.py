@@ -1,4 +1,6 @@
 import pandas as pd
+import logging
+import json
 import uuid
 import os
 
@@ -8,6 +10,7 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload
 from app.core.config import settings
 from fastapi import HTTPException, UploadFile
+from app.exceptions.file_exceptions import FileExtensionError, FileSizeError, handle_file_error
 from app.models import (
     AssessmentType, Major, CareerMajor, SchoolMajor, School, UserResponse, UserAssessmentScore,
     LearningStyleStudyTechnique, Dimension, Question, DimensionCareer, UserTest
@@ -15,8 +18,6 @@ from app.models import (
 from app.schemas.learning_style_assessment import LearningStyleChart, LearningStyleResponse
 from app.services.test import create_user_test
 from ml_models.model_loader import load_vark_model
-import logging
-import json
 
 logger = logging.getLogger(__name__)
 vark_model = load_vark_model()
@@ -24,6 +25,16 @@ vark_model = load_vark_model()
 
 async def upload_technique_image(db: AsyncSession, technique_uuid: str, file: UploadFile):
     try:
+
+        extension = file.filename.split(".")[-1].lower()
+        if extension not in settings.ALLOWED_EXTENSIONS:
+            raise FileExtensionError(settings.ALLOWED_EXTENSIONS)
+
+        file_size = file.file.seek(0, os.SEEK_END)
+        file.file.seek(0)
+        if file_size > settings.MAX_FILE_SIZE:
+            raise FileSizeError(settings.MAX_FILE_SIZE)
+
         technique_query = select(LearningStyleStudyTechnique).where(
             LearningStyleStudyTechnique.uuid == technique_uuid,
             LearningStyleStudyTechnique.is_deleted == False
@@ -56,6 +67,8 @@ async def upload_technique_image(db: AsyncSession, technique_uuid: str, file: Up
             "image_url": f"/{settings.BASE_UPLOAD_FOLDER}/techniques/{file_name}",
         }
 
+    except (FileExtensionError, FileSizeError) as e:
+        raise handle_file_error(e)
     except HTTPException as e:
         raise e
     except Exception as e:

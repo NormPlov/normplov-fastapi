@@ -1,16 +1,18 @@
-import os
-from pydantic import Field
+from typing import List
+
+from pydantic import Field, validator
 from pydantic_settings import BaseSettings
 from urllib.parse import quote_plus
 
 
 class Settings(BaseSettings):
+    # Environment Configuration
     ENVIRONMENT: str = Field(default="development", env="ENVIRONMENT")
-    BASE_UPLOAD_FOLDER: str = Field(default="uploads", env="BASE_UPLOAD_FOLDER")
 
-    @property
-    def LEARNING_STYLE_UPLOAD_FOLDER(self) -> str:
-        return os.path.join(self.BASE_UPLOAD_FOLDER, "learning_style")
+    # File Upload Configuration
+    ALLOWED_EXTENSIONS: List[str] = Field(..., env="ALLOWED_EXTENSIONS")
+    MAX_FILE_SIZE: int = Field(default=5 * 1024 * 1024, env="MAX_FILE_SIZE")
+    BASE_UPLOAD_FOLDER: str = Field(default="uploads", env="BASE_UPLOAD_FOLDER")
 
     # Database Configuration
     DB_USER: str = Field(default="postgres", env="POSTGRESQL_USER")
@@ -48,11 +50,19 @@ class Settings(BaseSettings):
     TELEGRAM_BOT_TOKEN: str = Field(default="7747910734:AAHKkDzr54-oMuRs7SuEvN13MxmUBKB6QxM", env="TELEGRAM_BOT_TOKEN")
     TELEGRAM_CHAT_ID: str = Field(default="1299615474", env="TELEGRAM_CHAT_ID")
 
+    # Validator for ALLOWED_EXTENSIONS
+    @validator("ALLOWED_EXTENSIONS", pre=True)
+    def parse_allowed_extensions(cls, value):
+        if isinstance(value, str):
+            return [ext.strip() for ext in value.split(",") if ext.strip()]
+        return value
+
     # Database URL Configuration
     @property
     def database_url(self) -> str:
         db_host = "136.228.158.126" if self.ENVIRONMENT == "development" else self.DB_HOST
         return f"postgresql+asyncpg://{quote_plus(self.DB_USER)}:{quote_plus(self.DB_PASSWORD)}@{db_host}:{self.DB_PORT}/{self.DB_NAME}"
+
 
     class Config:
         env_file = ".env"
