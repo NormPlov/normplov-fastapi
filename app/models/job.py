@@ -29,7 +29,7 @@ class Job(Base):
     location = Column(String(255), nullable=True)
     posted_at = Column(DateTime, nullable=True)
     description = Column(Text, nullable=True)
-    category = Column(String(255), nullable=True)
+    # category = Column(String(255), nullable=True)
     job_type = Column(String(50), nullable=True)
     schedule = Column(String(255), nullable=True)
     salary = Column(String(50), nullable=True)

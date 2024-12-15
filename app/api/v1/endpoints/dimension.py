@@ -13,7 +13,7 @@ dimension_router = APIRouter()
 @dimension_router.post(
     "/upload-image/{dimension_uuid}",
     response_model=BaseResponse,
-    summary="Upload an image for a dimension (Admin Only)",
+    summary="Upload an image for a dimension (Admin Only)"
 )
 async def upload_dimension_image_route(
     dimension_uuid: str,
@@ -22,17 +22,24 @@ async def upload_dimension_image_route(
     current_user=Depends(is_admin_user),
 ):
     try:
-        result = await upload_dimension_image(db=db, dimension_uuid=dimension_uuid, file=file)
+        result = await upload_dimension_image(
+            db=db,
+            dimension_uuid=dimension_uuid,
+            file=file
+        )
         return BaseResponse(
-            date=datetime.utcnow(),
+            date=datetime.utcnow().strftime("%Y-%m-%d"),
             status=200,
-            payload=UploadDimensionImageResponse(**result),
-            message="Image uploaded successfully",
+            payload=result,
+            message="Image uploaded successfully.",
         )
     except HTTPException as e:
         raise e
     except Exception as e:
-        raise HTTPException(status_code=500, detail="An unexpected error occurred.")
+        raise HTTPException(
+            status_code=500,
+            detail=f"An unexpected error occurred: {str(e)}"
+        )
 
 
 @dimension_router.get(

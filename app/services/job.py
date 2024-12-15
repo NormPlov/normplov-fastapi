@@ -1,14 +1,65 @@
 import uuid
-from typing import List
+from typing import List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from fastapi import HTTPException
 from sqlalchemy.orm import joinedload
 from app.models import Job
 from app.schemas.job import JobResponse, JobListingResponse
 from datetime import datetime
 from sqlalchemy.exc import IntegrityError
+
+
+async def get_job_details(uuid: str, db: AsyncSession) -> Job:
+    try:
+        stmt = select(Job).where(Job.uuid == uuid, Job.is_deleted == False)
+        result = await db.execute(stmt)
+        job = result.scalars().first()
+
+        if not job:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Job with UUID {uuid} not found or has been deleted."
+            )
+
+        return job
+
+    except HTTPException as exc:
+        raise exc
+    except Exception as exc:
+        raise Exception(f"An error occurred while fetching job details: {str(exc)}")
+
+
+async def load_paginated_jobs(
+    db: AsyncSession,
+    page: int = 1,
+    page_size: int = 10,
+    search: Optional[str] = None,
+) -> (List[Job], int):
+
+    try:
+        stmt = select(Job).where(Job.is_deleted == False)
+
+        if search:
+            stmt = stmt.where(
+                Job.title.ilike(f"%{search}%") | Job.company.ilike(f"%{search}%")
+            )
+
+        total_count_stmt = select(func.count()).select_from(stmt.subquery())
+        total_count_result = await db.execute(total_count_stmt)
+        total_items = total_count_result.scalar()
+
+        offset = (page - 1) * page_size
+        stmt = stmt.offset(offset).limit(page_size).options(joinedload(Job.job_category))
+
+        result = await db.execute(stmt)
+        jobs = result.scalars().all()
+
+        return jobs, total_items
+
+    except Exception as exc:
+        raise Exception(f"An error occurred while loading jobs: {str(exc)}")
 
 
 async def delete_job(uuid: str, db: AsyncSession) -> dict:
@@ -39,18 +90,37 @@ async def delete_job(uuid: str, db: AsyncSession) -> dict:
         )
 
 
-async def load_all_jobs(db: AsyncSession, page: int = 1, page_size: int = 10) -> List[JobListingResponse]:
+async def load_all_jobs(
+    db: AsyncSession,
+    search: Optional[str] = None,
+    sort_by: str = "created_at",
+    order: str = "desc",
+    category: Optional[str] = None,
+    location: Optional[str] = None,
+    job_type: Optional[str] = None
+) -> list:
     try:
-        offset = (page - 1) * page_size
-        stmt = (
-            select(Job)
-            .where(Job.is_deleted == False)
-            .order_by(Job.created_at.desc())
-            .offset(offset)
-            .limit(page_size)
-            .options(joinedload(Job.job_category))
-        )
+        stmt = select(Job).where(Job.is_deleted == False)
 
+        if category:
+            stmt = stmt.where(Job.category.ilike(f"%{category}%"))
+        if location:
+            stmt = stmt.where(Job.location.ilike(f"%{location}%"))
+        if job_type:
+            stmt = stmt.where(Job.job_type.ilike(f"%{job_type}%"))
+
+        if search:
+            stmt = stmt.where(
+                Job.title.ilike(f"%{search}%") | Job.company.ilike(f"%{search}%")
+            )
+
+        sort_column = getattr(Job, sort_by, Job.created_at)
+        if order.lower() == "desc":
+            stmt = stmt.order_by(sort_column.desc())
+        else:
+            stmt = stmt.order_by(sort_column.asc())
+
+        stmt = stmt.options(joinedload(Job.job_category))
         result = await db.execute(stmt)
         jobs = result.scalars().all()
 
@@ -66,6 +136,7 @@ async def load_all_jobs(db: AsyncSession, page: int = 1, page_size: int = 10) ->
             )
             for job in jobs
         ]
+
     except Exception as exc:
         raise HTTPException(
             status_code=500,

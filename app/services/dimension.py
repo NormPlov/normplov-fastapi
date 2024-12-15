@@ -1,4 +1,4 @@
-import os
+import shutil
 
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,6 +6,8 @@ from sqlalchemy.future import select
 from app.models.dimension import Dimension
 from app.core.config import settings
 from app.schemas.dimension import DimensionResponse
+from pathlib import Path
+from app.utils.file import validate_file_size, validate_file_extension
 
 
 async def upload_dimension_image(db: AsyncSession, dimension_uuid: str, file: UploadFile):
@@ -20,33 +22,41 @@ async def upload_dimension_image(db: AsyncSession, dimension_uuid: str, file: Up
         if not dimension:
             raise HTTPException(status_code=404, detail="Dimension not found.")
 
-        upload_folder = os.path.join(settings.BASE_UPLOAD_FOLDER, "dimension")
-        os.makedirs(upload_folder, exist_ok=True)
+        if not validate_file_extension(file.filename):
+            raise HTTPException(status_code=400, detail="Invalid file type.")
+
+        validate_file_size(file)
+
+        upload_folder = Path(settings.BASE_UPLOAD_FOLDER) / "dimension"
+        upload_folder.mkdir(parents=True, exist_ok=True)
 
         file_name = f"{dimension.uuid}_{file.filename}"
-        file_path = os.path.join(upload_folder, file_name)
+        file_path = upload_folder / file_name
 
         try:
             with open(file_path, "wb") as f:
-                content = await file.read()
-                f.write(content)
+                shutil.copyfileobj(file.file, f)
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
 
-        dimension.image = os.path.join("dimension", file_name)
+        dimension.image = str(Path("uploads/dimension") / file_name).replace("\\", "/")
+        db.add(dimension)
         await db.commit()
         await db.refresh(dimension)
 
         return {
             "dimension_uuid": dimension.uuid,
-            "image_url": f"/{settings.BASE_UPLOAD_FOLDER}/dimension/{file_name}",
+            "image_url": dimension.image,
         }
 
     except HTTPException as e:
         raise e
     except Exception as e:
         await db.rollback()
-        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"An unexpected error occurred: {str(e)}"
+        )
 
 
 async def load_all_dimensions(db: AsyncSession):

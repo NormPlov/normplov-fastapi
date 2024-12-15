@@ -5,6 +5,39 @@ from typing import List, Optional
 from datetime import datetime
 
 
+class JobDetailsResponse(BaseModel):
+    uuid: uuid.UUID
+    title: str
+    company_name: str
+    logo: Optional[str]
+    location: Optional[str]
+    job_type: Optional[str]
+    description: Optional[str]
+    requirements: Optional[List[str]]
+    responsibilities: Optional[List[str]]
+    facebook_url: Optional[str]
+    email: Optional[str]
+    phone: Optional[str]
+    website: Optional[str]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class PaginatedJobResponse(BaseModel):
+    uuid: uuid.UUID
+    company_logo: Optional[str] = None
+    company_name: Optional[str] = None
+    province_name: Optional[str] = None
+    job_category_name: Optional[str] = None
+    position: Optional[str] = None
+    closing_date: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
 class JobQueryParams(BaseModel):
     job_category_uuid: Optional[uuid.UUID] = None
     province_uuid: Optional[uuid.UUID] = None
