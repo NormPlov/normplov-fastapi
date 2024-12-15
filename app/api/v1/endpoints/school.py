@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
-from app.dependencies import is_admin_user, get_current_user_data
+from app.dependencies import is_admin_user
 from app.models import User
 from app.schemas.payload import BaseResponse
 from datetime import datetime, date

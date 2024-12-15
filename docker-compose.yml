@@ -1,3 +1,4 @@
+version: "3.8"
 services:
   api:
     build:
@@ -9,3 +10,5 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:password@136.228.158.126:3299/postgres
     depends_on: []
+    volumes:
+      - ./uploads:/app/uploads

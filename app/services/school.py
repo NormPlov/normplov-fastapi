@@ -7,6 +7,8 @@ from uuid import uuid4
 from sqlalchemy import func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
+from pathlib import Path
+from app.core.config import settings
 from app.models import Major, SchoolMajor, Province
 from app.models.school import School
 from app.schemas.major import MajorResponse
@@ -14,6 +16,8 @@ from app.schemas.payload import BaseResponse
 from app.schemas.school import CreateSchoolRequest, UpdateSchoolRequest, SchoolResponse, SchoolDetailsResponse
 from fastapi import HTTPException, status, UploadFile
 from sqlalchemy.future import select
+
+from app.utils.file import validate_file_extension, validate_file_size
 from app.utils.format_date import format_date
 from app.utils.pagination import paginate_results
 
@@ -116,30 +120,39 @@ async def upload_school_logo_cover(
             detail="School not found or has been deleted."
         )
 
-    logo_directory = "uploads/school_logos"
-    cover_image_directory = "uploads/school_cover_images"
+    logo_directory = Path(settings.BASE_UPLOAD_FOLDER) / "school_logos"
+    cover_image_directory = Path(settings.BASE_UPLOAD_FOLDER) / "school_cover_images"
 
     os.makedirs(logo_directory, exist_ok=True)
     os.makedirs(cover_image_directory, exist_ok=True)
 
     if logo:
-        logo_location = f"{logo_directory}/{school.uuid}_{logo.filename}"
+        if not validate_file_extension(logo.filename):
+            raise HTTPException(status_code=400, detail="Invalid file type for logo.")
+        validate_file_size(logo)
+
+        logo_location = logo_directory / f"{school.uuid}_{logo.filename}"
         try:
             with open(logo_location, "wb") as buffer:
                 shutil.copyfileobj(logo.file, buffer)
-            school.logo_url = logo_location
+            school.logo_url = str(logo_location).replace("\\", "/")
         except Exception as e:
             raise HTTPException(
                 status_code=500,
                 detail=f"Error saving logo: {str(e)}"
             )
 
+    # Handle cover_image upload
     if cover_image:
-        cover_image_location = f"{cover_image_directory}/{school.uuid}_{cover_image.filename}"
+        if not validate_file_extension(cover_image.filename):
+            raise HTTPException(status_code=400, detail="Invalid file type for cover image.")
+        validate_file_size(cover_image)
+
+        cover_image_location = cover_image_directory / f"{school.uuid}_{cover_image.filename}"
         try:
             with open(cover_image_location, "wb") as buffer:
                 shutil.copyfileobj(cover_image.file, buffer)
-            school.cover_image = cover_image_location
+            school.cover_image = str(cover_image_location).replace("\\", "/")
         except Exception as e:
             raise HTTPException(
                 status_code=500,
@@ -152,15 +165,19 @@ async def upload_school_logo_cover(
     await db.commit()
     await db.refresh(school)
 
+    payload = {
+        "uuid": str(school.uuid),
+    }
+    if school.logo_url:
+        payload["logo_url"] = school.logo_url
+    if school.cover_image:
+        payload["cover_image"] = school.cover_image
+
     return BaseResponse(
         date=datetime.utcnow().strftime("%d-%B-%Y"),
         status=200,
-        message="School logo and cover image updated successfully.",
-        payload={
-            "uuid": str(school.uuid),
-            "logo_url": school.logo_url,
-            "cover_image": school.cover_image
-        }
+        message="School logo and/or cover image updated successfully.",
+        payload=payload
     )
 
 
