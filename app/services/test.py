@@ -15,6 +15,7 @@ from sqlalchemy import cast
 from sqlalchemy.dialects.postgresql import UUID
 from app.schemas.payload import BaseResponse
 from app.utils.pagination import paginate_results
+from sqlalchemy.types import String
 
 logger = logging.getLogger(__name__)
 
@@ -29,12 +30,21 @@ async def get_all_tests(
     page_size: int = 10,
 ) -> Dict[str, Any]:
     try:
-        query = select(UserTest).join(User).options(joinedload(UserTest.user)).where(UserTest.is_deleted == False)
+        query = (
+            select(UserTest)
+            .join(User)
+            .options(
+                joinedload(UserTest.user),
+                joinedload(UserTest.user_responses),
+            )
+            .where(UserTest.is_deleted == False)
+        )
 
-        # Apply search
         if search:
             query = query.where(
-                UserTest.name.ilike(f"%{search}%") | User.username.ilike(f"%{search}%")
+                UserTest.name.ilike(f"%{search}%")
+                | User.username.ilike(f"%{search}%")
+                | UserResponse.response_data.cast(String).ilike(f"%{search}%")
             )
 
         if filter_by:
@@ -49,7 +59,6 @@ async def get_all_tests(
             except (ValueError, TypeError) as e:
                 raise HTTPException(status_code=400, detail=f"Invalid filter format: {e}")
 
-        # Apply sorting
         if hasattr(UserTest, sort_by):
             sort_column = getattr(UserTest, sort_by)
             query = query.order_by(sort_column.asc() if sort_order == "asc" else sort_column.desc())
@@ -60,7 +69,7 @@ async def get_all_tests(
             )
 
         result = await db.execute(query)
-        tests = result.scalars().all()
+        tests = result.unique().scalars().all()
 
         formatted_tests = [
             {
@@ -74,6 +83,15 @@ async def get_all_tests(
                     "avatar": test.user.avatar,
                     "email": test.user.email,
                 },
+                "responses": [
+                    {
+                        "response_uuid": str(response.uuid),
+                        "response_data": response.response_data,
+                        "is_draft": response.is_draft,
+                        "is_completed": response.is_completed,
+                    }
+                    for response in test.user_responses
+                ],
             }
             for test in tests
         ]

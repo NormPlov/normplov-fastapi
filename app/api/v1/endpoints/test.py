@@ -19,12 +19,12 @@ logger = logging.getLogger(__name__)
 @test_router.get(
     "/all-tests",
     response_model=BaseResponse,
-    summary="Retrieve all tests with user information",
-    description="Fetch all tests, including user information, with support for search, sort, filter, and pagination."
+    summary="Retrieve all tests with user and response data",
+    description="Fetch all tests, including user and response data, with support for search, sort, filter, and pagination."
 )
 async def get_all_tests_route(
     db: AsyncSession = Depends(get_db),
-    search: Optional[str] = Query(None, description="Search by test name or username"),
+    search: Optional[str] = Query(None, description="Search by test name, username, or response data"),
     sort_by: str = Query("created_at", description="Sort by field (default: created_at)"),
     sort_order: str = Query("desc", description="Sort order: asc or desc (default: desc)"),
     filter_by: Optional[str] = Query(None, description="Filter by key-value pairs as a JSON string"),
