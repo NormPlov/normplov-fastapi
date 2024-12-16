@@ -147,7 +147,7 @@ async def create_user_feedback(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user_data),
 ):
-    feedback_uuid = await create_feedback(payload.feedback, payload.assessment_type_uuid, current_user, db)
+    feedback_uuid = await create_feedback(payload.feedback, payload.user_test_uuid, current_user, db)
     return CreateFeedbackResponse(
         date=datetime.utcnow().strftime("%d-%B-%Y"),
         status=201,

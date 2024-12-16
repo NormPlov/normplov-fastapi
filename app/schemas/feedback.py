@@ -6,7 +6,7 @@ from app.schemas.payload import BaseResponse
 
 class CreateFeedbackRequest(BaseModel):
     feedback: str = Field(..., min_length=1, max_length=500, description="Feedback content")
-    assessment_type_uuid: str = Field(..., description="UUID of the assessment type")
+    user_test_uuid: str = Field(..., description="UUID of the user test")
 
     class Config:
         orm_mode = True

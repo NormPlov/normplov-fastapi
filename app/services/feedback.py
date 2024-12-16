@@ -7,7 +7,7 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload
 from datetime import datetime
 from sqlalchemy.sql.functions import current_user, func
-from app.models import AssessmentType
+from app.models import AssessmentType, UserTest
 from app.models.user_feedback import UserFeedback
 from fastapi import HTTPException
 from app.schemas.payload import BaseResponse
@@ -267,27 +267,27 @@ async def promote_feedback(feedback_uuid: str, db: AsyncSession) -> None:
         raise HTTPException(status_code=500, detail="Failed to promote feedback")
 
 
-async def create_feedback(feedback: str, assessment_type_uuid: str, current_user, db: AsyncSession) -> str:
+async def create_feedback(feedback: str, user_test_uuid: str, current_user, db: AsyncSession) -> str:
     try:
         result = await db.execute(
-            select(AssessmentType.id, AssessmentType.name).where(
-                AssessmentType.uuid == str(uuid.UUID(assessment_type_uuid)),
-                AssessmentType.is_deleted == False,
+            select(UserTest.id, AssessmentType.name).where(
+                UserTest.uuid == str(uuid.UUID(user_test_uuid)),
+                UserTest.is_deleted == False,
             )
         )
-        assessment_type = result.first()
+        user_test = result.first()
 
-        if not assessment_type:
-            raise HTTPException(status_code=404, detail="Assessment type not found")
+        if not user_test:
+            raise HTTPException(status_code=404, detail="User Test not found")
 
-        assessment_type_id, assessment_type_name = assessment_type
+        user_test_id, user_test_name = user_test
 
         feedback_uuid = str(uuid.uuid4())
         created_at = datetime.utcnow()
         new_feedback = UserFeedback(
             uuid=feedback_uuid,
             user_id=current_user.id,
-            assessment_type_id=assessment_type_id,
+            user_test_id=user_test_id,
             feedback=feedback,
             created_at=created_at,
             updated_at=created_at,
@@ -299,7 +299,7 @@ async def create_feedback(feedback: str, assessment_type_uuid: str, current_user
         telegram_message = (
             f"New Feedback Received:\n\n"
             f"<b>Username:</b> {current_user.username}\n"
-            f"<b>Assessment Type:</b> {assessment_type_name}\n"
+            f"<b>Assessment Type:</b> {user_test_name}\n"
             f"<b>Feedback:</b> {feedback}\n"
             f"<b>Date:</b> {formatted_date}"
         )

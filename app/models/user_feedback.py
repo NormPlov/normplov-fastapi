@@ -11,7 +11,7 @@ class UserFeedback(Base):
     id = Column(Integer, primary_key=True, index=True)
     uuid = Column(UUID(as_uuid=True), unique=True, nullable=False, default=lambda: uuid.uuid4())
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    assessment_type_id = Column(Integer, ForeignKey("assessment_types.id", ondelete="CASCADE"), nullable=False)
+    user_test_id = Column(Integer, ForeignKey("user_tests.id", ondelete="CASCADE"), nullable=False)
     feedback = Column(Text, nullable=False)
     is_deleted = Column(Boolean, default=False, nullable=False)
     is_promoted = Column(Boolean, default=False, nullable=False)  
@@ -20,4 +20,4 @@ class UserFeedback(Base):
 
     # Relationships
     user = relationship("User", back_populates="feedbacks")
-    assessment_type = relationship("AssessmentType", back_populates="feedbacks")
+    user_test = relationship("UserTest", back_populates="feedbacks")
