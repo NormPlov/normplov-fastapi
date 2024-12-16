@@ -354,7 +354,6 @@ async def delete_school(school_uuid: str, db: AsyncSession):
 
 async def create_school(data: CreateSchoolRequest, db: AsyncSession):
     try:
-        # Validate province UUID
         province_uuid = data.province_uuid
         province_stmt = select(Province).where(Province.uuid == province_uuid, Province.is_deleted == False)
         province_result = await db.execute(province_stmt)
@@ -366,7 +365,6 @@ async def create_school(data: CreateSchoolRequest, db: AsyncSession):
                 detail="Province not found or has been deleted."
             )
 
-        # Check for duplicate school name
         stmt = select(School).where(School.en_name == data.en_name, School.is_deleted == False)
         result = await db.execute(stmt)
         existing_school = result.scalars().first()
@@ -377,13 +375,10 @@ async def create_school(data: CreateSchoolRequest, db: AsyncSession):
                 detail="A school with this name already exists.",
             )
 
-        # Generate Google Map embed URL if latitude and longitude are provided
         google_map_embed_url = None
         if data.latitude and data.longitude:
-            from app.utils.google_map import generate_google_map_embed_url
             google_map_embed_url = generate_google_map_embed_url(data.latitude, data.longitude)
 
-        # Create a new school record
         new_school = School(
             uuid=uuid4(),
             kh_name=data.kh_name,
@@ -405,7 +400,6 @@ async def create_school(data: CreateSchoolRequest, db: AsyncSession):
             province_id=province.id,
         )
 
-        # Insert into the database
         try:
             db.add(new_school)
             await db.commit()
