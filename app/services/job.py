@@ -129,20 +129,23 @@ async def load_all_jobs(
     job_type: Optional[str] = None
 ) -> list[JobDetailsResponse]:
     try:
+        # Base query
         stmt = select(Job).where(Job.is_deleted == False)
 
+        # Apply filters
         if category:
-            stmt = stmt.where(Job.job_category.has(category.ilike(f"%{category}%")))
+            stmt = stmt.where(Job.job_category.has(name.ilike(f"%{category}%")))
         if location:
             stmt = stmt.where(Job.location.ilike(f"%{location}%"))
         if job_type:
             stmt = stmt.where(Job.job_type.ilike(f"%{job_type}%"))
 
+        # Search filter
         if search:
             stmt = stmt.where(
                 Job.title.ilike(f"%{search}%")
                 | Job.company.ilike(f"%{search}%")
-                | Job.job_category.has(Job.job_category.category.ilike(f"%{search}%"))
+                | Job.job_category.has(JobCategory.name.ilike(f"%{search}%"))
                 | Job.location.ilike(f"%{search}%")
                 | Job.job_type.ilike(f"%{search}%")
             )
@@ -159,6 +162,7 @@ async def load_all_jobs(
         result = await db.execute(stmt)
         jobs = result.scalars().all()
 
+        # Construct response
         return [
             JobDetailsResponse(
                 uuid=job.uuid,
@@ -175,6 +179,8 @@ async def load_all_jobs(
                 phone=job.phone,
                 website=job.website,
                 created_at=job.created_at,
+                closing_date=job.closing_date.strftime("%d.%b.%Y") if job.closing_date else None,
+                job_category_name=job.job_category.name if job.job_category else None,
             )
             for job in jobs
         ]

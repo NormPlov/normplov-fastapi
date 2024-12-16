@@ -257,7 +257,7 @@ async def load_all_schools(
                 "phone": school.phone,
                 "lowest_price": school.lowest_price,
                 "highest_price": school.highest_price,
-                "map": school.map,
+                "google_map_embed_url": school.google_map_embed_url,
                 "email": school.email,
                 "website": school.website,
                 "description": school.description,
