@@ -10,8 +10,26 @@ from app.models import Job
 from app.schemas.job import JobResponse, JobDetailsResponse
 from datetime import datetime
 from sqlalchemy.exc import IntegrityError
+from uuid import UUID
 
 logger = logging.getLogger(__name__)
+
+
+async def update_job_logo(db: AsyncSession, uuid: UUID, logo_url: str) -> None:
+    try:
+        stmt = select(Job).where(Job.uuid == uuid, Job.is_deleted == False)
+        result = await db.execute(stmt)
+        job = result.scalars().first()
+
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found.")
+
+        job.logo = logo_url
+        db.add(job)
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error updating job logo: {str(e)}")
 
 
 async def admin_load_all_jobs(

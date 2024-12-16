@@ -1,19 +1,77 @@
+import logging
+import os
+import shutil
 from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.config import settings
 from app.dependencies import is_admin_user
 from app.exceptions.formatters import format_http_exception
 from app.models import User
 from app.schemas.payload import BaseResponse
-from app.services.job import create_job, update_job, load_all_jobs, delete_job, get_job_details, admin_load_all_jobs
+from app.services.job import create_job, update_job, load_all_jobs, delete_job, get_job_details, admin_load_all_jobs, \
+    update_job_logo
 from app.schemas.job import JobCreateRequest, JobUpdateRequest, JobDetailsResponse
 from app.core.database import get_db
 import uuid as uuid_lib
+from uuid import UUID
 
+from app.utils.file import validate_file_extension, validate_file_size
 from app.utils.pagination import paginate_results
 
 job_router = APIRouter()
+logger = logging.getLogger(__name__)
+
+
+@job_router.post(
+    "/{uuid}/upload-logo",
+    response_model=BaseResponse,
+    summary="Upload job logo",
+    description="Upload and update the logo for a specific job by UUID.",
+    status_code=200,
+)
+async def upload_job_logo(
+    uuid: str,
+    logo: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(is_admin_user),
+):
+    try:
+        try:
+            uuid_obj = UUID(uuid, version=4)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid UUID format.")
+
+        if not validate_file_extension(logo.filename):
+            raise HTTPException(status_code=400, detail="Invalid file extension.")
+
+        validate_file_size(logo)
+
+        upload_directory = os.path.join(settings.BASE_UPLOAD_FOLDER, "job-logos")
+        os.makedirs(upload_directory, exist_ok=True)
+        file_path = os.path.join(upload_directory, f"{uuid_obj}.png")
+
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(logo.file, buffer)
+
+        logo_url = f"{settings.BASE_UPLOAD_FOLDER}/job-logos/{uuid_obj}.png"
+        await update_job_logo(db, uuid_obj, logo_url)
+
+        return BaseResponse(
+            date=datetime.utcnow().strftime("%Y-%m-%d"),
+            status=200,
+            message="Job logo uploaded successfully.",
+            payload={"logo_url": logo_url},
+        )
+    except HTTPException as exc:
+        raise exc
+    except Exception as exc:
+        logger.error(f"Error uploading job logo: {str(exc)}")
+        raise HTTPException(
+            status_code=500, detail=f"An error occurred while uploading the job logo: {str(exc)}"
+        )
 
 
 @job_router.get(
