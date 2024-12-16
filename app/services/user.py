@@ -312,9 +312,9 @@ async def update_user_profile(uuid: str, profile_update: UpdateUser, db: AsyncSe
             detail="User not found."
         )
 
-    update_data = profile_update.dict(exclude_unset=True)  # Only include fields that are updated
+    update_data = profile_update.dict(exclude_unset=True)
 
-    # Validate the date_of_birth field if it's provided
+    # Validate date_of_birth
     if "date_of_birth" in update_data:
         date_of_birth = update_data["date_of_birth"]
 
@@ -337,9 +337,10 @@ async def update_user_profile(uuid: str, profile_update: UpdateUser, db: AsyncSe
 
     user.updated_at = datetime.utcnow()
 
+    # Persist changes
     db.add(user)
     await db.commit()
-    await db.refresh(user)
+    await db.refresh(user)  # Refresh after commit to avoid closed transaction error
 
     return BaseResponse(
         date=datetime.utcnow().strftime("%d-%B-%Y"),

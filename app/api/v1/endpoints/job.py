@@ -1,9 +1,10 @@
 import logging
 import os
 import shutil
+import uuid
 from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -11,67 +12,16 @@ from app.dependencies import is_admin_user
 from app.exceptions.formatters import format_http_exception
 from app.models import User
 from app.schemas.payload import BaseResponse
-from app.services.job import create_job, update_job, load_all_jobs, delete_job, get_job_details, admin_load_all_jobs, \
-    update_job_logo
+from app.services.job import create_job, update_job, load_all_jobs, delete_job, get_job_details, admin_load_all_jobs
 from app.schemas.job import JobCreateRequest, JobUpdateRequest, JobDetailsResponse
 from app.core.database import get_db
 import uuid as uuid_lib
-from uuid import UUID
 
-from app.utils.file import validate_file_extension, validate_file_size
+from app.utils.file import validate_file_size, validate_file_extension
 from app.utils.pagination import paginate_results
 
 job_router = APIRouter()
 logger = logging.getLogger(__name__)
-
-
-@job_router.post(
-    "/{uuid}/upload-logo",
-    response_model=BaseResponse,
-    summary="Upload job logo",
-    description="Upload and update the logo for a specific job by UUID.",
-    status_code=200,
-)
-async def upload_job_logo(
-    uuid: str,
-    logo: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(is_admin_user),
-):
-    try:
-        try:
-            uuid_obj = UUID(uuid, version=4)
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid UUID format.")
-
-        if not validate_file_extension(logo.filename):
-            raise HTTPException(status_code=400, detail="Invalid file extension.")
-
-        validate_file_size(logo)
-
-        upload_directory = os.path.join(settings.BASE_UPLOAD_FOLDER, "job-logos")
-        os.makedirs(upload_directory, exist_ok=True)
-        file_path = os.path.join(upload_directory, f"{uuid_obj}.png")
-
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(logo.file, buffer)
-
-        logo_url = f"{settings.BASE_UPLOAD_FOLDER}/job-logos/{uuid_obj}.png"
-        await update_job_logo(db, uuid_obj, logo_url)
-
-        return BaseResponse(
-            date=datetime.utcnow().strftime("%Y-%m-%d"),
-            status=200,
-            message="Job logo uploaded successfully.",
-            payload={"logo_url": logo_url},
-        )
-    except HTTPException as exc:
-        raise exc
-    except Exception as exc:
-        logger.error(f"Error uploading job logo: {str(exc)}")
-        raise HTTPException(
-            status_code=500, detail=f"An error occurred while uploading the job logo: {str(exc)}"
-        )
 
 
 @job_router.get(
@@ -278,12 +228,68 @@ async def update_job_route(
     summary="Create a new job",
 )
 async def create_job_route(
-    job_data: JobCreateRequest,
+    title: str = Form(...),
+    company: str = Form(...),
+    location: str = Form(None),
+    facebook_url: str = Form(None),
+    posted_at: str = Form(None),
+    description: str = Form(None),
+    job_type: str = Form(None),
+    schedule: str = Form(None),
+    salary: str = Form(None),
+    closing_date: str = Form(None),
+    requirements: str = Form(None),
+    responsibilities: str = Form(None),
+    benefits: str = Form(None),
+    email: str = Form(None),
+    phone: str = Form(None),
+    website: str = Form(None),
+    is_active: bool = Form(True),
+    logo: UploadFile = File(None),
+    job_category_uuid: str = Form(None),  # Add job category UUID
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(is_admin_user),
 ):
     try:
-        new_job = await create_job(db, job_data.dict())
+        logo_url = None
+
+        if logo:
+            if not validate_file_extension(logo.filename):
+                raise HTTPException(status_code=400, detail="Invalid file extension. Only specific types are allowed.")
+
+            validate_file_size(logo)
+
+            upload_directory = os.path.join(settings.BASE_UPLOAD_FOLDER, "job-logos")
+            os.makedirs(upload_directory, exist_ok=True)
+            file_path = os.path.join(upload_directory, f"{uuid.uuid4()}.png")
+            with open(file_path, "wb") as buffer:
+                shutil.copyfileobj(logo.file, buffer)
+
+            logo_url = f"{settings.BASE_UPLOAD_FOLDER}/job-logos/{os.path.basename(file_path)}"
+
+        job_data = {
+            "title": title,
+            "company": company,
+            "location": location,
+            "facebook_url": facebook_url,
+            "posted_at": posted_at,
+            "description": description,
+            "job_type": job_type,
+            "schedule": schedule,
+            "salary": salary,
+            "closing_date": closing_date,
+            "requirements": str(requirements).split(",") if requirements else None,
+            "responsibilities": str(responsibilities).split(",") if responsibilities else None,
+            "benefits": str(benefits).split(",") if benefits else None,
+            "email": email,
+            "phone": phone,
+            "website": website,
+            "is_active": is_active,
+            "logo": logo_url,
+            "job_category_uuid": job_category_uuid,
+        }
+
+        new_job = await create_job(db, job_data)
 
         return BaseResponse(
             date=datetime.utcnow(),

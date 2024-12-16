@@ -30,12 +30,17 @@ class ChangePassword(BaseModel):
 
 
 class UpdateUser(BaseModel):
-    username: Optional[str]
-    address: Optional[str]
-    phone_number: Optional[str]
-    bio: Optional[str]
-    gender: Optional[str]
-    date_of_birth: Optional[datetime]
+    username: Optional[str] = Field(None, max_length=100)
+    email: Optional[EmailStr] = None
+    avatar: Optional[str] = None
+    address: Optional[str] = None
+    phone_number: Optional[str] = None
+    bio: Optional[str] = None
+    gender: Optional[str] = None
+    date_of_birth: Optional[datetime] = None
+
+    class Config:
+        orm_mode = True
 
 
 class UserResponse(BaseModel):

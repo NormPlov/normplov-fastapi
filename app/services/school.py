@@ -19,6 +19,7 @@ from sqlalchemy.future import select
 
 from app.utils.file import validate_file_extension, validate_file_size
 from app.utils.format_date import format_date
+from app.utils.maps import generate_google_map_embed_url
 from app.utils.pagination import paginate_results
 
 logger = logging.getLogger(__name__)
@@ -353,6 +354,7 @@ async def delete_school(school_uuid: str, db: AsyncSession):
 
 async def create_school(data: CreateSchoolRequest, db: AsyncSession):
     try:
+        # Validate province UUID
         province_uuid = data.province_uuid
         province_stmt = select(Province).where(Province.uuid == province_uuid, Province.is_deleted == False)
         province_result = await db.execute(province_stmt)
@@ -364,6 +366,7 @@ async def create_school(data: CreateSchoolRequest, db: AsyncSession):
                 detail="Province not found or has been deleted."
             )
 
+        # Check for duplicate school name
         stmt = select(School).where(School.en_name == data.en_name, School.is_deleted == False)
         result = await db.execute(stmt)
         existing_school = result.scalars().first()
@@ -374,6 +377,13 @@ async def create_school(data: CreateSchoolRequest, db: AsyncSession):
                 detail="A school with this name already exists.",
             )
 
+        # Generate Google Map embed URL if latitude and longitude are provided
+        google_map_embed_url = None
+        if data.latitude and data.longitude:
+            from app.utils.google_map import generate_google_map_embed_url
+            google_map_embed_url = generate_google_map_embed_url(data.latitude, data.longitude)
+
+        # Create a new school record
         new_school = School(
             uuid=uuid4(),
             kh_name=data.kh_name,
@@ -384,15 +394,18 @@ async def create_school(data: CreateSchoolRequest, db: AsyncSession):
             phone=data.phone,
             lowest_price=data.lowest_price,
             highest_price=data.highest_price,
-            map=str(data.map) if data.map else None,
+            latitude=data.latitude,
+            longitude=data.longitude,
+            google_map_embed_url=google_map_embed_url,
             email=data.email,
-            website=str(data.website) if data.website else None,
+            website=str(data.website) if data.website else None,  # Convert Url to string
             description=data.description,
             mission=data.mission,
             vision=data.vision,
             province_id=province.id,
         )
 
+        # Insert into the database
         try:
             db.add(new_school)
             await db.commit()

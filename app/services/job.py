@@ -6,30 +6,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from fastapi import HTTPException
 from sqlalchemy.orm import joinedload
-from app.models import Job
+from app.models import Job, JobCategory
 from app.schemas.job import JobResponse, JobDetailsResponse
 from datetime import datetime
 from sqlalchemy.exc import IntegrityError
 from uuid import UUID
 
 logger = logging.getLogger(__name__)
-
-
-async def update_job_logo(db: AsyncSession, uuid: UUID, logo_url: str) -> None:
-    try:
-        stmt = select(Job).where(Job.uuid == uuid, Job.is_deleted == False)
-        result = await db.execute(stmt)
-        job = result.scalars().first()
-
-        if not job:
-            raise HTTPException(status_code=404, detail="Job not found.")
-
-        job.logo = logo_url
-        db.add(job)
-        await db.commit()
-    except Exception as e:
-        await db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error updating job logo: {str(e)}")
 
 
 async def admin_load_all_jobs(
@@ -252,8 +235,9 @@ async def create_job(
     job_data: dict,
 ) -> JobResponse:
     try:
+        # Validate posted_at
         posted_at = job_data.get("posted_at")
-        if isinstance(posted_at, str):
+        if posted_at:
             try:
                 posted_at = datetime.fromisoformat(posted_at)
             except ValueError:
@@ -262,8 +246,9 @@ async def create_job(
                     detail="Invalid date format for posted_at."
                 )
 
+        # Validate closing_date
         closing_date = job_data.get("closing_date")
-        if isinstance(closing_date, str):
+        if closing_date:
             try:
                 closing_date = datetime.fromisoformat(closing_date)
             except ValueError:
@@ -272,6 +257,22 @@ async def create_job(
                     detail="Invalid date format for closing_date."
                 )
 
+        # Validate job_category_uuid
+        job_category_id = None
+        if job_data.get("job_category_uuid"):
+            stmt = select(JobCategory).where(
+                JobCategory.uuid == job_data["job_category_uuid"], JobCategory.is_deleted == False
+            )
+            result = await db.execute(stmt)
+            job_category = result.scalars().first()
+            if not job_category:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Job category not found."
+                )
+            job_category_id = job_category.id
+
+        # Create the job
         new_job = Job(
             uuid=uuid.uuid4(),
             title=job_data["title"],
@@ -296,6 +297,7 @@ async def create_job(
             is_deleted=False,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
+            job_category_id=job_category_id,
         )
 
         db.add(new_job)
@@ -324,6 +326,7 @@ async def create_job(
             is_active=new_job.is_active,
             created_at=new_job.created_at.isoformat(),
             updated_at=new_job.updated_at.isoformat() if new_job.updated_at else None,
+            job_category_uuid=str(job_data.get("job_category_uuid")),
         )
 
     except IntegrityError as e:

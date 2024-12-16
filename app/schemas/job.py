@@ -75,6 +75,7 @@ class JobUpdateRequest(BaseModel):
 
 
 class JobCreateRequest(BaseModel):
+    job_category_uuid: Optional[str] = Field(None, description="UUID of the job category")
     title: str
     company: str
     logo: Optional[str] = Field(None, description="Logo URL as a string")

@@ -26,7 +26,7 @@ class SchoolDetailsResponse(BaseModel):
     phone: Optional[str] = Field(None)
     lowest_price: Optional[float] = Field(None)
     highest_price: Optional[float] = Field(None)
-    map: Optional[str] = Field(None)
+    google_map_embed_url: Optional[str]
     email: Optional[str] = Field(None)
     website: Optional[str] = Field(None)
     description: Optional[str] = Field(None)
@@ -68,7 +68,8 @@ class CreateSchoolRequest(BaseModel):
     phone: Optional[str] = Field(None, max_length=15)
     lowest_price: Optional[float] = Field(None, ge=0)
     highest_price: Optional[float] = Field(None, ge=0)
-    map: Optional[HttpUrl] = Field(None)
+    latitude: Optional[float] = Field(None, ge=-90, le=90)
+    longitude: Optional[float] = Field(None, ge=-180, le=180)
     email: Optional[EmailStr] = Field(None)
     website: Optional[HttpUrl] = Field(None)
     description: Optional[str] = Field(None, max_length=2000)

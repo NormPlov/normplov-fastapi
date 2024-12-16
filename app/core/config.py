@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     TELEGRAM_BOT_TOKEN: str = Field(default="7747910734:AAHKkDzr54-oMuRs7SuEvN13MxmUBKB6QxM", env="TELEGRAM_BOT_TOKEN")
     TELEGRAM_CHAT_ID: str = Field(default="1299615474", env="TELEGRAM_CHAT_ID")
 
+    # Google Maps Configuration
+    GOOGLE_MAPS_API_KEY: str = Field(..., env="GOOGLE_MAPS_API_KEY")
+
     # Validator for ALLOWED_EXTENSIONS
     @validator("ALLOWED_EXTENSIONS", pre=True)
     def parse_allowed_extensions(cls, value):
