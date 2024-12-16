@@ -1,15 +1,18 @@
+import shutil
 import uuid
 import logging
 
+from pathlib import Path
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from fastapi import HTTPException
+from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import joinedload
+from app.core.config import settings
 from app.models import Job, JobCategory
 from app.schemas.job import JobResponse, JobDetailsResponse
 from datetime import datetime
-from sqlalchemy.exc import IntegrityError
+from app.utils.file import validate_file_extension, validate_file_size
 
 logger = logging.getLogger(__name__)
 
@@ -236,114 +239,130 @@ async def update_job(uuid: uuid.UUID, db: AsyncSession, update_data: dict) -> Jo
     return JobResponse(**job_data)
 
 
-async def create_job(
+async def create_job_with_logo_service(
+    title: str,
+    company: str,
+    location: str,
+    facebook_url: Optional[str],
+    posted_at: Optional[str],
+    description: Optional[str],
+    job_type: Optional[str],
+    schedule: Optional[str],
+    salary: Optional[str],
+    closing_date: Optional[str],
+    requirements: Optional[str],
+    responsibilities: Optional[str],
+    benefits: Optional[str],
+    email: Optional[str],
+    phone: Optional[str],
+    website: Optional[str],
+    is_active: bool,
+    logo: Optional[UploadFile],
+    job_category_uuid: str,
     db: AsyncSession,
-    job_data: dict,
-) -> JobResponse:
+) -> dict:
     try:
-        # Validate posted_at
-        posted_at = job_data.get("posted_at")
+        logo_url = None
+        if logo:
+            if not validate_file_extension(logo.filename):
+                raise HTTPException(status_code=400, detail="Invalid file type for logo.")
+
+            validate_file_size(logo)
+
+            logo_directory = Path(settings.BASE_UPLOAD_FOLDER) / "job-logos"
+            logo_directory.mkdir(parents=True, exist_ok=True)
+
+            logo_path = logo_directory / f"{uuid.uuid4()}_{logo.filename}"
+            with open(logo_path, "wb") as buffer:
+                shutil.copyfileobj(logo.file, buffer)
+
+            logo_url = f"{settings.BASE_UPLOAD_FOLDER}/job-logos/{logo_path.name}"
+
+        parsed_posted_at = None
         if posted_at:
             try:
-                posted_at = datetime.fromisoformat(posted_at)
+                parsed_posted_at = datetime.fromisoformat(posted_at)
+                if parsed_posted_at > datetime.utcnow():
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Posted date cannot be in the future.",
+                    )
             except ValueError:
                 raise HTTPException(
                     status_code=400,
-                    detail="Invalid date format for posted_at."
+                    detail="Invalid posted_at date format. Use ISO 8601 format.",
                 )
 
-        # Validate closing_date
-        closing_date = job_data.get("closing_date")
+        parsed_closing_date = None
         if closing_date:
             try:
-                closing_date = datetime.fromisoformat(closing_date)
+                parsed_closing_date = datetime.fromisoformat(closing_date)
+                if parsed_posted_at and parsed_closing_date < parsed_posted_at:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Closing date cannot be earlier than posted date.",
+                    )
             except ValueError:
                 raise HTTPException(
                     status_code=400,
-                    detail="Invalid date format for closing_date."
+                    detail="Invalid closing_date format. Use ISO 8601 format.",
                 )
 
-        # Validate job_category_uuid
         job_category_id = None
-        if job_data.get("job_category_uuid"):
+        if job_category_uuid:
             stmt = select(JobCategory).where(
-                JobCategory.uuid == job_data["job_category_uuid"], JobCategory.is_deleted == False
+                JobCategory.uuid == job_category_uuid,
+                JobCategory.is_deleted == False
             )
             result = await db.execute(stmt)
             job_category = result.scalars().first()
             if not job_category:
-                raise HTTPException(
-                    status_code=404,
-                    detail="Job category not found."
-                )
+                raise HTTPException(status_code=404, detail="Job category not found.")
             job_category_id = job_category.id
 
-        # Create the job
+        requirements_list = requirements.split(",") if requirements else None
+        responsibilities_list = responsibilities.split(",") if responsibilities else None
+        benefits_list = benefits.split(",") if benefits else None
+
         new_job = Job(
             uuid=uuid.uuid4(),
-            title=job_data["title"],
-            company=job_data["company"],
-            logo=job_data.get("logo"),
-            facebook_url=job_data.get("facebook_url"),
-            location=job_data.get("location"),
-            posted_at=posted_at,
-            description=job_data.get("description"),
-            job_type=job_data.get("job_type"),
-            schedule=job_data.get("schedule"),
-            salary=job_data.get("salary"),
-            closing_date=closing_date,
-            requirements=job_data.get("requirements"),
-            responsibilities=job_data.get("responsibilities"),
-            benefits=job_data.get("benefits"),
-            email=job_data.get("email"),
-            phone=job_data.get("phone"),
-            website=job_data.get("website"),
-            is_active=job_data.get("is_active", True),
-            is_scraped=job_data.get("is_scraped", False),
+            title=title,
+            company=company,
+            location=location,
+            facebook_url=facebook_url,
+            posted_at=parsed_posted_at,
+            description=description,
+            job_type=job_type,
+            schedule=schedule,
+            salary=salary,
+            closing_date=parsed_closing_date,
+            requirements=requirements_list,
+            responsibilities=responsibilities_list,
+            benefits=benefits_list,
+            email=email,
+            phone=phone,
+            website=website,
+            is_active=is_active,
+            logo=logo_url,
+            job_category_id=job_category_id,
             is_deleted=False,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
-            job_category_id=job_category_id,
         )
 
         db.add(new_job)
         await db.commit()
         await db.refresh(new_job)
 
-        return JobResponse(
-            uuid=str(new_job.uuid),
-            title=new_job.title,
-            company=new_job.company,
-            logo=new_job.logo,
-            facebook_url=new_job.facebook_url,
-            location=new_job.location,
-            posted_at=new_job.posted_at.isoformat() if new_job.posted_at else None,
-            description=new_job.description,
-            job_type=new_job.job_type,
-            schedule=new_job.schedule,
-            salary=new_job.salary,
-            closing_date=new_job.closing_date.isoformat() if new_job.closing_date else None,
-            requirements=new_job.requirements,
-            responsibilities=new_job.responsibilities,
-            benefits=new_job.benefits,
-            email=new_job.email,
-            phone=new_job.phone,
-            website=new_job.website,
-            is_active=new_job.is_active,
-            created_at=new_job.created_at.isoformat(),
-            updated_at=new_job.updated_at.isoformat() if new_job.updated_at else None,
-            job_category_uuid=str(job_data.get("job_category_uuid")),
-        )
+        return {
+            "uuid": str(new_job.uuid),
+        }
 
-    except IntegrityError as e:
-        await db.rollback()
-        raise HTTPException(
-            status_code=400,
-            detail=f"Integrity error: {str(e)}"
-        )
-    except Exception as e:
+    except HTTPException as exc:
+        raise exc
+    except Exception as exc:
         await db.rollback()
         raise HTTPException(
             status_code=500,
-            detail=f"An error occurred while creating the job: {str(e)}"
+            detail=f"An error occurred while creating the job: {str(exc)}",
         )

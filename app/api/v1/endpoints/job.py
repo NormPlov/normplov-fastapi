@@ -1,23 +1,18 @@
 import logging
-import os
-import shutil
-import uuid
+
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.core.config import settings
 from app.dependencies import is_admin_user
-from app.exceptions.formatters import format_http_exception
 from app.models import User
 from app.schemas.payload import BaseResponse
-from app.services.job import create_job, update_job, load_all_jobs, delete_job, get_job_details, admin_load_all_jobs
-from app.schemas.job import JobCreateRequest, JobUpdateRequest, JobDetailsResponse
+from app.services.job import update_job, load_all_jobs, delete_job, get_job_details, admin_load_all_jobs, \
+    create_job_with_logo_service
+from app.schemas.job import JobUpdateRequest, JobDetailsResponse
 from app.core.database import get_db
 import uuid as uuid_lib
 
-from app.utils.file import validate_file_size, validate_file_extension
 from app.utils.pagination import paginate_results
 
 job_router = APIRouter()
@@ -222,10 +217,10 @@ async def update_job_route(
 
 
 @job_router.post(
-    "/",
+    "",
     response_model=BaseResponse,
     status_code=201,
-    summary="Create a new job",
+    summary="Create a new job with a logo",
 )
 async def create_job_route(
     title: str = Form(...),
@@ -251,59 +246,39 @@ async def create_job_route(
     current_user: dict = Depends(is_admin_user),
 ):
     try:
-        logo_url = None
-        if logo:
-            if not validate_file_extension(logo.filename):
-                raise HTTPException(status_code=400, detail="Invalid file extension. Only specific types are allowed.")
-
-            validate_file_size(logo)
-
-            upload_directory = os.path.join(settings.BASE_UPLOAD_FOLDER, "job-logos")
-            os.makedirs(upload_directory, exist_ok=True)
-            file_path = os.path.join(upload_directory, f"{uuid.uuid4()}.png")
-            with open(file_path, "wb") as buffer:
-                shutil.copyfileobj(logo.file, buffer)
-
-            logo_url = f"{settings.BASE_URL}/job-logos/{os.path.basename(file_path)}"
-
-        job_data = {
-            "title": title,
-            "company": company,
-            "location": location,
-            "facebook_url": facebook_url,
-            "posted_at": posted_at,
-            "description": description,
-            "job_type": job_type,
-            "schedule": schedule,
-            "salary": salary,
-            "closing_date": closing_date,
-            "requirements": str(requirements).split(",") if requirements else None,
-            "responsibilities": str(responsibilities).split(",") if responsibilities else None,
-            "benefits": str(benefits).split(",") if benefits else None,
-            "email": email,
-            "phone": phone,
-            "website": website,
-            "is_active": is_active,
-            "logo": logo_url,
-            "job_category_uuid": job_category_uuid,
-        }
-
-        job_response = await create_job(db, job_data)
+        job_response = await create_job_with_logo_service(
+            title=title,
+            company=company,
+            location=location,
+            facebook_url=facebook_url,
+            posted_at=posted_at,
+            description=description,
+            job_type=job_type,
+            schedule=schedule,
+            salary=salary,
+            closing_date=closing_date,
+            requirements=requirements,
+            responsibilities=responsibilities,
+            benefits=benefits,
+            email=email,
+            phone=phone,
+            website=website,
+            is_active=is_active,
+            logo=logo,
+            job_category_uuid=job_category_uuid,
+            db=db,
+        )
 
         return BaseResponse(
             date=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
             status=201,
             message="Job created successfully.",
-            payload=job_response.dict(),
+            payload=job_response,
         )
-
     except HTTPException as e:
         raise e
-
     except Exception as e:
-        raise format_http_exception(
+        raise HTTPException(
             status_code=500,
-            message="An unexpected error occurred while creating the job.",
-            details=str(e),
+            detail=f"An unexpected error occurred while creating the job: {str(e)}",
         )
-
