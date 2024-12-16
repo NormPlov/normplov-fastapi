@@ -10,7 +10,7 @@ from datetime import datetime, date
 from app.services.school import (
     create_school,
     delete_school,
-    update_school, load_all_schools, get_majors_for_school, upload_school_logo_cover, get_school_with_majors
+    update_school, load_all_schools, upload_school_logo_cover, get_school_with_majors
 )
 from app.schemas.school import (
     CreateSchoolRequest,
@@ -50,21 +50,6 @@ async def upload_school_logo_cover_route(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An error occurred while uploading the logo and cover image: {str(e)}"
         )
-
-
-@school_router.get(
-    "/{school_uuid}/majors",
-    response_model=BaseResponse,
-    summary="Get majors for a school",
-    description="Fetch all majors offered by a specific school using the school UUID."
-)
-async def fetch_majors_for_school(
-    school_uuid: str,
-    page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(10, ge=1, le=100, description="Number of items per page"),
-    db: AsyncSession = Depends(get_db)
-):
-    return await get_majors_for_school(school_uuid, db, page, page_size)
 
 
 @school_router.get(

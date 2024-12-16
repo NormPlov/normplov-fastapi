@@ -72,7 +72,7 @@ async def get_school_with_majors(
             kh_name=school.kh_name,
             en_name=school.en_name,
             type=school.type.value,
-            popular_major=school.popular_major,
+            popular_major=school.popular_major or "",
             logo_url=school.logo_url,
             cover_image=school.cover_image,
             location=school.location,
@@ -179,77 +179,6 @@ async def upload_school_logo_cover(
         message="School logo and/or cover image updated successfully.",
         payload=payload
     )
-
-
-async def get_majors_for_school(
-    school_uuid: str,
-    db: AsyncSession,
-    page: int = 1,
-    page_size: int = 10
-) -> BaseResponse:
-    try:
-        logger.info(f"Fetching majors for school with UUID: {school_uuid}")
-
-        school_query = select(School).where(
-            School.uuid == school_uuid,
-            School.is_deleted == False
-        )
-        school_result = await db.execute(school_query)
-        school = school_result.scalars().first()
-
-        if not school:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="School not found or has been deleted."
-            )
-
-        query = (
-            select(Major)
-            .join(SchoolMajor, SchoolMajor.major_id == Major.id)
-            .where(
-                SchoolMajor.school_id == school.id,
-                SchoolMajor.is_deleted == False,
-                Major.is_deleted == False
-            )
-        )
-
-        # Pagination
-        total_query = query.with_only_columns(func.count()).order_by(None)
-        total_result = await db.execute(total_query)
-        total_items = total_result.scalar()
-
-        paginated_query = query.offset((page - 1) * page_size).limit(page_size)
-        result = await db.execute(paginated_query)
-        majors = result.scalars().all()
-
-        # Format the response
-        major_payload = [MajorResponse.from_orm(major) for major in majors]
-        metadata = {
-            "page": page,
-            "page_size": page_size,
-            "total_items": total_items,
-            "total_pages": (total_items + page_size - 1) // page_size,
-        }
-
-        return BaseResponse(
-            date=format_date(datetime.utcnow()),
-            status=status.HTTP_200_OK,
-            message="Majors retrieved successfully.",
-            payload={
-                "school_uuid": school_uuid,
-                "majors": major_payload,
-                "metadata": metadata,
-            },
-        )
-
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        logger.error(f"Error fetching majors for school: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An unexpected error occurred while fetching majors for the school."
-        )
 
 
 async def load_all_schools(
