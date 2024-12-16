@@ -6,7 +6,7 @@ from app.dependencies import is_admin_user
 from app.exceptions.formatters import format_http_exception
 from app.models import User
 from app.schemas.payload import BaseResponse
-from app.services.job import create_job, update_job, load_all_jobs, delete_job, get_job_details
+from app.services.job import create_job, update_job, load_all_jobs, delete_job, get_job_details, admin_load_all_jobs
 from app.schemas.job import JobCreateRequest, JobUpdateRequest, JobDetailsResponse
 from app.core.database import get_db
 import uuid as uuid_lib
@@ -14,6 +14,47 @@ import uuid as uuid_lib
 from app.utils.pagination import paginate_results
 
 job_router = APIRouter()
+
+
+@job_router.get(
+    "/admin/all-jobs",
+    response_model=BaseResponse,
+    status_code=200,
+    summary="Admin: Get all jobs",
+    description="Retrieve all jobs with detailed information for admin users."
+)
+async def admin_get_all_jobs_route(
+    search: Optional[str] = Query(None, description="Search term for job title or company name"),
+    sort_by: Optional[str] = Query("created_at", description="Sort by column (e.g., title, company, created_at)"),
+    order: Optional[str] = Query("desc", description="Order direction ('asc' or 'desc')"),
+    page: int = Query(1, description="Page number"),
+    page_size: int = Query(10, description="Number of jobs per page"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(is_admin_user),
+):
+    try:
+        jobs = await admin_load_all_jobs(
+            db=db,
+            search=search,
+            sort_by=sort_by,
+            order=order,
+        )
+
+        paginated_result = paginate_results(jobs, page=page, page_size=page_size)
+
+        return BaseResponse(
+            date=datetime.utcnow().strftime("%Y-%m-%d"),
+            status=200,
+            message="Jobs retrieved successfully.",
+            payload=paginated_result,
+        )
+    except HTTPException as exc:
+        raise exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"An error occurred: {str(exc)}",
+        )
 
 
 @job_router.get(
@@ -65,6 +106,7 @@ async def get_job_details_route(
             status_code=500,
             detail=f"An error occurred while retrieving job details: {str(exc)}",
         )
+
 
 @job_router.delete(
     "/{uuid}",
@@ -133,12 +175,10 @@ async def get_all_jobs_route(
             message="Jobs retrieved successfully.",
             payload=paginated_result,
         )
-    except HTTPException as exc:
-        raise exc
     except Exception as exc:
         raise HTTPException(
             status_code=500,
-            detail=f"An error occurred while retrieving jobs: {str(exc)}",
+            detail=f"An error occurred: {str(exc)}",
         )
 
 

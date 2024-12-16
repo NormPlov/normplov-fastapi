@@ -1,17 +1,72 @@
 import uuid
 import logging
 
-from typing import Optional, Dict
+from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select
 from fastapi import HTTPException
 from sqlalchemy.orm import joinedload
 from app.models import Job
-from app.schemas.job import JobResponse, JobListingResponse
+from app.schemas.job import JobResponse, JobDetailsResponse
 from datetime import datetime
 from sqlalchemy.exc import IntegrityError
 
 logger = logging.getLogger(__name__)
+
+
+async def admin_load_all_jobs(
+    db: AsyncSession,
+    search: Optional[str] = None,
+    sort_by: str = "created_at",
+    order: str = "desc"
+) -> list[JobDetailsResponse]:
+    try:
+
+        stmt = select(Job).where(Job.is_deleted == False)
+
+        if search:
+            stmt = stmt.where(
+                Job.title.ilike(f"%{search}%") | Job.company.ilike(f"%{search}%")
+            )
+
+        sort_column = getattr(Job, sort_by, Job.created_at)
+        if order.lower() == "desc":
+            stmt = stmt.order_by(sort_column.desc())
+        else:
+            stmt = stmt.order_by(sort_column.asc())
+
+        stmt = stmt.options(joinedload(Job.job_category))
+
+        result = await db.execute(stmt)
+        jobs = result.scalars().all()
+
+        return [
+            JobDetailsResponse(
+                uuid=job.uuid,
+                title=job.title,
+                company_name=job.company,
+                logo=job.logo,
+                location=job.location,
+                job_type=job.job_type,
+                description=job.description,
+                requirements=job.requirements,
+                responsibilities=job.responsibilities,
+                facebook_url=job.facebook_url,
+                email=job.email,
+                phone=job.phone,
+                website=job.website,
+                created_at=job.created_at,
+            )
+            for job in jobs
+        ]
+
+    except HTTPException as exc:
+        raise exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"An error occurred while loading jobs: {str(exc)}",
+        )
 
 
 async def get_job_details(uuid: str, db: AsyncSession) -> Job:
@@ -71,13 +126,12 @@ async def load_all_jobs(
     category: Optional[str] = None,
     location: Optional[str] = None,
     job_type: Optional[str] = None
-) -> list:
+) -> list[JobDetailsResponse]:
     try:
         stmt = select(Job).where(Job.is_deleted == False)
 
-        # Apply filters
         if category:
-            stmt = stmt.where(Job.category.ilike(f"%{category}%"))
+            stmt = stmt.where(Job.job_category.has(category.ilike(f"%{category}%")))
         if location:
             stmt = stmt.where(Job.location.ilike(f"%{location}%"))
         if job_type:
@@ -85,7 +139,11 @@ async def load_all_jobs(
 
         if search:
             stmt = stmt.where(
-                Job.title.ilike(f"%{search}%") | Job.company.ilike(f"%{search}%")
+                Job.title.ilike(f"%{search}%")
+                | Job.company.ilike(f"%{search}%")
+                | Job.job_category.has(Job.job_category.category.ilike(f"%{search}%"))
+                | Job.location.ilike(f"%{search}%")
+                | Job.job_type.ilike(f"%{search}%")
             )
 
         # Apply sorting
@@ -100,16 +158,22 @@ async def load_all_jobs(
         result = await db.execute(stmt)
         jobs = result.scalars().all()
 
-        # Transform jobs into response objects
         return [
-            JobListingResponse(
+            JobDetailsResponse(
                 uuid=job.uuid,
-                job_type=job.job_type,
                 title=job.title,
                 company_name=job.company,
-                company_logo=job.logo,
-                province_name=job.location,
-                closing_date=job.closing_date,
+                logo=job.logo,
+                location=job.location,
+                job_type=job.job_type,
+                description=job.description,
+                requirements=job.requirements,
+                responsibilities=job.responsibilities,
+                facebook_url=job.facebook_url,
+                email=job.email,
+                phone=job.phone,
+                website=job.website,
+                created_at=job.created_at,
             )
             for job in jobs
         ]
