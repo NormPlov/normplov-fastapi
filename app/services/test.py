@@ -6,7 +6,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import joinedload
 from sqlalchemy.sql import text
 from datetime import date
-from app.models import UserResponse, UserTest, User
+from app.models import UserResponse, UserTest, User, AssessmentType
 from datetime import datetime
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,23 +30,29 @@ async def get_all_tests(
     page_size: int = 10,
 ) -> Dict[str, Any]:
     try:
+        # Base query
         query = (
             select(UserTest)
             .join(User)
+            .join(AssessmentType, UserTest.assessment_type_id == AssessmentType.id)
             .options(
                 joinedload(UserTest.user),
                 joinedload(UserTest.user_responses),
+                joinedload(UserTest.assessment_type),  # Load assessment type
             )
             .where(UserTest.is_deleted == False)
         )
 
+        # Apply search
         if search:
             query = query.where(
                 UserTest.name.ilike(f"%{search}%")
                 | User.username.ilike(f"%{search}%")
+                | AssessmentType.name.ilike(f"%{search}%")  # Search in assessment type
                 | UserResponse.response_data.cast(String).ilike(f"%{search}%")
             )
 
+        # Apply filters
         if filter_by:
             try:
                 import json
@@ -59,6 +65,7 @@ async def get_all_tests(
             except (ValueError, TypeError) as e:
                 raise HTTPException(status_code=400, detail=f"Invalid filter format: {e}")
 
+        # Apply sorting
         if hasattr(UserTest, sort_by):
             sort_column = getattr(UserTest, sort_by)
             query = query.order_by(sort_column.asc() if sort_order == "asc" else sort_column.desc())
@@ -68,13 +75,16 @@ async def get_all_tests(
                 detail=f"Invalid sort_by field. Choose a valid field from UserTest or User.",
             )
 
+        # Execute query
         result = await db.execute(query)
         tests = result.unique().scalars().all()
 
+        # Format response
         formatted_tests = [
             {
                 "test_uuid": str(test.uuid),
                 "test_name": test.name,
+                "assessment_type_name": test.assessment_type.name if test.assessment_type else None,  # Include assessment type name
                 "is_completed": test.is_completed,
                 "is_deleted": test.is_deleted,
                 "created_at": test.created_at.strftime("%d-%B-%Y"),
@@ -96,6 +106,7 @@ async def get_all_tests(
             for test in tests
         ]
 
+        # Paginate results
         paginated_results = paginate_results(formatted_tests, page, page_size)
 
         return paginated_results
