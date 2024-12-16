@@ -20,7 +20,7 @@ class Job(Base):
     __tablename__ = "jobs"
 
     id = Column(Integer, primary_key=True, index=True)
-    uuid = Column(UUID, unique=True, nullable=False, default=uuid.uuid4)
+    uuid = Column(UUID(as_uuid=True), unique=True, nullable=False, default=uuid.uuid4)
     job_category_id = Column(Integer, ForeignKey("job_categories.id"), nullable=True)
     title = Column(String(255), nullable=False)
     company = Column(String(255), nullable=False)
@@ -29,7 +29,6 @@ class Job(Base):
     location = Column(String(255), nullable=True)
     posted_at = Column(DateTime, nullable=True)
     description = Column(Text, nullable=True)
-    # category = Column(String(255), nullable=True)
     job_type = Column(String(50), nullable=True)
     schedule = Column(String(255), nullable=True)
     salary = Column(String(50), nullable=True)

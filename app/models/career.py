@@ -13,6 +13,7 @@ class Career(Base):
     uuid = Column(String, unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
+    working_preference = Column(Text, nullable=True)
     personality_type_id = Column(Integer, ForeignKey("personality_types.id", ondelete="SET NULL"), nullable=True)
     holland_code_id = Column(Integer, ForeignKey("holland_codes.id", ondelete="SET NULL"), nullable=True)
     value_category_id = Column(Integer, ForeignKey("value_categories.id", ondelete="SET NULL"), nullable=True)

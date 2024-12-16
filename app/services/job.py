@@ -1,6 +1,7 @@
 import uuid
-from typing import List, Optional
+import logging
 
+from typing import Optional, Dict
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from fastapi import HTTPException
@@ -10,9 +11,12 @@ from app.schemas.job import JobResponse, JobListingResponse
 from datetime import datetime
 from sqlalchemy.exc import IntegrityError
 
+logger = logging.getLogger(__name__)
+
 
 async def get_job_details(uuid: str, db: AsyncSession) -> Job:
     try:
+        # Query to fetch job details
         stmt = select(Job).where(Job.uuid == uuid, Job.is_deleted == False)
         result = await db.execute(stmt)
         job = result.scalars().first()
@@ -29,37 +33,6 @@ async def get_job_details(uuid: str, db: AsyncSession) -> Job:
         raise exc
     except Exception as exc:
         raise Exception(f"An error occurred while fetching job details: {str(exc)}")
-
-
-async def load_paginated_jobs(
-    db: AsyncSession,
-    page: int = 1,
-    page_size: int = 10,
-    search: Optional[str] = None,
-) -> (List[Job], int):
-
-    try:
-        stmt = select(Job).where(Job.is_deleted == False)
-
-        if search:
-            stmt = stmt.where(
-                Job.title.ilike(f"%{search}%") | Job.company.ilike(f"%{search}%")
-            )
-
-        total_count_stmt = select(func.count()).select_from(stmt.subquery())
-        total_count_result = await db.execute(total_count_stmt)
-        total_items = total_count_result.scalar()
-
-        offset = (page - 1) * page_size
-        stmt = stmt.offset(offset).limit(page_size).options(joinedload(Job.job_category))
-
-        result = await db.execute(stmt)
-        jobs = result.scalars().all()
-
-        return jobs, total_items
-
-    except Exception as exc:
-        raise Exception(f"An error occurred while loading jobs: {str(exc)}")
 
 
 async def delete_job(uuid: str, db: AsyncSession) -> dict:
@@ -102,6 +75,7 @@ async def load_all_jobs(
     try:
         stmt = select(Job).where(Job.is_deleted == False)
 
+        # Apply filters
         if category:
             stmt = stmt.where(Job.category.ilike(f"%{category}%"))
         if location:
@@ -114,16 +88,19 @@ async def load_all_jobs(
                 Job.title.ilike(f"%{search}%") | Job.company.ilike(f"%{search}%")
             )
 
+        # Apply sorting
         sort_column = getattr(Job, sort_by, Job.created_at)
         if order.lower() == "desc":
             stmt = stmt.order_by(sort_column.desc())
         else:
             stmt = stmt.order_by(sort_column.asc())
 
+        # Fetch results
         stmt = stmt.options(joinedload(Job.job_category))
         result = await db.execute(stmt)
         jobs = result.scalars().all()
 
+        # Transform jobs into response objects
         return [
             JobListingResponse(
                 uuid=job.uuid,
@@ -172,7 +149,6 @@ async def update_job(uuid: uuid.UUID, db: AsyncSession, update_data: dict) -> Jo
         "location": job.location,
         "posted_at": job.posted_at.isoformat() if job.posted_at else None,
         "description": job.description,
-        "category": job.category,
         "job_type": job.job_type,
         "schedule": job.schedule,
         "salary": job.salary,
@@ -223,7 +199,6 @@ async def create_job(
             location=job_data.get("location"),
             posted_at=posted_at,
             description=job_data.get("description"),
-            category=job_data.get("category"),
             job_type=job_data.get("job_type"),
             schedule=job_data.get("schedule"),
             salary=job_data.get("salary"),
@@ -254,7 +229,6 @@ async def create_job(
             location=new_job.location,
             posted_at=new_job.posted_at.isoformat() if new_job.posted_at else None,
             description=new_job.description,
-            category=new_job.category,
             job_type=new_job.job_type,
             schedule=new_job.schedule,
             salary=new_job.salary,

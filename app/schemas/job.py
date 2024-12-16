@@ -1,5 +1,6 @@
 import uuid
 
+from fastapi import HTTPException
 from pydantic import BaseModel, Field, HttpUrl, EmailStr
 from typing import List, Optional
 from datetime import datetime
@@ -20,19 +21,6 @@ class JobDetailsResponse(BaseModel):
     phone: Optional[str]
     website: Optional[str]
     created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
-class PaginatedJobResponse(BaseModel):
-    uuid: uuid.UUID
-    company_logo: Optional[str] = None
-    company_name: Optional[str] = None
-    province_name: Optional[str] = None
-    job_category_name: Optional[str] = None
-    position: Optional[str] = None
-    closing_date: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -70,7 +58,6 @@ class JobUpdateRequest(BaseModel):
     location: Optional[str] = Field(None, description="Job location")
     posted_at: Optional[datetime] = Field(None, description="Posting date")
     description: Optional[str] = Field(None, description="Job description")
-    category: Optional[str] = Field(None, description="Job category")
     job_type: Optional[str] = Field(None, description="Job type")
     schedule: Optional[str] = Field(None, description="Work schedule")
     salary: Optional[str] = Field(None, description="Salary range")
@@ -95,7 +82,6 @@ class JobCreateRequest(BaseModel):
     location: Optional[str]
     posted_at: Optional[datetime]
     description: Optional[str]
-    category: Optional[str]
     job_type: Optional[str]
     schedule: Optional[str]
     salary: Optional[str]
@@ -118,7 +104,6 @@ class JobResponse(BaseModel):
     location: Optional[str]
     posted_at: Optional[datetime]
     description: Optional[str]
-    category: Optional[str]
     job_type: Optional[str]
     schedule: Optional[str]
     salary: Optional[str]

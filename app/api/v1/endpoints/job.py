@@ -1,15 +1,17 @@
 from datetime import datetime
 from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import is_admin_user
 from app.exceptions.formatters import format_http_exception
 from app.models import User
 from app.schemas.payload import BaseResponse
-from app.services.job import create_job, update_job, load_all_jobs, delete_job, load_paginated_jobs, get_job_details
-from app.schemas.job import JobCreateRequest, JobUpdateRequest, PaginatedJobResponse, JobDetailsResponse
+from app.services.job import create_job, update_job, load_all_jobs, delete_job, get_job_details
+from app.schemas.job import JobCreateRequest, JobUpdateRequest, JobDetailsResponse
 from app.core.database import get_db
+import uuid as uuid_lib
+
+from app.utils.pagination import paginate_results
 
 job_router = APIRouter()
 
@@ -26,6 +28,11 @@ async def get_job_details_route(
     db: AsyncSession = Depends(get_db),
 ):
     try:
+        try:
+            uuid_obj = uuid_lib.UUID(uuid, version=4)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid UUID format.")
+
         job = await get_job_details(uuid, db)
 
         job_details = JobDetailsResponse(
@@ -58,65 +65,6 @@ async def get_job_details_route(
             status_code=500,
             detail=f"An error occurred while retrieving job details: {str(exc)}",
         )
-
-
-@job_router.get(
-    "/paginated-jobs",
-    response_model=BaseResponse,
-    status_code=200,
-    summary="Get paginated jobs",
-    description="Admin-only: Retrieve a paginated list of jobs based on search criteria."
-)
-async def get_paginated_jobs(
-    page: int = Query(1, description="Page number"),
-    page_size: int = Query(10, description="Number of jobs per page"),
-    search: Optional[str] = Query(None, description="Search term for job title or company name"),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(is_admin_user),
-):
-    try:
-        jobs, total_items = await load_paginated_jobs(
-            db=db,
-            page=page,
-            page_size=page_size,
-            search=search,
-        )
-
-        job_list = [
-            PaginatedJobResponse(
-                uuid=job.uuid,
-                company_logo=job.logo,
-                company_name=job.company,
-                province_name=job.location,
-                job_category_name=job.job_category.category if job.job_category else None,
-                position=job.title,
-                closing_date=job.closing_date,
-            )
-            for job in jobs
-        ]
-
-        return BaseResponse(
-            date=datetime.utcnow().strftime("%Y-%m-%d"),
-            status=200,
-            message="Jobs retrieved successfully.",
-            payload={
-                "items": job_list,
-                "metadata": {
-                    "page": page,
-                    "page_size": page_size,
-                    "total_items": total_items,
-                    "total_pages": (total_items + page_size - 1) // page_size,
-                },
-            },
-        )
-    except HTTPException as exc:
-        raise exc
-    except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"An error occurred while retrieving jobs: {str(exc)}",
-        )
-
 
 @job_router.delete(
     "/{uuid}",
@@ -153,7 +101,7 @@ async def delete_job_route(
     response_model=BaseResponse,
     status_code=200,
     summary="Get all jobs",
-    description="Retrieve a searchable, sortable, and filterable list of jobs."
+    description="Retrieve a searchable, sortable, and filterable list of jobs with pagination."
 )
 async def get_all_jobs_route(
     search: Optional[str] = Query(None, description="Search term for job title or company name"),
@@ -162,6 +110,8 @@ async def get_all_jobs_route(
     category: Optional[str] = Query(None, description="Filter by job category name"),
     location: Optional[str] = Query(None, description="Filter by job location"),
     job_type: Optional[str] = Query(None, description="Filter by job type"),
+    page: int = Query(1, description="Page number"),
+    page_size: int = Query(10, description="Number of jobs per page"),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -175,11 +125,13 @@ async def get_all_jobs_route(
             job_type=job_type,
         )
 
+        paginated_result = paginate_results(jobs, page=page, page_size=page_size)
+
         return BaseResponse(
             date=datetime.utcnow().strftime("%Y-%m-%d"),
             status=200,
             message="Jobs retrieved successfully.",
-            payload={"jobs": jobs},
+            payload=paginated_result,
         )
     except HTTPException as exc:
         raise exc
