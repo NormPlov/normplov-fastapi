@@ -10,7 +10,7 @@ from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import joinedload
 from app.core.config import settings
 from app.models import Job, JobCategory
-from app.schemas.job import JobResponse, JobDetailsResponse
+from app.schemas.job import JobDetailsResponse, JobResponse
 from datetime import datetime
 from app.utils.file import validate_file_extension, validate_file_size
 
@@ -132,10 +132,8 @@ async def load_all_jobs(
     job_type: Optional[str] = None
 ) -> list[JobDetailsResponse]:
     try:
-        # Base query
         stmt = select(Job).where(Job.is_deleted == False)
 
-        # Apply filters
         if category:
             stmt = stmt.where(Job.job_category.has(name.ilike(f"%{category}%")))
         if location:
@@ -143,7 +141,6 @@ async def load_all_jobs(
         if job_type:
             stmt = stmt.where(Job.job_type.ilike(f"%{job_type}%"))
 
-        # Search filter
         if search:
             stmt = stmt.where(
                 Job.title.ilike(f"%{search}%")
@@ -153,19 +150,16 @@ async def load_all_jobs(
                 | Job.job_type.ilike(f"%{search}%")
             )
 
-        # Apply sorting
         sort_column = getattr(Job, sort_by, Job.created_at)
         if order.lower() == "desc":
             stmt = stmt.order_by(sort_column.desc())
         else:
             stmt = stmt.order_by(sort_column.asc())
 
-        # Fetch results
         stmt = stmt.options(joinedload(Job.job_category))
         result = await db.execute(stmt)
         jobs = result.scalars().all()
 
-        # Construct response
         return [
             JobDetailsResponse(
                 uuid=job.uuid,
@@ -195,51 +189,91 @@ async def load_all_jobs(
         )
 
 
-async def update_job(uuid: uuid.UUID, db: AsyncSession, update_data: dict) -> JobResponse:
-    stmt = select(Job).where(Job.uuid == uuid)
-    result = await db.execute(stmt)
-    job = result.scalars().first()
+async def update_job(
+    uuid: str,
+    db: AsyncSession,
+    update_data: dict,
+    logo: Optional[UploadFile] = None,
+) -> JobResponse:
+    try:
+        stmt = select(Job).where(Job.uuid == uuid, Job.is_deleted == False)
+        result = await db.execute(stmt)
+        job = result.scalars().first()
 
-    if not job:
-        raise HTTPException(
-            status_code=404,
-            detail="Job not found."
+        if not job:
+            raise HTTPException(
+                status_code=404,
+                detail="Job not found or has been deleted."
+            )
+
+        if logo:
+            if not validate_file_extension(logo.filename):
+                raise HTTPException(status_code=400, detail="Invalid file type for logo.")
+            validate_file_size(logo)
+
+            logo_directory = Path(settings.BASE_UPLOAD_FOLDER) / "job-logos"
+            logo_directory.mkdir(parents=True, exist_ok=True)
+
+            logo_path = logo_directory / f"{uuid.uuid4()}_{logo.filename}"
+            with open(logo_path, "wb") as buffer:
+                shutil.copyfileobj(logo.file, buffer)
+
+            logo_url = f"{settings.BASE_URL}/job-logos/{logo_path.name}"
+            update_data["logo"] = logo_url
+
+        if "posted_at" in update_data:
+            try:
+                update_data["posted_at"] = datetime.fromisoformat(update_data["posted_at"])
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid date format for posted_at.")
+
+        if "closing_date" in update_data:
+            try:
+                update_data["closing_date"] = datetime.fromisoformat(update_data["closing_date"])
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid date format for closing_date.")
+
+        for field, value in update_data.items():
+            if hasattr(job, field):
+                setattr(job, field, value)
+
+        db.add(job)
+        await db.commit()
+        await db.refresh(job)
+
+        return JobResponse(
+            uuid=str(job.uuid),
+            title=job.title,
+            company=job.company,
+            logo=job.logo,
+            facebook_url=job.facebook_url,
+            location=job.location,
+            posted_at=job.posted_at.isoformat() if job.posted_at else None,
+            description=job.description,
+            job_type=job.job_type,
+            schedule=job.schedule,
+            salary=job.salary,
+            closing_date=job.closing_date.isoformat() if job.closing_date else None,
+            requirements=job.requirements,
+            responsibilities=job.responsibilities,
+            benefits=job.benefits,
+            email=job.email,
+            phone=job.phone,
+            website=job.website,
+            is_active=job.is_active,
         )
 
-    for field, value in update_data.items():
-        if hasattr(job, field):
-            setattr(job, field, value)
-
-    db.add(job)
-    await db.commit()
-    await db.refresh(job)
-
-    job_data = {
-        "uuid": str(job.uuid),
-        "title": job.title,
-        "company": job.company,
-        "logo": job.logo,
-        "facebook_url": job.facebook_url,
-        "location": job.location,
-        "posted_at": job.posted_at.isoformat() if job.posted_at else None,
-        "description": job.description,
-        "job_type": job.job_type,
-        "schedule": job.schedule,
-        "salary": job.salary,
-        "closing_date": job.closing_date.isoformat() if job.closing_date else None,
-        "requirements": job.requirements,
-        "responsibilities": job.responsibilities,
-        "benefits": job.benefits,
-        "email": job.email,
-        "phone": job.phone,
-        "website": job.website,
-        "is_active": job.is_active,
-    }
-
-    return JobResponse(**job_data)
+    except HTTPException as exc:
+        raise exc
+    except Exception as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"An error occurred while updating the job: {str(exc)}"
+        )
 
 
-async def create_job_with_logo_service(
+async def create_job(
     title: str,
     company: str,
     location: str,

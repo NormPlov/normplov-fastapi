@@ -7,9 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import is_admin_user
 from app.models import User
 from app.schemas.payload import BaseResponse
-from app.services.job import update_job, load_all_jobs, delete_job, get_job_details, admin_load_all_jobs, \
-    create_job_with_logo_service
-from app.schemas.job import JobUpdateRequest, JobDetailsResponse
+from app.services.job import load_all_jobs, delete_job, get_job_details, admin_load_all_jobs, create_job, update_job
+from app.schemas.job import JobDetailsResponse
 from app.core.database import get_db
 import uuid as uuid_lib
 
@@ -142,7 +141,7 @@ async def delete_job_route(
 
 
 @job_router.get(
-    "/",
+    "",
     response_model=BaseResponse,
     status_code=200,
     summary="Get all jobs",
@@ -192,27 +191,65 @@ async def get_all_jobs_route(
     summary="Update an existing job"
 )
 async def update_job_route(
-        uuid: str,
-        job_data: JobUpdateRequest,
-        db: AsyncSession = Depends(get_db)
+    uuid: str,
+    title: Optional[str] = Form(None),
+    company: Optional[str] = Form(None),
+    location: Optional[str] = Form(None),
+    facebook_url: Optional[str] = Form(None),
+    posted_at: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    job_type: Optional[str] = Form(None),
+    schedule: Optional[str] = Form(None),
+    salary: Optional[str] = Form(None),
+    closing_date: Optional[str] = Form(None),
+    requirements: Optional[str] = Form(None),
+    responsibilities: Optional[str] = Form(None),
+    benefits: Optional[str] = Form(None),
+    email: Optional[str] = Form(None),
+    phone: Optional[str] = Form(None),
+    website: Optional[str] = Form(None),
+    is_active: Optional[bool] = Form(None),
+    logo: Optional[UploadFile] = File(None),
+    db: AsyncSession = Depends(get_db),
 ):
     try:
-        updated_job = await update_job(uuid, db, job_data.dict(exclude_unset=True))
+        update_data = {
+            "title": title,
+            "company": company,
+            "location": location,
+            "facebook_url": facebook_url,
+            "posted_at": posted_at,
+            "description": description,
+            "job_type": job_type,
+            "schedule": schedule,
+            "salary": salary,
+            "closing_date": closing_date,
+            "requirements": requirements,
+            "responsibilities": responsibilities,
+            "benefits": benefits,
+            "email": email,
+            "phone": phone,
+            "website": website,
+            "is_active": is_active,
+        }
+
+        # Remove fields with `None` values
+        update_data = {key: value for key, value in update_data.items() if value is not None}
+
+        updated_job = await update_job(uuid, db, update_data, logo)
 
         return BaseResponse(
             date=datetime.utcnow().strftime("%d-%B-%Y"),
             status=200,
             message="Job updated successfully.",
-            payload=updated_job
+            payload=updated_job.dict()
         )
     except HTTPException as e:
         raise e
     except Exception as e:
-        return BaseResponse(
-            date=datetime.utcnow().strftime("%d-%B-%Y"),
-            status=500,
-            message=f"An error occurred while updating the job: {str(e)}",
-            payload=None
+        raise HTTPException(
+            status_code=500,
+            detail=f"An error occurred while updating the job: {str(e)}"
         )
 
 
@@ -246,7 +283,7 @@ async def create_job_route(
     current_user: dict = Depends(is_admin_user),
 ):
     try:
-        job_response = await create_job_with_logo_service(
+        job_response = await create_job(
             title=title,
             company=company,
             location=location,
