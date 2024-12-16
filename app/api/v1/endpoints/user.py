@@ -4,12 +4,13 @@ from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, status, UploadFile, File, Query, HTTPException
 from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.utils.format_date import format_date
 from app.models import User
 from app.schemas.payload import BaseResponse
-from app.schemas.user import UserResponse, UpdateUser, UpdateBio, ChangePassword, BlockUserRequest
+from app.schemas.user import UpdateUser, UpdateBio, ChangePassword, BlockUserRequest
 from app.services.user import (
     block_user,
     get_user_by_email,
@@ -139,9 +140,41 @@ async def update_bio_route(
     return await update_user_bio(current_user.uuid, bio_data.bio, db)
 
 
-# Upload profile picture
 @user_router.post("/profile/upload/{uuid}", response_model=BaseResponse)
-async def upload_profile_picture_route(uuid: str, file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+async def upload_profile_picture_route(
+    uuid: str,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user_data),
+):
+    stmt = select(User).where(User.uuid == uuid)
+    result = await db.execute(stmt)
+    target_user = result.scalars().first()
+
+    if not target_user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found."
+        )
+
+    if current_user.uuid != uuid:
+        if any(role.role.name == "ADMIN" for role in target_user.roles):
+            raise HTTPException(
+                status_code=403,
+                detail="Users cannot upload profile pictures for admins."
+            )
+
+        if any(role.role.name == "ADMIN" for role in current_user.roles):
+            raise HTTPException(
+                status_code=403,
+                detail="Admins cannot upload profile pictures for other users."
+            )
+
+        raise HTTPException(
+            status_code=403,
+            detail="You can only upload your own profile picture."
+        )
+
     return await upload_profile_picture(uuid, file, db)
 
 

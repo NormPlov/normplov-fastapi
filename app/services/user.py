@@ -261,10 +261,7 @@ async def upload_profile_picture(uuid: str, file: UploadFile, db: AsyncSession) 
         user = result.scalars().first()
 
         if not user:
-            raise HTTPException(
-                status_code=404,
-                detail="User not found."
-            )
+            raise HTTPException(status_code=404, detail="User not found.")
 
         upload_folder = os.path.join(settings.BASE_UPLOAD_FOLDER, "profile_pictures")
         os.makedirs(upload_folder, exist_ok=True)
@@ -275,12 +272,10 @@ async def upload_profile_picture(uuid: str, file: UploadFile, db: AsyncSession) 
             with open(file_path, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
         except Exception as e:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Error saving file: {str(e)}"
-            )
+            raise HTTPException(status_code=500, detail=f"Error saving file: {str(e)}")
 
-        user.avatar = os.path.join("profile_pictures", file_name)
+        avatar_url = f"{settings.BASE_UPLOAD_FOLDER}/profile_pictures/{file_name}"
+        user.avatar = avatar_url
         user.updated_at = datetime.utcnow()
 
         db.add(user)
@@ -291,7 +286,7 @@ async def upload_profile_picture(uuid: str, file: UploadFile, db: AsyncSession) 
             date=datetime.utcnow().strftime("%Y-%m-%d"),
             status=200,
             message="Profile picture uploaded successfully.",
-            payload={"avatar_url": f"/{settings.BASE_UPLOAD_FOLDER}/profile_pictures/{file_name}"},
+            payload={"avatar_url": avatar_url},
         )
 
     except (FileExtensionError, FileSizeError) as e:
