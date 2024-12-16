@@ -10,14 +10,44 @@ from app.services.school import (
     update_school,
     load_all_schools,
     get_school_with_majors,
-    create_school_service
+    create_school_service, upload_school_logo_or_cover_service
 )
 from app.schemas.school import (
-    UpdateSchoolRequest
+    UpdateSchoolRequest, UploadImageResponse
 )
 
 
 school_router = APIRouter()
+
+
+@school_router.patch("/{school_uuid}/upload_school_logo_cover", response_model=BaseResponse)
+async def upload_school_image_route(
+    school_uuid: str,
+    logo: UploadFile = File(None),
+    cover_image: UploadFile = File(None),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        result = await upload_school_logo_or_cover_service(
+            school_uuid=school_uuid,
+            logo=logo,
+            cover_image=cover_image,
+            db=db,
+        )
+        return BaseResponse(
+            date=datetime.utcnow().strftime("%d-%B-%Y"),
+            status=status.HTTP_200_OK,
+            message="Image(s) uploaded successfully.",
+            payload=UploadImageResponse(**result),
+        )
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {str(e)}",
+        )
 
 
 @school_router.get(
@@ -161,10 +191,8 @@ async def create_school_endpoint(
         return BaseResponse(
             date=datetime.utcnow().strftime("%d-%B-%Y"),
             status=status.HTTP_201_CREATED,
-            payload={
-                "uuid": school.uuid
-            },
-            message="School created successfully"
+            payload={"uuid": school.uuid},
+            message="School created successfully",
         )
 
     except HTTPException as e:
@@ -172,5 +200,5 @@ async def create_school_endpoint(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An unexpected error occurred: {str(e)}"
+            detail=f"An unexpected error occurred: {str(e)}",
         )

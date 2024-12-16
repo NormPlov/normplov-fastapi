@@ -1,5 +1,4 @@
 import logging
-import os
 import shutil
 
 from datetime import datetime
@@ -12,7 +11,7 @@ from app.core.config import settings
 from app.models import SchoolMajor, Province
 from app.models.school import School
 from app.schemas.payload import BaseResponse
-from app.schemas.school import CreateSchoolRequest, UpdateSchoolRequest, SchoolResponse, SchoolDetailsResponse
+from app.schemas.school import UpdateSchoolRequest, SchoolDetailsResponse
 from fastapi import HTTPException, status, UploadFile
 from sqlalchemy.future import select
 from app.utils.file import validate_file_extension, validate_file_size
@@ -22,12 +21,65 @@ from app.utils.pagination import paginate_results
 logger = logging.getLogger(__name__)
 
 
+async def upload_school_logo_or_cover_service(
+    school_uuid: str,
+    logo: UploadFile = None,
+    cover_image: UploadFile = None,
+    db: AsyncSession = None,
+):
+    try:
+        school_stmt = select(School).where(School.uuid == school_uuid, School.is_deleted == False)
+        result = await db.execute(school_stmt)
+        school = result.scalars().first()
+
+        if not school:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="School not found or has been deleted.",
+            )
+
+        logo_directory = Path(settings.BASE_UPLOAD_FOLDER) / "school_logos"
+        cover_image_directory = Path(settings.BASE_UPLOAD_FOLDER) / "school_cover_images"
+        logo_directory.mkdir(parents=True, exist_ok=True)
+        cover_image_directory.mkdir(parents=True, exist_ok=True)
+
+        if logo:
+            logo_path = logo_directory / f"{uuid4()}_{logo.filename}"
+            with open(logo_path, "wb") as buffer:
+                shutil.copyfileobj(logo.file, buffer)
+
+            school.logo_url = f"{settings.BASE_UPLOAD_FOLDER}/school_logos/{logo_path.name}"
+
+        if cover_image:
+            cover_image_path = cover_image_directory / f"{uuid4()}_{cover_image.filename}"
+            with open(cover_image_path, "wb") as buffer:
+                shutil.copyfileobj(cover_image.file, buffer)
+
+            school.cover_image = f"{settings.BASE_UPLOAD_FOLDER}/school_cover_images/{cover_image_path.name}"
+
+        school.updated_at = datetime.utcnow()
+        db.add(school)
+        await db.commit()
+        await db.refresh(school)
+
+        return {
+            "uuid": str(school.uuid),
+            "logo_url": school.logo_url,
+            "cover_image": school.cover_image,
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {str(e)}",
+        )
+
+
 async def get_school_with_majors(
     school_uuid: str,
     db: AsyncSession,
 ) -> BaseResponse:
     try:
-        # Query the school with majors
         school_stmt = (
             select(School)
             .options(
@@ -309,23 +361,30 @@ async def create_school_service(
         cover_image_directory.mkdir(parents=True, exist_ok=True)
 
         logo_url = None
-        if logo:
-            try:
+        try:
+            if logo:
                 logger.debug(f"Uploading logo: {logo.filename}")
+                try:
+                    if not validate_file_extension(logo.filename):
+                        raise HTTPException(status_code=400, detail="Invalid file type for logo.")
+                    validate_file_size(logo)
+                except Exception as e:
+                    logger.error(f"Validation failed for logo: {str(e)}")
+                    raise HTTPException(status_code=400, detail="Logo validation failed.")
 
-                if not validate_file_extension(logo.filename):
-                    raise HTTPException(status_code=400, detail="Invalid file type for logo.")
-                validate_file_size(logo)
+                try:
+                    logo_path = logo_directory / f"{uuid4()}_{logo.filename}"
+                    with open(logo_path, "wb") as buffer:
+                        shutil.copyfileobj(logo.file, buffer)
+                    logo_url = f"{settings.BASE_UPLOAD_FOLDER}/school_logos/{logo_path.name}"
+                    logger.debug(f"Logo successfully uploaded: {logo_url}")
+                except Exception as e:
+                    logger.error(f"Error saving logo: {str(e)}")
+                    raise HTTPException(status_code=500, detail="Error saving logo.")
 
-                logo_path = logo_directory / f"{uuid4()}_{logo.filename}"
-                logger.debug(f"Saving logo to: {logo_path}")
-                with open(logo_path, "wb") as buffer:
-                    shutil.copyfileobj(logo.file, buffer)
-
-                logo_url = f"{settings.BASE_UPLOAD_FOLDER}/school_logos/{logo_path.name}"
-                logger.debug(f"Logo URL set to: {logo_url}")
-            except Exception as e:
-                logger.error(f"Error uploading logo: {e}")
+        except Exception as e:
+            logger.error(f"Error uploading logo: {str(e)}")
+            raise HTTPException(status_code=500, detail="Logo upload failed.")
 
         cover_image_url = None
         if cover_image:

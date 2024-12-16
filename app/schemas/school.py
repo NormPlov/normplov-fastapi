@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
-from pydantic import BaseModel, Field, EmailStr, HttpUrl, validator, root_validator
-from typing import Optional, List
+from pydantic import BaseModel, Field, EmailStr, HttpUrl, validator
+from typing import Optional, List, Union
 from enum import Enum as PyEnum
 from app.schemas.major import MajorResponse
 from app.utils.format_date import format_date
@@ -39,8 +39,14 @@ class SchoolDetailsResponse(BaseModel):
 
 
 class UploadSchoolLogoCoverRequest(BaseModel):
-    logo: Optional[str] = None
-    cover_image: Optional[str] = None
+    logo: Optional[str] = Field(None, description="Base64 or file name for the logo")
+    cover_image: Optional[str] = Field(None, description="Base64 or file name for the cover image")
+
+
+class UploadImageResponse(BaseModel):
+    uuid: str = Field(..., description="School UUID")
+    logo_url: Optional[str] = Field(None, description="Uploaded logo URL")
+    cover_image: Optional[str] = Field(None, description="Uploaded cover image URL")
 
 
 class SchoolType(PyEnum):
@@ -60,10 +66,10 @@ class CreateSchoolRequest(BaseModel):
     province_uuid: str = Field(...)
     kh_name: str = Field(..., max_length=255)
     en_name: str = Field(..., max_length=255)
-    type: SchoolType = Field(...)
+    type: Union[str, SchoolType] = Field(...)
     popular_major: str = Field(..., max_length=255)
-    logo_url: Optional[HttpUrl] = Field(None)
-    cover_image: Optional[HttpUrl] = Field(None)
+    logo_url: Optional[str] = Field(None)
+    cover_image: Optional[str] = Field(None)
     location: Optional[str] = Field(None, max_length=500)
     phone: Optional[str] = Field(None, max_length=15)
     lowest_price: Optional[float] = Field(None, ge=0)
@@ -71,7 +77,7 @@ class CreateSchoolRequest(BaseModel):
     latitude: Optional[float] = Field(None, ge=-90, le=90)
     longitude: Optional[float] = Field(None, ge=-180, le=180)
     email: Optional[EmailStr] = Field(None)
-    website: Optional[HttpUrl] = Field(None)
+    website: Optional[str] = Field(None)
     description: Optional[str] = Field(None, max_length=2000)
     mission: Optional[str] = Field(None, max_length=2000)
     vision: Optional[str] = Field(None, max_length=2000)
