@@ -1,19 +1,18 @@
-import logging
-
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.dependencies import is_admin_user
 from app.models import User
 from app.schemas.payload import BaseResponse
-from datetime import datetime, date
+from datetime import datetime
 from app.services.school import (
-    create_school,
     delete_school,
-    update_school, load_all_schools, upload_school_logo_cover, get_school_with_majors
+    update_school,
+    load_all_schools,
+    get_school_with_majors,
+    create_school_service
 )
 from app.schemas.school import (
-    CreateSchoolRequest,
     UpdateSchoolRequest
 )
 
@@ -34,26 +33,8 @@ async def get_school_details_route(
     return await get_school_with_majors(school_uuid, db)
 
 
-@school_router.patch("/{school_uuid}/logo-cover", response_model=BaseResponse)
-async def upload_school_logo_cover_route(
-    school_uuid: str,
-    logo: UploadFile = File(None),
-    cover_image: UploadFile = File(None),
-    db: AsyncSession = Depends(get_db)
-) -> BaseResponse:
-    try:
-        return await upload_school_logo_cover(school_uuid, logo, cover_image, db)
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while uploading the logo and cover image: {str(e)}"
-        )
-
-
 @school_router.get(
-    "/",
+    "",
     summary="Fetch all schools",
     tags=["School"],
     response_model=BaseResponse,
@@ -132,20 +113,60 @@ async def delete_school_endpoint(
         )
 
 
-@school_router.post("/", response_model=BaseResponse, status_code=status.HTTP_201_CREATED)
+@school_router.post("", response_model=BaseResponse, status_code=status.HTTP_201_CREATED)
 async def create_school_endpoint(
-    data: CreateSchoolRequest,
+    province_uuid: str = Form(...),
+    kh_name: str = Form(...),
+    en_name: str = Form(...),
+    school_type: str = Form(...),
+    popular_major: str = Form(...),
+    location: str = Form(None),
+    phone: str = Form(None),
+    lowest_price: float = Form(None),
+    highest_price: float = Form(None),
+    latitude: float = Form(None),
+    longitude: float = Form(None),
+    email: str = Form(None),
+    website: str = Form(None),
+    description: str = Form(None),
+    mission: str = Form(None),
+    vision: str = Form(None),
+    logo: UploadFile = File(None),
+    cover_image: UploadFile = File(None),
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        school = await create_school(data, db)
+        school = await create_school_service(
+            province_uuid=province_uuid,
+            kh_name=kh_name,
+            en_name=en_name,
+            school_type=school_type,
+            popular_major=popular_major,
+            location=location,
+            phone=phone,
+            lowest_price=lowest_price,
+            highest_price=highest_price,
+            latitude=latitude,
+            longitude=longitude,
+            email=email,
+            website=website,
+            description=description,
+            mission=mission,
+            vision=vision,
+            logo=logo,
+            cover_image=cover_image,
+            db=db,
+        )
 
         return BaseResponse(
-            date=date.today().strftime("%d-%B-%Y"),
+            date=datetime.utcnow().strftime("%d-%B-%Y"),
             status=status.HTTP_201_CREATED,
-            payload={"uuid": school.uuid},
+            payload={
+                "uuid": school.uuid
+            },
             message="School created successfully"
         )
+
     except HTTPException as e:
         raise e
     except Exception as e:

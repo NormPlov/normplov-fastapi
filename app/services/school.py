@@ -9,16 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 from pathlib import Path
 from app.core.config import settings
-from app.models import Major, SchoolMajor, Province
+from app.models import SchoolMajor, Province
 from app.models.school import School
-from app.schemas.major import MajorResponse
 from app.schemas.payload import BaseResponse
 from app.schemas.school import CreateSchoolRequest, UpdateSchoolRequest, SchoolResponse, SchoolDetailsResponse
 from fastapi import HTTPException, status, UploadFile
 from sqlalchemy.future import select
-
 from app.utils.file import validate_file_extension, validate_file_size
-from app.utils.format_date import format_date
 from app.utils.maps import generate_google_map_embed_url
 from app.utils.pagination import paginate_results
 
@@ -80,7 +77,7 @@ async def get_school_with_majors(
             phone=school.phone,
             lowest_price=school.lowest_price,
             highest_price=school.highest_price,
-            map=school.map,
+            google_map_embed_url=school.google_map_embed_url,
             email=school.email,
             website=school.website,
             description=school.description,
@@ -102,84 +99,6 @@ async def get_school_with_majors(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An error occurred while retrieving school details: {str(e)}",
         )
-
-
-async def upload_school_logo_cover(
-    school_uuid: str,
-    logo: UploadFile = None,
-    cover_image: UploadFile = None,
-    db: AsyncSession = None
-) -> BaseResponse:
-
-    stmt = select(School).where(School.uuid == school_uuid, School.is_deleted == False)
-    result = await db.execute(stmt)
-    school = result.scalars().first()
-
-    if not school:
-        raise HTTPException(
-            status_code=404,
-            detail="School not found or has been deleted."
-        )
-
-    logo_directory = Path(settings.BASE_UPLOAD_FOLDER) / "school_logos"
-    cover_image_directory = Path(settings.BASE_UPLOAD_FOLDER) / "school_cover_images"
-
-    os.makedirs(logo_directory, exist_ok=True)
-    os.makedirs(cover_image_directory, exist_ok=True)
-
-    if logo:
-        if not validate_file_extension(logo.filename):
-            raise HTTPException(status_code=400, detail="Invalid file type for logo.")
-        validate_file_size(logo)
-
-        logo_location = logo_directory / f"{school.uuid}_{logo.filename}"
-        try:
-            with open(logo_location, "wb") as buffer:
-                shutil.copyfileobj(logo.file, buffer)
-            school.logo_url = str(logo_location).replace("\\", "/")
-        except Exception as e:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Error saving logo: {str(e)}"
-            )
-
-    # Handle cover_image upload
-    if cover_image:
-        if not validate_file_extension(cover_image.filename):
-            raise HTTPException(status_code=400, detail="Invalid file type for cover image.")
-        validate_file_size(cover_image)
-
-        cover_image_location = cover_image_directory / f"{school.uuid}_{cover_image.filename}"
-        try:
-            with open(cover_image_location, "wb") as buffer:
-                shutil.copyfileobj(cover_image.file, buffer)
-            school.cover_image = str(cover_image_location).replace("\\", "/")
-        except Exception as e:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Error saving cover image: {str(e)}"
-            )
-
-    school.updated_at = datetime.utcnow()
-
-    db.add(school)
-    await db.commit()
-    await db.refresh(school)
-
-    payload = {
-        "uuid": str(school.uuid),
-    }
-    if school.logo_url:
-        payload["logo_url"] = school.logo_url
-    if school.cover_image:
-        payload["cover_image"] = school.cover_image
-
-    return BaseResponse(
-        date=datetime.utcnow().strftime("%d-%B-%Y"),
-        status=200,
-        message="School logo and/or cover image updated successfully.",
-        payload=payload
-    )
 
 
 async def load_all_schools(
@@ -217,12 +136,10 @@ async def load_all_schools(
             else:
                 query = query.order_by(sort_column.desc())
 
-        # Fetch paginated schools
         result = await db.execute(query)
         schools = result.scalars().all()
         paginated_schools = paginate_results(schools, page, page_size)
 
-        # Count total schools with the same filters
         total_query = select(func.count(School.id)).where(School.is_deleted == False)
         if province_uuid:
             total_query = total_query.where(School.province.has(uuid=province_uuid))
@@ -352,72 +269,112 @@ async def delete_school(school_uuid: str, db: AsyncSession):
     )
 
 
-async def create_school(data: CreateSchoolRequest, db: AsyncSession):
+async def create_school_service(
+    province_uuid: str,
+    kh_name: str,
+    en_name: str,
+    school_type: str,
+    popular_major: str,
+    location: str,
+    phone: str,
+    lowest_price: float,
+    highest_price: float,
+    latitude: float,
+    longitude: float,
+    email: str,
+    website: str,
+    description: str,
+    mission: str,
+    vision: str,
+    logo: UploadFile = None,
+    cover_image: UploadFile = None,
+    db: AsyncSession = None,
+):
     try:
-        province_uuid = data.province_uuid
         province_stmt = select(Province).where(Province.uuid == province_uuid, Province.is_deleted == False)
         province_result = await db.execute(province_stmt)
         province = province_result.scalars().first()
 
         if not province:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
+                status_code=404,
                 detail="Province not found or has been deleted."
             )
 
-        stmt = select(School).where(School.en_name == data.en_name, School.is_deleted == False)
-        result = await db.execute(stmt)
-        existing_school = result.scalars().first()
+        google_map_embed_url = generate_google_map_embed_url(latitude, longitude) if latitude and longitude else None
 
-        if existing_school:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="A school with this name already exists.",
-            )
+        logo_directory = Path(settings.BASE_UPLOAD_FOLDER) / "school_logos"
+        cover_image_directory = Path(settings.BASE_UPLOAD_FOLDER) / "school_cover_images"
+        logo_directory.mkdir(parents=True, exist_ok=True)
+        cover_image_directory.mkdir(parents=True, exist_ok=True)
 
-        google_map_embed_url = None
-        if data.latitude and data.longitude:
-            google_map_embed_url = generate_google_map_embed_url(data.latitude, data.longitude)
+        logo_url = None
+        if logo:
+            try:
+                logger.debug(f"Uploading logo: {logo.filename}")
+
+                if not validate_file_extension(logo.filename):
+                    raise HTTPException(status_code=400, detail="Invalid file type for logo.")
+                validate_file_size(logo)
+
+                logo_path = logo_directory / f"{uuid4()}_{logo.filename}"
+                logger.debug(f"Saving logo to: {logo_path}")
+                with open(logo_path, "wb") as buffer:
+                    shutil.copyfileobj(logo.file, buffer)
+
+                logo_url = f"{settings.BASE_UPLOAD_FOLDER}/school_logos/{logo_path.name}"
+                logger.debug(f"Logo URL set to: {logo_url}")
+            except Exception as e:
+                logger.error(f"Error uploading logo: {e}")
+
+        cover_image_url = None
+        if cover_image:
+            logger.debug(f"Uploading cover image: {cover_image.filename}")
+            if not validate_file_extension(cover_image.filename):
+                raise HTTPException(status_code=400, detail="Invalid file type for cover image.")
+            validate_file_size(cover_image)
+
+            cover_image_path = cover_image_directory / f"{uuid4()}_{cover_image.filename}"
+            with open(cover_image_path, "wb") as buffer:
+                shutil.copyfileobj(cover_image.file, buffer)
+            cover_image_url = f"{settings.BASE_UPLOAD_FOLDER}/school_cover_images/{cover_image_path.name}"
+            logger.debug(f"Cover Image URL set to: {cover_image_url}")
 
         new_school = School(
             uuid=uuid4(),
-            kh_name=data.kh_name,
-            en_name=data.en_name,
-            type=data.type.value,
-            popular_major=data.popular_major,
-            location=data.location,
-            phone=data.phone,
-            lowest_price=data.lowest_price,
-            highest_price=data.highest_price,
-            latitude=data.latitude,
-            longitude=data.longitude,
+            kh_name=kh_name,
+            en_name=en_name,
+            type=school_type,
+            popular_major=popular_major,
+            location=location,
+            phone=phone,
+            lowest_price=lowest_price,
+            highest_price=highest_price,
+            latitude=latitude,
+            longitude=longitude,
             google_map_embed_url=google_map_embed_url,
-            email=data.email,
-            website=str(data.website) if data.website else None,  # Convert Url to string
-            description=data.description,
-            mission=data.mission,
-            vision=data.vision,
+            email=email,
+            website=website,
+            description=description,
+            mission=mission,
+            vision=vision,
             province_id=province.id,
+            logo_url=logo_url,
+            cover_image=cover_image_url,
         )
 
-        try:
-            db.add(new_school)
-            await db.commit()
-            await db.refresh(new_school)
-        except Exception as e:
-            logger.error(f"Error creating school: {e}")
-            await db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="An error occurred while creating the school."
-            )
+        db.add(new_school)
+        await db.commit()
+        await db.refresh(new_school)
+
+        logger.debug(f"School created with UUID: {new_school.uuid}, Logo URL: {new_school.logo_url}")
 
         return new_school
 
-    except HTTPException:
-        raise
     except Exception as e:
+        logger.error(f"Error in create_school_service: {str(e)}")
+        await db.rollback()
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred while creating the school.",
+            status_code=500,
+            detail=f"An unexpected error occurred: {str(e)}"
         )
