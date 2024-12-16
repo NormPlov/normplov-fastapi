@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload
 from datetime import datetime
-from sqlalchemy.sql.functions import current_user, func
+from sqlalchemy.sql.functions import current_user
 from app.models import AssessmentType, UserTest
 from app.models.user_feedback import UserFeedback
 from fastapi import HTTPException
@@ -171,14 +171,6 @@ async def get_promoted_feedbacks(db: AsyncSession) -> list:
         raise HTTPException(status_code=500, detail="Failed to fetch promoted feedbacks")
 
 
-from sqlalchemy.future import select
-from sqlalchemy.orm import joinedload
-from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import HTTPException
-from app.models import UserFeedback
-from app.utils.pagination import paginate_results  # Assuming the utility is here
-
-
 async def get_all_feedbacks(
     db: AsyncSession,
     page: int,
@@ -236,12 +228,12 @@ async def get_all_feedbacks(
         raise HTTPException(status_code=500, detail="Failed to fetch feedbacks")
 
 
-async def promote_feedback(feedback_uuid: str, db: AsyncSession) -> None:
-
+async def promote_feedback(feedback_uuid: str, current_user, db: AsyncSession) -> None:
     try:
+        # Fetch feedback by UUID
         stmt = select(UserFeedback).where(
             UserFeedback.uuid == feedback_uuid,
-            UserFeedback.is_deleted == False
+            UserFeedback.is_deleted == False,
         )
         result = await db.execute(stmt)
         feedback = result.scalars().first()
@@ -249,18 +241,23 @@ async def promote_feedback(feedback_uuid: str, db: AsyncSession) -> None:
         if not feedback:
             raise HTTPException(status_code=404, detail="Feedback not found")
 
+        # Prevent self-promotion
         if feedback.user_id == current_user.id:
             raise HTTPException(
                 status_code=403,
-                detail="You cannot promote your own feedback."
+                detail="You cannot promote your own feedback.",
             )
 
-        # Here I just change the status of the feedback
+        # Update feedback status
         feedback.is_promoted = True
         feedback.updated_at = datetime.utcnow()
 
+        db.add(feedback)
         await db.commit()
 
+    except HTTPException as e:
+        logger.error(f"Error promoting feedback: {str(e)}")
+        raise e
     except Exception as e:
         logger.exception("Error promoting feedback")
         await db.rollback()

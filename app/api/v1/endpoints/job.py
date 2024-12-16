@@ -252,7 +252,6 @@ async def create_job_route(
 ):
     try:
         logo_url = None
-
         if logo:
             if not validate_file_extension(logo.filename):
                 raise HTTPException(status_code=400, detail="Invalid file extension. Only specific types are allowed.")
@@ -265,7 +264,7 @@ async def create_job_route(
             with open(file_path, "wb") as buffer:
                 shutil.copyfileobj(logo.file, buffer)
 
-            logo_url = f"{settings.BASE_UPLOAD_FOLDER}/job-logos/{os.path.basename(file_path)}"
+            logo_url = f"{settings.BASE_URL}/job-logos/{os.path.basename(file_path)}"
 
         job_data = {
             "title": title,
@@ -289,12 +288,13 @@ async def create_job_route(
             "job_category_uuid": job_category_uuid,
         }
 
-        await create_job(db, job_data)
+        job_response = await create_job(db, job_data)
 
         return BaseResponse(
             date=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
             status=201,
             message="Job created successfully.",
+            payload=job_response.dict(),
         )
 
     except HTTPException as e:
@@ -306,3 +306,4 @@ async def create_job_route(
             message="An unexpected error occurred while creating the job.",
             details=str(e),
         )
+

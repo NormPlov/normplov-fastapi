@@ -73,14 +73,13 @@ async def promote_user_feedback(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user_data),
 ):
-    # Corrected attribute access
     if not any(role.role.name == "ADMIN" for role in current_user.roles):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User does not have permission to promote feedback.",
         )
 
-    await promote_feedback(feedback_uuid, db)
+    await promote_feedback(feedback_uuid, current_user, db)
 
     return {
         "date": datetime.utcnow().strftime("%d-%B-%Y"),
