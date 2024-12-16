@@ -21,6 +21,8 @@ class JobDetailsResponse(BaseModel):
     phone: Optional[str]
     website: Optional[str]
     created_at: datetime
+    closing_date: Optional[str]
+    job_category_name: Optional[str]
 
     class Config:
         from_attributes = True

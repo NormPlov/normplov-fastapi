@@ -246,7 +246,7 @@ async def create_job_route(
     website: str = Form(None),
     is_active: bool = Form(True),
     logo: UploadFile = File(None),
-    job_category_uuid: str = Form(None),  # Add job category UUID
+    job_category_uuid: str = Form(None),
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(is_admin_user),
 ):
@@ -289,13 +289,12 @@ async def create_job_route(
             "job_category_uuid": job_category_uuid,
         }
 
-        new_job = await create_job(db, job_data)
+        await create_job(db, job_data)
 
         return BaseResponse(
-            date=datetime.utcnow(),
+            date=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
             status=201,
             message="Job created successfully.",
-            payload=new_job,
         )
 
     except HTTPException as e:

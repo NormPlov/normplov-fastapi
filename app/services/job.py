@@ -10,7 +10,6 @@ from app.models import Job, JobCategory
 from app.schemas.job import JobResponse, JobDetailsResponse
 from datetime import datetime
 from sqlalchemy.exc import IntegrityError
-from uuid import UUID
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +21,6 @@ async def admin_load_all_jobs(
     order: str = "desc"
 ) -> list[JobDetailsResponse]:
     try:
-
         stmt = select(Job).where(Job.is_deleted == False)
 
         if search:
@@ -57,6 +55,8 @@ async def admin_load_all_jobs(
                 phone=job.phone,
                 website=job.website,
                 created_at=job.created_at,
+                closing_date=job.closing_date.strftime("%d.%b.%Y") if job.closing_date else None,
+                job_category_name=job.job_category.name if job.job_category else None,
             )
             for job in jobs
         ]
