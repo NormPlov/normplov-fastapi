@@ -8,14 +8,83 @@ from app.dependencies import get_current_user_data
 from app.models.user import User
 from app.schemas.ai_recommendation import AIRecommendationCreate, RenameAIRecommendationRequest
 from app.schemas.payload import BaseResponse
-from app.services.ai_recommendation import generate_ai_recommendation, delete_ai_recommendation, \
-    rename_ai_recommendation, load_all_user_recommendations
+from app.services.ai_recommendation import (
+    generate_ai_recommendation,
+    delete_ai_recommendation,
+    rename_ai_recommendation,
+    load_all_user_recommendations,
+    get_user_ai_conversation_details, generate_ai_response, continue_user_ai_conversation
+)
 
 ai_recommendation_router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@ai_recommendation_router.get("/recommendations", response_model=BaseResponse)
+@ai_recommendation_router.post("/conversations/{conversation_uuid}/continue", response_model=BaseResponse)
+async def continue_conversation_route(
+    conversation_uuid: str,
+    query: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user_data),
+):
+    try:
+        ai_reply = await generate_ai_response({"user_query": query, "user_responses": []})
+
+        updated_conversation = await continue_user_ai_conversation(
+            user=current_user,
+            conversation_uuid=conversation_uuid,
+            new_query=query,
+            ai_reply=ai_reply,
+            db=db
+        )
+
+        return BaseResponse(
+            date=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            status=200,
+            message="Conversation updated successfully.",
+            payload=updated_conversation
+        )
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="An error occurred while updating the conversation."
+        )
+
+
+@ai_recommendation_router.get("/conversations/{conversation_uuid}", response_model=BaseResponse)
+async def get_conversation_details_route(
+    conversation_uuid: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user_data),
+):
+    try:
+        conversation_details = await get_user_ai_conversation_details(
+            user=current_user,
+            conversation_uuid=conversation_uuid,
+            db=db
+        )
+        return BaseResponse(
+            date=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            status=200,
+            message="Conversation details retrieved successfully.",
+            payload=conversation_details,
+        )
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        return BaseResponse(
+            date=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            status=500,
+            message=f"An error occurred while fetching conversation details: {str(e)}",
+            payload=None,
+        )
+
+
+@ai_recommendation_router.get("/conversations", response_model=BaseResponse)
 async def get_all_user_recommendations(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_data),
@@ -28,7 +97,7 @@ async def get_all_user_recommendations(
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
-@ai_recommendation_router.put("/recommendations/{recommendation_uuid}", response_model=BaseResponse)
+@ai_recommendation_router.put("/conversations/{recommendation_uuid}", response_model=BaseResponse)
 async def rename_ai_recommendation_endpoint(
     recommendation_uuid: str,
     data: RenameAIRecommendationRequest,
@@ -43,7 +112,7 @@ async def rename_ai_recommendation_endpoint(
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
-@ai_recommendation_router.delete("/recommendations/{recommendation_uuid}", response_model=BaseResponse)
+@ai_recommendation_router.delete("/conversations/{recommendation_uuid}", response_model=BaseResponse)
 async def delete_ai_recommendation_endpoint(
     recommendation_uuid: str,
     db: AsyncSession = Depends(get_db),
@@ -57,7 +126,7 @@ async def delete_ai_recommendation_endpoint(
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
-@ai_recommendation_router.post("/recommendations", response_model=BaseResponse)
+@ai_recommendation_router.post("/conversations", response_model=BaseResponse)
 async def create_ai_recommendation(
     data: AIRecommendationCreate,
     db: AsyncSession = Depends(get_db),

@@ -14,6 +14,15 @@ class SchoolType(str, PyEnum):
     MAJORS_COURSES = "MAJORS_COURSES"
 
 
+class FacultyResponse(BaseModel):
+    uuid: str
+    name: str
+    description: Optional[str] = None
+
+    class Config:
+        orm_mode = True
+
+
 class SchoolDetailsResponse(BaseModel):
     uuid: str = Field(...)
     kh_name: str = Field(...)
@@ -33,6 +42,7 @@ class SchoolDetailsResponse(BaseModel):
     mission: Optional[str] = Field(None)
     vision: Optional[str] = Field(None)
     majors: List[MajorResponse] = Field(...)
+    faculties: List[FacultyResponse]
 
     class Config:
         orm_mode = True

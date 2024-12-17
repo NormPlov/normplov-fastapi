@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     GOOGLE_REDIRECT_URI: str = Field(default="http://localhost:8000/auth/google/callback", env="GOOGLE_REDIRECT_URI")
 
     # Google Generative AI Key
-    GOOGLE_GENERATIVE_AI_KEY: str = Field(default="AIzaSyBs8q5cZDyFDPVqiN5JJ8loS_Qt2SiHsRk", env="GOOGLE_GENERATIVE_AI_KEY")
+    GOOGLE_GENERATIVE_AI_KEY: str = Field(default="AIzaSyDLz0bS0Bm1z-km6XeuUX6lQKxqa9ZuJlw", env="GOOGLE_GENERATIVE_AI_KEY")
 
     # In the Settings class
 

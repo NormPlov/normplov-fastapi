@@ -83,7 +83,8 @@ async def get_school_with_majors(
         school_stmt = (
             select(School)
             .options(
-                joinedload(School.majors).joinedload(SchoolMajor.major)
+                joinedload(School.majors).joinedload(SchoolMajor.major),
+                joinedload(School.faculties)
             )
             .where(School.uuid == school_uuid, School.is_deleted == False)
         )
@@ -96,14 +97,12 @@ async def get_school_with_majors(
                 detail="School not found or has been deleted.",
             )
 
-        # Extract and filter majors
         majors = [
             major.major
             for major in school.majors
             if not major.is_deleted and not major.major.is_deleted
         ]
 
-        # Map majors to response format
         major_responses = [
             {
                 "uuid": str(major.uuid),
@@ -115,6 +114,19 @@ async def get_school_with_majors(
                 "degree": major.degree.value,
             }
             for major in majors
+        ]
+
+        faculties = [
+            faculty for faculty in school.faculties if not faculty.is_deleted
+        ]
+
+        faculty_responses = [
+            {
+                "uuid": str(faculty.uuid),
+                "name": faculty.name,
+                "description": faculty.description,
+            }
+            for faculty in faculties
         ]
 
         response_payload = SchoolDetailsResponse(
@@ -136,12 +148,13 @@ async def get_school_with_majors(
             mission=school.mission,
             vision=school.vision,
             majors=major_responses,
+            faculties=faculty_responses,
         )
 
         return BaseResponse(
             date=datetime.utcnow().strftime("%Y-%m-%d"),
             status=status.HTTP_200_OK,
-            message="School details and majors retrieved successfully.",
+            message="School details, majors, and faculties retrieved successfully.",
             payload=response_payload.dict(),
         )
     except HTTPException as e:

@@ -7,17 +7,49 @@ from pydantic import UUID4
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import get_current_user_data
+from app.models import User
 from app.schemas.payload import BaseResponse
 from app.services.test import (
     delete_test,
     generate_shareable_link,
     get_user_tests,
-    get_all_tests
+    get_all_tests, get_user_responses
 )
 from app.core.database import get_db
 
 test_router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+@test_router.get(
+    "/{test_uuid}",
+    summary="Get user responses",
+    response_model=BaseResponse,
+    tags=["User Responses"],
+)
+async def get_user_responses_route(
+    test_uuid: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user_data)
+):
+    try:
+        user_id = current_user.id
+        responses = await get_user_responses(db, user_id, test_uuid)
+
+        return BaseResponse(
+            date=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            status=200,
+            message="User responses retrieved successfully.",
+            payload=responses
+        )
+
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail="An error occurred while retrieving user responses."
+        )
 
 
 @test_router.get(

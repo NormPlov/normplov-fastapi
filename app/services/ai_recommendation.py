@@ -4,7 +4,6 @@ from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from app.models.ai_recommendation import AIRecommendation
-from app.models.user_response import UserResponse
 from app.models.user import User
 from app.schemas.ai_recommendation import AIRecommendationCreate, AIRecommendationResponse
 from app.core.config import settings
@@ -33,45 +32,101 @@ model = genai.GenerativeModel(
 )
 
 
-async def load_all_user_recommendations(
-        db: AsyncSession, user: User
-) -> BaseResponse:
+async def continue_user_ai_conversation(
+    user: User,
+    conversation_uuid: str,
+    new_query: str,
+    ai_reply: str,
+    db: AsyncSession
+) -> dict:
     try:
-        if not user:
-            raise HTTPException(status_code=401, detail="User not authenticated.")
+        stmt = select(AIRecommendation).where(
+            AIRecommendation.uuid == conversation_uuid,
+            AIRecommendation.user_id == user.id,
+            AIRecommendation.is_deleted == False
+        )
+        result = await db.execute(stmt)
+        existing_conversation = result.scalars().first()
 
-        stmt = select(AIRecommendation).where(AIRecommendation.user_id == user.id, AIRecommendation.is_deleted == False)
+        if not existing_conversation:
+            raise HTTPException(status_code=404, detail="Conversation not found.")
+
+        conversation_history = existing_conversation.conversation_history or []
+        conversation_history.append({
+            "user_query": new_query,
+            "ai_reply": ai_reply,
+            "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+        })
+
+        existing_conversation.conversation_history = conversation_history
+        existing_conversation.updated_at = datetime.utcnow()
+
+        db.add(existing_conversation)
+        await db.commit()
+        await db.refresh(existing_conversation)
+
+        return {
+            "conversation_uuid": existing_conversation.uuid,
+            "conversation_history": existing_conversation.conversation_history,
+            "message": "Conversation updated successfully."
+        }
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to update the conversation.")
+
+
+async def get_user_ai_conversation_details(user: User, conversation_uuid: str, db: AsyncSession) -> dict:
+    try:
+        stmt = select(AIRecommendation).where(
+            AIRecommendation.uuid == conversation_uuid,
+            AIRecommendation.user_id == user.id,
+            AIRecommendation.is_deleted == False
+        )
+        result = await db.execute(stmt)
+        conversation = result.scalars().first()
+
+        if not conversation:
+            raise HTTPException(status_code=404, detail="Conversation not found.")
+
+        return {
+            "conversation_uuid": conversation.uuid,
+            "chat_title": conversation.chat_title,
+            "conversation_history": conversation.conversation_history,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Failed to fetch conversation details.")
+
+
+async def load_all_user_recommendations(db: AsyncSession, user: User) -> BaseResponse:
+    try:
+        stmt = select(AIRecommendation).where(
+            AIRecommendation.user_id == user.id,
+            AIRecommendation.is_deleted == False
+        )
         result = await db.execute(stmt)
         recommendations = result.scalars().all()
 
         if not recommendations:
             raise HTTPException(status_code=404, detail="No recommendations found.")
 
-        recommendations_response = [
-            AIRecommendationResponse(
-                uuid=recommendation.uuid,
-                user_uuid=user.uuid,
-                query=recommendation.query,
-                recommendation=recommendation.recommendation,
-                chat_title=recommendation.chat_title,
-                created_at=recommendation.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-                updated_at=recommendation.updated_at.strftime(
-                    "%Y-%m-%d %H:%M:%S") if recommendation.updated_at else None,
-            )
+        summaries = [
+            {
+                "uuid": recommendation.uuid,
+                "chat_title": recommendation.chat_title,
+                "created_at": recommendation.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                "updated_at": recommendation.updated_at.strftime("%Y-%m-%d %H:%M:%S") if recommendation.updated_at else None
+            }
             for recommendation in recommendations
         ]
 
         return BaseResponse(
             date=str(datetime.utcnow().date()),
             status=200,
-            payload=recommendations_response,
-            message="AI Recommendations loaded successfully."
+            payload=summaries,
+            message="User recommendations loaded successfully."
         )
-
-    except HTTPException as http_exc:
-        raise http_exc
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal Server Error")
+        raise HTTPException(status_code=500, detail="Failed to fetch recommendations.")
 
 
 async def rename_ai_recommendation(
@@ -147,25 +202,16 @@ async def delete_ai_recommendation(
 
 async def generate_ai_recommendation(data: AIRecommendationCreate, db: AsyncSession, user: User):
     try:
-
-        stmt = select(UserResponse).where(UserResponse.user_id == user.id)
-        result = await db.execute(stmt)
-        user_responses = result.scalars().all()
-
-        # Build context for the AI model
-        user_response_context = [
-            {"assessment_type": response.assessment_type_id, "response": response.response_data}
-            for response in user_responses
-        ]
-        full_context = {
-            "user_query": data.query,
-            "user_responses": user_response_context,
-        }
-
-        generated_recommendation = await generate_ai_response(full_context)
-
-        # Use AI to generate chat title
+        generated_recommendation = await generate_ai_response({"user_query": data.query, "user_responses": []})
         chat_title = await generate_chat_title(data.query)
+
+        conversation_history = [
+            {
+                "user_query": data.query,
+                "ai_reply": generated_recommendation,
+                "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            }
+        ]
 
         new_recommendation = AIRecommendation(
             uuid=str(uuid.uuid4()),
@@ -173,28 +219,22 @@ async def generate_ai_recommendation(data: AIRecommendationCreate, db: AsyncSess
             query=data.query,
             recommendation=generated_recommendation,
             chat_title=chat_title,
+            conversation_history=conversation_history,
             created_at=datetime.utcnow(),
         )
+
         db.add(new_recommendation)
         await db.commit()
         await db.refresh(new_recommendation)
 
-        recommendation_response = AIRecommendationResponse(
-            uuid=new_recommendation.uuid,
-            user_uuid=user.uuid,
-            query=new_recommendation.query,
-            recommendation=new_recommendation.recommendation,
-            chat_title=new_recommendation.chat_title,  # Include chat title
-            created_at=new_recommendation.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-            updated_at=new_recommendation.updated_at.strftime("%Y-%m-%d %H:%M:%S") if new_recommendation.updated_at else None
-        )
-
-        return recommendation_response
-
+        return {
+            "uuid": new_recommendation.uuid,
+            "chat_title": chat_title,
+            "conversation_history": conversation_history,
+        }
     except Exception as e:
-        logger.error("Failed to generate AI recommendation: %s", str(e))
         await db.rollback()
-        raise RuntimeError("Internal Server Error")
+        raise HTTPException(status_code=500, detail="Failed to create AI recommendation.")
 
 
 async def generate_ai_response(context: dict) -> str:
