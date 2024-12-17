@@ -13,7 +13,7 @@ from sqlalchemy.sql.functions import current_user
 
 from app.core.config import settings
 from app.exceptions.file_exceptions import FileExtensionError, handle_file_error, FileSizeError
-from app.models import UserRole
+from app.models import UserRole, Role
 from app.models.user import User
 from app.schemas.payload import BaseResponse
 from app.schemas.user import UpdateUser, UserResponse
@@ -447,37 +447,43 @@ async def update_user_by_uuid(uuid: str, user_update: UpdateUser, db: AsyncSessi
 async def get_all_users(
     db: AsyncSession,
     search: Optional[str] = None,
-    sort_by: Optional[str] = None,
+    sort_by: Optional[str] = "created_at",
     sort_order: Optional[str] = "asc",
     page: int = 1,
     page_size: int = 10,
-    filters: Optional[dict] = None,
-) -> BaseResponse:
+    filters: dict = None
+):
     try:
-        stmt = select(User)
+        stmt = (
+            select(User)
+            .where(User.is_deleted == False)
+            .options(joinedload(User.roles).joinedload(UserRole.role))
+            .distinct()
+        )
 
         if search:
             search_filter = or_(
                 User.username.ilike(f"%{search}%"),
                 User.email.ilike(f"%{search}%"),
-                User.bio.ilike(f"%{search}%"),
+                User.bio.ilike(f"%{search}%")
             )
             stmt = stmt.where(search_filter)
 
         if filters:
             for field, value in filters.items():
-                if hasattr(User, field):
+                if value is not None and hasattr(User, field):
                     stmt = stmt.where(getattr(User, field) == value)
 
-        if sort_by and hasattr(User, sort_by):
+        stmt = stmt.where(~User.roles.any(UserRole.role.has(Role.name == "ADMIN")))
+
+        if hasattr(User, sort_by):
             sort_column = getattr(User, sort_by)
-            if sort_order.lower() == "desc":
-                stmt = stmt.order_by(desc(sort_column))
-            else:
-                stmt = stmt.order_by(asc(sort_column))
+            stmt = stmt.order_by(desc(sort_column) if sort_order.lower() == "desc" else asc(sort_column))
+        else:
+            stmt = stmt.order_by(User.created_at.desc())
 
         result = await db.execute(stmt)
-        users = result.scalars().all()
+        users = result.unique().scalars().all()
 
         paginated_users = paginate_results(users, page, page_size)
 
@@ -491,27 +497,21 @@ async def get_all_users(
                 "avatar": user.avatar,
                 "is_active": user.is_active,
                 "is_verified": user.is_verified,
-                "is_blocked": user.is_blocked,
-                "is_deleted": user.is_deleted,
+                "created_at": user.created_at.strftime("%d-%B-%Y"),
+                "is_blocked": user.is_blocked
             }
             for user in paginated_users["items"]
         ]
 
-        return BaseResponse(
-            date=datetime.utcnow().strftime("%d-%B-%Y"),
-            status=status.HTTP_200_OK,
-            message="Users retrieved successfully.",
-            payload={
-                "users": response_payload,
-                "metadata": paginated_users["metadata"],
-            },
-        )
+        return {
+            "users": response_payload,
+            "metadata": paginated_users["metadata"]
+        }
 
     except Exception as e:
-        logger.exception("An error occurred while retrieving users.")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred: {str(e)}",
+            status_code=500,
+            detail=f"An error occurred while retrieving users: {str(e)}"
         )
 
 

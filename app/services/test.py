@@ -219,54 +219,6 @@ async def get_user_tests(
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
 
 
-async def get_shared_test(test_uuid: str, db: AsyncSession) -> BaseResponse:
-    try:
-        stmt = select(UserTest).where(
-            cast(UserTest.uuid, UUID) == cast(test_uuid, UUID),
-            UserTest.is_deleted == False
-        )
-        result = await db.execute(stmt)
-        user_test = result.scalars().first()
-
-        if not user_test:
-            raise HTTPException(status_code=404, detail="Test not found or deleted.")
-
-        response_stmt = select(UserResponse).where(
-            UserResponse.user_test_id == user_test.id,
-            UserResponse.is_deleted == False
-        )
-        response_result = await db.execute(response_stmt)
-        user_response = response_result.scalars().first()
-
-        if not user_response:
-            raise HTTPException(status_code=404, detail="No response found for the test.")
-
-        response_payload = {
-            "response_uuid": user_response.uuid,
-            "uuid": user_response.uuid,
-            "response_data": user_response.response_data,
-            "is_draft": user_response.is_draft,
-            "created_at": user_response.created_at.strftime("%d-%B-%Y %H:%M:%S"),
-            "updated_at": user_response.updated_at.strftime("%d-%B-%Y %H:%M:%S") if user_response.updated_at else None
-        }
-
-        return BaseResponse(
-            date=date.today(),
-            status=200,
-            payload={
-                "test_uuid": user_test.uuid,
-                "test_name": user_test.name,
-                "response": response_payload
-            },
-            message="User response retrieved successfully."
-        )
-
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
-
-
 async def generate_shareable_link(
     test_uuid: str, user_id: int, base_url: str, db: AsyncSession
 ) -> BaseResponse:

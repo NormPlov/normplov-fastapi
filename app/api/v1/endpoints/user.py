@@ -204,37 +204,45 @@ async def update_user_by_uuid_route(uuid: str, user_update: UpdateUser, db: Asyn
 @user_router.get("/list", response_model=BaseResponse, status_code=200)
 async def get_users_route(
         search: Optional[str] = Query(None, description="Search term for users (username, email, or bio)"),
-        sort_by: Optional[str] = Query(None, description="Field to sort by (e.g., username, email)"),
+        sort_by: Optional[str] = Query("created_at", description="Field to sort by (e.g., username, email)"),
         sort_order: Optional[str] = Query("asc", regex="^(asc|desc)$", description="Sort order (asc or desc)"),
         page: int = Query(1, ge=1, description="Page number"),
         page_size: int = Query(10, ge=1, le=100, description="Number of users per page"),
         is_active: Optional[bool] = Query(None, description="Filter users by active status"),
         is_verified: Optional[bool] = Query(None, description="Filter users by verification status"),
         db: AsyncSession = Depends(get_db),
-        current_user=Depends(is_admin_user),  # Ensure only admins can access this
+        current_user=Depends(is_admin_user)
 ):
-    filters = {}
-    if is_active is not None:
-        filters["is_active"] = is_active
-    if is_verified is not None:
-        filters["is_verified"] = is_verified
+    try:
+        filters = {
+            "is_active": is_active,
+            "is_verified": is_verified,
+            "is_deleted": False
+        }
 
-    result = await get_all_users(
-        db=db,
-        search=search,
-        sort_by=sort_by,
-        sort_order=sort_order,
-        page=page,
-        page_size=page_size,
-        filters=filters,
-    )
+        result = await get_all_users(
+            db=db,
+            search=search,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            page=page,
+            page_size=page_size,
+            filters=filters
+        )
 
-    return BaseResponse(
-        date=datetime.utcnow(),
-        status=status.HTTP_200_OK,
-        payload=result.payload,
-        message="Users retrieved successfully.",
-    )
+        return BaseResponse(
+            date=datetime.utcnow().strftime("%d-%B-%Y"),
+            status=status.HTTP_200_OK,
+            payload=result,
+            message="Users retrieved successfully."
+        )
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {str(e)}"
+        )
 
 
 # Retrieve user by UUID

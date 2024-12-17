@@ -1,15 +1,19 @@
 import logging
+
 from datetime import datetime, date
 from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import UUID4
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import get_current_user_data
 from app.schemas.payload import BaseResponse
-from app.services.test import delete_test, generate_shareable_link, get_shared_test, get_user_tests, get_user_responses, \
+from app.services.test import (
+    delete_test,
+    generate_shareable_link,
+    get_user_tests,
     get_all_tests
+)
 from app.core.database import get_db
 
 test_router = APIRouter()
@@ -99,23 +103,6 @@ async def get_user_tests_route(
             status_code=500,
             detail=f"An unexpected error occurred: {str(e)}",
         )
-
-
-@test_router.get(
-    "/{test_uuid}",
-    response_model=BaseResponse,
-    summary="Retrieve the user response for a specific test"
-)
-async def get_user_response_route(
-    test_uuid: str,
-    db: AsyncSession = Depends(get_db),
-):
-    try:
-        return await get_shared_test(test_uuid, db)
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @test_router.get(
