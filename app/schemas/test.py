@@ -1,25 +1,27 @@
-from pydantic import BaseModel, validator
 from datetime import datetime
-from typing import Optional, List, Dict
+from typing import List, Optional, Dict, Any
+from pydantic import BaseModel
 
 
-class TestSummary(BaseModel):
+class UserTestResponseSchema(BaseModel):
     test_uuid: str
     test_name: str
-    is_completed: bool
-    is_deleted: bool
-    created_at: str
-
-    @validator("created_at", pre=True)
-    def format_datetime(cls, value):
-        if isinstance(value, datetime):
-            return value.strftime("%A, %d %B")
-        return value
+    assessment_type_name: Optional[str]
+    response_data: List[Dict[str, Any]]
+    created_at: datetime
 
 
-class UserTestsResponse(BaseModel):
-    user_id: int
-    tests: List[TestSummary]
+class PaginationMetadata(BaseModel):
+    page: int
+    page_size: int
+    total_items: int
+    total_pages: int
+
+
+class PaginatedUserTestsResponse(BaseModel):
+    tests: list[UserTestResponseSchema]
+    metadata: PaginationMetadata
+
 
 
 class AssessmentDraftData(BaseModel):

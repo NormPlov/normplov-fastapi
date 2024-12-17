@@ -1,5 +1,6 @@
 import logging
 import uuid
+from uuid import UUID
 
 from typing import List, Dict, Any, Optional
 from sqlalchemy.exc import SQLAlchemyError
@@ -12,7 +13,6 @@ from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException
 from sqlalchemy import cast
-from sqlalchemy.dialects.postgresql import UUID
 from app.schemas.payload import BaseResponse
 from app.utils.pagination import paginate_results
 from sqlalchemy.types import String
@@ -153,72 +153,6 @@ async def get_user_responses(
         raise HTTPException(status_code=500, detail="An error occurred while fetching user responses.")
 
 
-async def get_user_tests(
-    db: AsyncSession,
-    user_id: int,
-    search: Optional[str] = None,
-    sort_by: str = "created_at",
-    sort_order: str = "desc",
-    filter_by: Optional[str] = None,
-    page: int = 1,
-    page_size: int = 10,
-) -> Dict[str, Any]:
-    try:
-        query = select(UserTest).options(
-            joinedload(UserTest.user), joinedload(UserTest.assessment_type)
-        ).where(
-            UserTest.user_id == user_id,
-            UserTest.is_deleted == False
-        )
-
-        if search:
-            query = query.where(UserTest.name.ilike(f"%{search}%"))
-
-        if filter_by:
-            try:
-                import json
-                filters = json.loads(filter_by)
-                if not isinstance(filters, dict):
-                    raise ValueError("Filter must be a JSON object.")
-                for key, value in filters.items():
-                    if hasattr(UserTest, key):
-                        query = query.where(getattr(UserTest, key) == value)
-            except (ValueError, TypeError) as e:
-                raise HTTPException(status_code=400, detail=f"Invalid filter format: {e}")
-
-        if hasattr(UserTest, sort_by):
-            sort_column = getattr(UserTest, sort_by)
-            query = query.order_by(sort_column.asc() if sort_order == "asc" else sort_column.desc())
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid sort_by field. Choose a valid field from UserTest.",
-            )
-
-        result = await db.execute(query)
-        tests = result.scalars().all()
-
-        formatted_tests = [
-            {
-                "test_uuid": str(test.uuid),
-                "test_name": test.name,
-                "assessment_type_name": test.assessment_type.name if test.assessment_type else None,
-                "is_completed": test.is_completed,
-                "is_deleted": test.is_deleted,
-                "created_at": test.created_at.strftime("%d-%B-%Y"),
-            }
-            for test in tests
-        ]
-
-        paginated_results = paginate_results(formatted_tests, page, page_size)
-
-        return paginated_results
-
-    except Exception as e:
-        logger.error(f"Error fetching user tests: {e}")
-        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
-
-
 async def generate_shareable_link(
     test_uuid: str, user_id: int, base_url: str, db: AsyncSession
 ) -> BaseResponse:
@@ -289,6 +223,13 @@ async def delete_test(test_uuid: str, user_id: int, db: AsyncSession):
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
 
 
+def validate_uuid(value: str) -> str:
+    try:
+        return str(UUID(value))
+    except ValueError:
+        raise ValueError(f"Invalid UUID format: {value}")
+
+
 async def create_user_test(
     db: AsyncSession,
     user_id: int,
@@ -318,8 +259,17 @@ async def create_user_test(
 
         test_name = f"Test {next_index}"
 
+        while True:
+            generated_uuid = str(uuid.uuid4())
+            validated_uuid = validate_uuid(generated_uuid)
+            existing_test = await db.execute(
+                select(UserTest).where(UserTest.uuid == validated_uuid)
+            )
+            if not existing_test.scalars().first():
+                break
+
         new_test = UserTest(
-            uuid=uuid.uuid4(),
+            uuid=validated_uuid,
             user_id=user_id,
             name=test_name,
             assessment_type_id=assessment_type_id,
@@ -336,5 +286,5 @@ async def create_user_test(
         return new_test
 
     except Exception as e:
-        raise RuntimeError(f"Failed to create user test: {e}")
-
+        logger.error(f"Failed to create user test: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An error occurred while creating the user test.")

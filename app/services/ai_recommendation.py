@@ -40,6 +40,7 @@ async def continue_user_ai_conversation(
     db: AsyncSession
 ) -> dict:
     try:
+        # Fetch the existing conversation
         stmt = select(AIRecommendation).where(
             AIRecommendation.uuid == conversation_uuid,
             AIRecommendation.user_id == user.id,
@@ -51,32 +52,44 @@ async def continue_user_ai_conversation(
         if not existing_conversation:
             raise HTTPException(status_code=404, detail="Conversation not found.")
 
+        # Ensure conversation history is initialized
         conversation_history = existing_conversation.conversation_history or []
-        conversation_history.append({
-            "user_query": new_query,
-            "ai_reply": ai_reply,
-            "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
-        })
 
+        # Append the new query and AI reply to the conversation history
+        new_entry = {
+            "user_query": new_query.strip(),
+            "ai_reply": ai_reply.strip(),
+            "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        conversation_history.append(new_entry)
+
+        # Update conversation object
         existing_conversation.conversation_history = conversation_history
         existing_conversation.updated_at = datetime.utcnow()
 
+        # Persist changes to the database
         db.add(existing_conversation)
         await db.commit()
-        await db.refresh(existing_conversation)
+        await db.refresh(existing_conversation)  # Ensure updated data is returned
 
+        # Return updated conversation details
         return {
             "conversation_uuid": existing_conversation.uuid,
+            "chat_title": existing_conversation.chat_title,
             "conversation_history": existing_conversation.conversation_history,
-            "message": "Conversation updated successfully."
         }
+
+    except HTTPException as exc:
+        raise exc
     except Exception as e:
         await db.rollback()
+        logger.error(f"Error updating conversation: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to update the conversation.")
 
 
 async def get_user_ai_conversation_details(user: User, conversation_uuid: str, db: AsyncSession) -> dict:
     try:
+        # Fetch the conversation by UUID and user_id
         stmt = select(AIRecommendation).where(
             AIRecommendation.uuid == conversation_uuid,
             AIRecommendation.user_id == user.id,
@@ -85,16 +98,24 @@ async def get_user_ai_conversation_details(user: User, conversation_uuid: str, d
         result = await db.execute(stmt)
         conversation = result.scalars().first()
 
+        # Check if conversation exists
         if not conversation:
             raise HTTPException(status_code=404, detail="Conversation not found.")
 
+        # Ensure the conversation_history is a list (handle empty or null cases)
+        conversation_history = conversation.conversation_history or []
+
+        # Return the full conversation history
         return {
             "conversation_uuid": conversation.uuid,
             "chat_title": conversation.chat_title,
-            "conversation_history": conversation.conversation_history,
+            "conversation_history": conversation_history,  # Already structured JSON data
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Failed to fetch conversation details.")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch conversation details: {str(e)}"
+        )
 
 
 async def load_all_user_recommendations(db: AsyncSession, user: User) -> BaseResponse:

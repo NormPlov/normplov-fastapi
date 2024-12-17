@@ -6,7 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.dependencies import get_current_user_data
 from app.models.user import User
-from app.schemas.ai_recommendation import AIRecommendationCreate, RenameAIRecommendationRequest
+from app.schemas.ai_recommendation import AIRecommendationCreate, RenameAIRecommendationRequest, \
+    ContinueConversationRequest
 from app.schemas.payload import BaseResponse
 from app.services.ai_recommendation import (
     generate_ai_recommendation,
@@ -20,20 +21,30 @@ ai_recommendation_router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@ai_recommendation_router.post("/conversations/{conversation_uuid}/continue", response_model=BaseResponse)
+@ai_recommendation_router.post(
+    "/conversations/{conversation_uuid}/continue",
+    response_model=BaseResponse,
+    summary="Continue an existing conversation"
+)
 async def continue_conversation_route(
     conversation_uuid: str,
-    query: str,
+    data: ContinueConversationRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_data),
 ):
     try:
-        ai_reply = await generate_ai_response({"user_query": query, "user_responses": []})
+        # Validate query input
+        if not data.new_query or data.new_query.strip() == "":
+            raise HTTPException(status_code=400, detail="New query cannot be empty.")
 
+        # Generate AI reply
+        ai_reply = await generate_ai_response({"user_query": data.new_query, "user_responses": []})
+
+        # Continue conversation
         updated_conversation = await continue_user_ai_conversation(
             user=current_user,
             conversation_uuid=conversation_uuid,
-            new_query=query,
+            new_query=data.new_query,
             ai_reply=ai_reply,
             db=db
         )
@@ -53,6 +64,7 @@ async def continue_conversation_route(
             status_code=500,
             detail="An error occurred while updating the conversation."
         )
+
 
 
 @ai_recommendation_router.get("/conversations/{conversation_uuid}", response_model=BaseResponse)

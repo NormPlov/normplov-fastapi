@@ -1,6 +1,10 @@
 from pydantic import BaseModel, Field
 
 
+class ContinueConversationRequest(BaseModel):
+    new_query: str
+
+
 class AIRecommendationCreate(BaseModel):
     query: str = Field(..., description="User's query or question")
 
