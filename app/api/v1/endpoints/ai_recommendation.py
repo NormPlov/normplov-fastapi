@@ -1,10 +1,12 @@
 import logging
+import uuid
 
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.dependencies import get_current_user_data
+from app.models import AIRecommendation
 from app.models.user import User
 from app.schemas.ai_recommendation import AIRecommendationCreate, RenameAIRecommendationRequest, \
     ContinueConversationRequest
@@ -28,24 +30,21 @@ logger = logging.getLogger(__name__)
 )
 async def continue_conversation_route(
     conversation_uuid: str,
-    data: ContinueConversationRequest,
+    data: dict,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_data),
 ):
     try:
-        # Validate query input
-        if not data.new_query or data.new_query.strip() == "":
+        # Validate input
+        new_query = data.get("new_query", "").strip()
+        if not new_query:
             raise HTTPException(status_code=400, detail="New query cannot be empty.")
 
-        # Generate AI reply
-        ai_reply = await generate_ai_response({"user_query": data.new_query, "user_responses": []})
-
-        # Continue conversation
+        # Continue the conversation
         updated_conversation = await continue_user_ai_conversation(
             user=current_user,
             conversation_uuid=conversation_uuid,
-            new_query=data.new_query,
-            ai_reply=ai_reply,
+            new_query=new_query,
             db=db
         )
 
@@ -55,16 +54,11 @@ async def continue_conversation_route(
             message="Conversation updated successfully.",
             payload=updated_conversation
         )
-
     except HTTPException as e:
         raise e
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail="An error occurred while updating the conversation."
-        )
-
+        logger.error(f"Error continuing conversation: {str(e)}")
+        raise HTTPException(status_code=500, detail="An error occurred while continuing the conversation.")
 
 
 @ai_recommendation_router.get("/conversations/{conversation_uuid}", response_model=BaseResponse)
@@ -138,26 +132,63 @@ async def delete_ai_recommendation_endpoint(
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
-@ai_recommendation_router.post("/conversations", response_model=BaseResponse)
-async def create_ai_recommendation(
-    data: AIRecommendationCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_data),
+@ai_recommendation_router.post(
+    "/conversations/start",
+    response_model=BaseResponse,
+    summary="Start a new conversation"
+)
+async def start_new_conversation(
+        data: dict,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user_data),
 ):
     try:
-        recommendation = await generate_ai_recommendation(data, db, current_user)
+        # Validate query input
+        if not data.get("query") or data["query"].strip() == "":
+            raise HTTPException(status_code=400, detail="Query cannot be empty.")
 
-        response = BaseResponse(
-            date=datetime.utcnow().strftime("%d-%B-%Y"),
-            status=200,
-            payload=recommendation,
-            message="AI recommendation generated successfully."
+        # Generate AI reply for the initial query
+        query = data["query"].strip()
+
+        # Pass db and user_id to generate_ai_response
+        ai_reply = await generate_ai_response(
+            context={"user_query": query, "user_responses": []},
+            db=db,
+            user_id=current_user.id
         )
-        return response
 
-    except HTTPException as http_exc:
-        logger.error(f"HTTP error during recommendation creation: {http_exc.detail}")
-        raise http_exc
-    except Exception as exc:
-        logger.error("Unexpected error occurred while creating AI recommendation: %s", str(exc))
-        raise HTTPException(status_code=500, detail="Internal Server Error")
+        # Initialize conversation history
+        conversation_history = [{
+            "user_query": query,
+            "ai_reply": ai_reply,
+            "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+        }]
+
+        # Create a new conversation
+        new_conversation = AIRecommendation(
+            uuid=str(uuid.uuid4()),
+            user_id=current_user.id,
+            query=query,
+            recommendation=ai_reply,
+            chat_title="Career Recommendation",  # Or dynamically generate a title
+            conversation_history=conversation_history
+        )
+
+        # Persist to database
+        db.add(new_conversation)
+        await db.commit()
+        await db.refresh(new_conversation)
+
+        return BaseResponse(
+            date=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            status=200,
+            message="Conversation started successfully.",
+            payload={
+                "conversation_uuid": new_conversation.uuid,
+                "chat_title": new_conversation.chat_title,
+                "conversation_history": new_conversation.conversation_history
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error starting conversation: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to start the conversation.")

@@ -3,6 +3,8 @@ import uuid
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+
+from app.models import UserResponse
 from app.models.ai_recommendation import AIRecommendation
 from app.models.user import User
 from app.schemas.ai_recommendation import AIRecommendationCreate, AIRecommendationResponse
@@ -36,11 +38,10 @@ async def continue_user_ai_conversation(
     user: User,
     conversation_uuid: str,
     new_query: str,
-    ai_reply: str,
     db: AsyncSession
 ) -> dict:
     try:
-        # Fetch the existing conversation
+        # Step 1: Fetch the existing conversation
         stmt = select(AIRecommendation).where(
             AIRecommendation.uuid == conversation_uuid,
             AIRecommendation.user_id == user.id,
@@ -52,10 +53,42 @@ async def continue_user_ai_conversation(
         if not existing_conversation:
             raise HTTPException(status_code=404, detail="Conversation not found.")
 
-        # Ensure conversation history is initialized
-        conversation_history = existing_conversation.conversation_history or []
+        # Step 2: Fetch user response_data from the user_responses table
+        user_responses_stmt = select(UserResponse.response_data).where(
+            UserResponse.user_id == user.id,
+            UserResponse.is_deleted == False,
+            UserResponse.is_completed == True
+        )
+        user_responses_result = await db.execute(user_responses_stmt)
+        response_data = user_responses_result.scalars().all()
 
-        # Append the new query and AI reply to the conversation history
+        # Combine user response_data into a single string
+        formatted_response_data = "\n".join(
+            [f"User Response: {data}" for data in response_data]
+        ) if response_data else "No additional user responses provided."
+
+        # Step 3: Format the conversation history
+        conversation_history = existing_conversation.conversation_history or []
+        formatted_history = ""
+        for entry in conversation_history:
+            formatted_history += f"User: {entry['user_query']}\nAI: {entry['ai_reply']}\n"
+
+        # Step 4: Construct the final AI prompt
+        formatted_prompt = (
+            f"User-provided responses for context:\n{formatted_response_data}\n\n"
+            f"Previous conversation:\n{formatted_history}"
+            f"User: {new_query.strip()}\n"
+            f"AI:"
+        )
+
+        # Step 5: Pass the formatted prompt to the AI
+        ai_reply = await generate_ai_response(
+            context={"formatted_prompt": formatted_prompt},
+            db=db,
+            user_id=user.id
+        )
+
+        # Step 6: Append new query and AI reply to the conversation history
         new_entry = {
             "user_query": new_query.strip(),
             "ai_reply": ai_reply.strip(),
@@ -63,20 +96,20 @@ async def continue_user_ai_conversation(
         }
         conversation_history.append(new_entry)
 
-        # Update conversation object
+        # Step 7: Update the conversation in the database
         existing_conversation.conversation_history = conversation_history
         existing_conversation.updated_at = datetime.utcnow()
 
-        # Persist changes to the database
         db.add(existing_conversation)
         await db.commit()
-        await db.refresh(existing_conversation)  # Ensure updated data is returned
+        await db.refresh(existing_conversation)
 
         # Return updated conversation details
         return {
             "conversation_uuid": existing_conversation.uuid,
             "chat_title": existing_conversation.chat_title,
             "conversation_history": existing_conversation.conversation_history,
+            "updated_at": existing_conversation.updated_at
         }
 
     except HTTPException as exc:
@@ -84,7 +117,7 @@ async def continue_user_ai_conversation(
     except Exception as e:
         await db.rollback()
         logger.error(f"Error updating conversation: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to update the conversation.")
+        raise HTTPException(status_code=500, detail="Failed to continue the conversation.")
 
 
 async def get_user_ai_conversation_details(user: User, conversation_uuid: str, db: AsyncSession) -> dict:
@@ -258,25 +291,47 @@ async def generate_ai_recommendation(data: AIRecommendationCreate, db: AsyncSess
         raise HTTPException(status_code=500, detail="Failed to create AI recommendation.")
 
 
-async def generate_ai_response(context: dict) -> str:
+async def generate_ai_response(context: dict, db: AsyncSession, user_id: int) -> str:
     try:
-        prompt = f"""
-        User's previous responses: {context['user_responses']}
-        User's query: {context['user_query']}
-        Provide a detailed and personalized recommendation based on this information.
-        """
+        # Step 1: Fetch user response_data from the user_responses table
+        user_responses_stmt = select(UserResponse.response_data).where(
+            UserResponse.user_id == user_id,
+            UserResponse.is_deleted == False,
+            UserResponse.is_completed == True
+        )
+        result = await db.execute(user_responses_stmt)
+        user_responses = result.scalars().all()
 
+        # Step 2: Format user response_data into a structured prompt
+        formatted_user_responses = "\n".join(
+            [f"User Response: {response}" for response in user_responses]
+        ) if user_responses else "No user responses available."
+
+        # Step 3: Include conversation history
+        conversation_history = context.get('user_responses', [])
+        formatted_history = ""
+        for entry in conversation_history:
+            formatted_history += f"User: {entry['user_query']}\nAI: {entry['ai_reply']}\n"
+
+        # Step 4: Construct the final prompt
+        formatted_prompt = (
+            f"Here is the user's previous responses:\n{formatted_user_responses}\n\n"
+            f"Previous conversation:\n{formatted_history}"
+            f"User: {context['user_query']}\n"
+            f"AI: "
+        )
+
+        # Step 5: Pass the formatted prompt to the AI model
         chat_session = model.start_chat(history=[])
-        response = chat_session.send_message(prompt)
+        response = chat_session.send_message(formatted_prompt)
 
-        if response:
+        if response and response.text:
             return response.text.strip()
         else:
-            return "No recommendation available."
-
+            return "I'm sorry, I couldn't generate a response based on the provided data."
     except Exception as e:
         logger.error(f"Error generating AI recommendation: {e}")
-        return "Error contacting Google Generative AI."
+        return "An error occurred while generating a response."
 
 
 async def generate_chat_title(user_query: str) -> str:

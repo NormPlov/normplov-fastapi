@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 from pathlib import Path
 from app.core.config import settings
+from app.exceptions.formatters import format_http_exception
 from app.models import SchoolMajor, Province
 from app.models.school import School
 from app.schemas.payload import BaseResponse
@@ -356,14 +357,29 @@ async def create_school_service(
     db: AsyncSession = None,
 ):
     try:
+        existing_school_stmt = select(School).where(
+            (School.kh_name == kh_name) | (School.en_name == en_name),
+            School.is_deleted == False
+        )
+        result = await db.execute(existing_school_stmt)
+        existing_school = result.scalars().first()
+
+        if existing_school:
+            raise format_http_exception(
+                status_code=400,
+                message="Duplicate school names.",
+                details="A school with the same Khmer name or English name already exists."
+            )
+
         province_stmt = select(Province).where(Province.uuid == province_uuid, Province.is_deleted == False)
         province_result = await db.execute(province_stmt)
         province = province_result.scalars().first()
 
         if not province:
-            raise HTTPException(
+            raise format_http_exception(
                 status_code=404,
-                detail="Province not found or has been deleted."
+                message="Province not found.",
+                details="The specified province does not exist or has been deleted."
             )
 
         google_map_embed_url = generate_google_map_embed_url(latitude, longitude) if latitude and longitude else None

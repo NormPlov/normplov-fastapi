@@ -190,20 +190,19 @@ async def load_all_jobs(
 
 
 async def update_job(
-    uuid: str,
+    job_uuid: str,
     db: AsyncSession,
     update_data: dict,
     logo: Optional[UploadFile] = None,
 ) -> JobResponse:
     try:
-        stmt = select(Job).where(Job.uuid == uuid, Job.is_deleted == False)
+        stmt = select(Job).where(Job.uuid == job_uuid, Job.is_deleted == False)
         result = await db.execute(stmt)
         job = result.scalars().first()
 
         if not job:
             raise HTTPException(
-                status_code=404,
-                detail="Job not found or has been deleted."
+                status_code=404, detail="Job not found or has been deleted."
             )
 
         if logo:
@@ -214,24 +213,22 @@ async def update_job(
             logo_directory = Path(settings.BASE_UPLOAD_FOLDER) / "job-logos"
             logo_directory.mkdir(parents=True, exist_ok=True)
 
-            logo_path = logo_directory / f"{uuid.uuid4()}_{logo.filename}"
+            logo_path = logo_directory / f"{job_uuid}_{uuid.uuid4()}_{logo.filename}"
             with open(logo_path, "wb") as buffer:
                 shutil.copyfileobj(logo.file, buffer)
 
-            logo_url = f"{settings.BASE_URL}/job-logos/{logo_path.name}"
-            update_data["logo"] = logo_url
+            update_data["logo"] = f"{settings.BASE_UPLOAD_FOLDER}/job-logos/{logo_path.name}"
 
         if "posted_at" in update_data:
             try:
                 update_data["posted_at"] = datetime.fromisoformat(update_data["posted_at"])
             except ValueError:
-                raise HTTPException(status_code=400, detail="Invalid date format for posted_at.")
-
+                raise HTTPException(400, detail="Invalid date format for posted_at.")
         if "closing_date" in update_data:
             try:
                 update_data["closing_date"] = datetime.fromisoformat(update_data["closing_date"])
             except ValueError:
-                raise HTTPException(status_code=400, detail="Invalid date format for closing_date.")
+                raise HTTPException(400, detail="Invalid date format for closing_date.")
 
         for field, value in update_data.items():
             if hasattr(job, field):
@@ -263,14 +260,9 @@ async def update_job(
             is_active=job.is_active,
         )
 
-    except HTTPException as exc:
-        raise exc
     except Exception as exc:
         await db.rollback()
-        raise HTTPException(
-            status_code=500,
-            detail=f"An error occurred while updating the job: {str(exc)}"
-        )
+        raise HTTPException(500, detail=f"An error occurred while updating the job: {exc}")
 
 
 async def create_job(

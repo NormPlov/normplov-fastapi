@@ -233,7 +233,6 @@ async def update_job_route(
             "is_active": is_active,
         }
 
-        # Remove fields with `None` values
         update_data = {key: value for key, value in update_data.items() if value is not None}
 
         updated_job = await update_job(uuid, db, update_data, logo)

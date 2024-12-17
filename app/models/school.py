@@ -19,9 +19,9 @@ class School(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     uuid = Column(UUID(as_uuid=True), unique=True, nullable=False, default=uuid.uuid4)
-    province_id = Column(Integer, ForeignKey("provinces.id", ondelete="SET NULL"), nullable=True)  # New relationship
-    kh_name = Column(String, nullable=False)
-    en_name = Column(String, nullable=False)
+    province_id = Column(Integer, ForeignKey("provinces.id", ondelete="SET NULL"), nullable=True)
+    kh_name = Column(String, unique=True, nullable=False)
+    en_name = Column(String, unique=True, nullable=False)
     popular_major = Column(String, nullable=True)
     type = Column(Enum(SchoolType, name="school_type"), nullable=True)
     logo_url = Column(String, nullable=True)

@@ -36,7 +36,7 @@ class ChartData(BaseModel):
 class DimensionDescription(BaseModel):
     dimension_name: str
     description: str
-    image_url: str
+    image_url: Optional[str]
 
 
 class InterestAssessmentResponse(BaseModel):
