@@ -1,9 +1,9 @@
 import uuid
+import json
 
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-
 from app.models import UserResponse
 from app.models.ai_recommendation import AIRecommendation
 from app.models.user import User
@@ -41,7 +41,6 @@ async def continue_user_ai_conversation(
     db: AsyncSession
 ) -> dict:
     try:
-        # Step 1: Fetch the existing conversation
         stmt = select(AIRecommendation).where(
             AIRecommendation.uuid == conversation_uuid,
             AIRecommendation.user_id == user.id,
@@ -53,7 +52,23 @@ async def continue_user_ai_conversation(
         if not existing_conversation:
             raise HTTPException(status_code=404, detail="Conversation not found.")
 
-        # Step 2: Fetch user response_data from the user_responses table
+        conversation_history_raw = existing_conversation.conversation_history or []
+        if isinstance(conversation_history_raw, str):
+            try:
+                conversation_history = json.loads(conversation_history_raw)
+            except json.JSONDecodeError:
+                logger.error("Failed to deserialize conversation history.")
+                raise HTTPException(status_code=500, detail="Invalid conversation history format.")
+        else:
+            conversation_history = conversation_history_raw
+
+        validated_history = []
+        for idx, entry in enumerate(conversation_history):
+            if not isinstance(entry, dict) or 'user_query' not in entry or 'ai_reply' not in entry:
+                logger.warning(f"Skipping invalid entry at index {idx}: {entry}")
+                continue
+            validated_history.append(entry)
+
         user_responses_stmt = select(UserResponse.response_data).where(
             UserResponse.user_id == user.id,
             UserResponse.is_deleted == False,
@@ -61,19 +76,14 @@ async def continue_user_ai_conversation(
         )
         user_responses_result = await db.execute(user_responses_stmt)
         response_data = user_responses_result.scalars().all()
-
-        # Combine user response_data into a single string
         formatted_response_data = "\n".join(
             [f"User Response: {data}" for data in response_data]
         ) if response_data else "No additional user responses provided."
 
-        # Step 3: Format the conversation history
-        conversation_history = existing_conversation.conversation_history or []
         formatted_history = ""
-        for entry in conversation_history:
+        for entry in validated_history:
             formatted_history += f"User: {entry['user_query']}\nAI: {entry['ai_reply']}\n"
 
-        # Step 4: Construct the final AI prompt
         formatted_prompt = (
             f"User-provided responses for context:\n{formatted_response_data}\n\n"
             f"Previous conversation:\n{formatted_history}"
@@ -81,34 +91,33 @@ async def continue_user_ai_conversation(
             f"AI:"
         )
 
-        # Step 5: Pass the formatted prompt to the AI
         ai_reply = await generate_ai_response(
-            context={"formatted_prompt": formatted_prompt},
+            context={
+                "user_query": new_query.strip(),
+                "user_responses": conversation_history
+            },
             db=db,
             user_id=user.id
         )
 
-        # Step 6: Append new query and AI reply to the conversation history
         new_entry = {
             "user_query": new_query.strip(),
             "ai_reply": ai_reply.strip(),
             "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
         }
-        conversation_history.append(new_entry)
+        validated_history.append(new_entry)
 
-        # Step 7: Update the conversation in the database
-        existing_conversation.conversation_history = conversation_history
+        existing_conversation.conversation_history = validated_history
         existing_conversation.updated_at = datetime.utcnow()
 
         db.add(existing_conversation)
         await db.commit()
         await db.refresh(existing_conversation)
 
-        # Return updated conversation details
         return {
             "conversation_uuid": existing_conversation.uuid,
             "chat_title": existing_conversation.chat_title,
-            "conversation_history": existing_conversation.conversation_history,
+            "conversation_history": validated_history,
             "updated_at": existing_conversation.updated_at
         }
 
@@ -122,7 +131,6 @@ async def continue_user_ai_conversation(
 
 async def get_user_ai_conversation_details(user: User, conversation_uuid: str, db: AsyncSession) -> dict:
     try:
-        # Fetch the conversation by UUID and user_id
         stmt = select(AIRecommendation).where(
             AIRecommendation.uuid == conversation_uuid,
             AIRecommendation.user_id == user.id,
@@ -131,18 +139,15 @@ async def get_user_ai_conversation_details(user: User, conversation_uuid: str, d
         result = await db.execute(stmt)
         conversation = result.scalars().first()
 
-        # Check if conversation exists
         if not conversation:
             raise HTTPException(status_code=404, detail="Conversation not found.")
 
-        # Ensure the conversation_history is a list (handle empty or null cases)
         conversation_history = conversation.conversation_history or []
 
-        # Return the full conversation history
         return {
             "conversation_uuid": conversation.uuid,
             "chat_title": conversation.chat_title,
-            "conversation_history": conversation_history,  # Already structured JSON data
+            "conversation_history": conversation_history,
         }
     except Exception as e:
         raise HTTPException(
@@ -293,7 +298,7 @@ async def generate_ai_recommendation(data: AIRecommendationCreate, db: AsyncSess
 
 async def generate_ai_response(context: dict, db: AsyncSession, user_id: int) -> str:
     try:
-        # Step 1: Fetch user response_data from the user_responses table
+        # Step 1: Fetch user response_data from the database
         user_responses_stmt = select(UserResponse.response_data).where(
             UserResponse.user_id == user_id,
             UserResponse.is_deleted == False,
@@ -302,36 +307,63 @@ async def generate_ai_response(context: dict, db: AsyncSession, user_id: int) ->
         result = await db.execute(user_responses_stmt)
         user_responses = result.scalars().all()
 
-        # Step 2: Format user response_data into a structured prompt
-        formatted_user_responses = "\n".join(
-            [f"User Response: {response}" for response in user_responses]
-        ) if user_responses else "No user responses available."
+        # Step 2: Deserialize user response_data and format it
+        formatted_user_responses = []
+        for idx, response in enumerate(user_responses):
+            try:
+                deserialized_response = json.loads(response)
+                formatted_user_responses.append(
+                    f"Response {idx + 1} - {deserialized_response.get('top_category', {}).get('name', 'Unknown')}: "
+                    f"{deserialized_response.get('top_category', {}).get('description', '')}"
+                )
+            except json.JSONDecodeError:
+                logger.warning(f"Skipping invalid JSON response: {response}")
 
-        # Step 3: Include conversation history
+        user_response_summary = "\n".join(formatted_user_responses) if formatted_user_responses else "No user responses available."
+
+        # Step 3: Clean up conversation history (remove redundant responses)
         conversation_history = context.get('user_responses', [])
-        formatted_history = ""
-        for entry in conversation_history:
-            formatted_history += f"User: {entry['user_query']}\nAI: {entry['ai_reply']}\n"
+        cleaned_history = ""
+        for idx, entry in enumerate(conversation_history[-5:]):  # Only keep the last 5 exchanges
+            user_query = entry.get("user_query", "").strip()
+            ai_reply = entry.get("ai_reply", "").strip()
+            if user_query and ai_reply and "I need more details" not in ai_reply:
+                cleaned_history += f"User: {user_query}\nAI: {ai_reply}\n"
 
-        # Step 4: Construct the final prompt
+        # Step 4: Extract the current user query
+        user_query = context.get('user_query', '').strip()
+        if not user_query:
+            logger.error("Missing or empty 'user_query' in context.")
+            return "I need more details to provide an answer. Could you clarify your question?"
+
+        # Step 5: Construct a clear and actionable prompt for the AI
         formatted_prompt = (
-            f"Here is the user's previous responses:\n{formatted_user_responses}\n\n"
-            f"Previous conversation:\n{formatted_history}"
-            f"User: {context['user_query']}\n"
-            f"AI: "
+            "You are a helpful career and life advisor. Use the provided user information and conversation history "
+            "to give a clear and actionable answer to the user's current question.\n\n"
+            f"### User Information:\n{user_response_summary}\n\n"
+            f"### Recent Conversation History:\n{cleaned_history}\n"
+            f"### Current User Query:\n{user_query}\n\n"
+            "Provide a detailed, thoughtful, and specific response to the user's query."
         )
 
-        # Step 5: Pass the formatted prompt to the AI model
+        # Log the prompt for debugging
+        logger.info(f"Generated AI Prompt:\n{formatted_prompt}")
+
+        # Step 6: Send the prompt to the AI model
         chat_session = model.start_chat(history=[])
         response = chat_session.send_message(formatted_prompt)
 
-        if response and response.text:
+        # Step 7: Validate and return the AI response
+        if response and response.text.strip():
+            logger.info("AI response generated successfully.")
             return response.text.strip()
         else:
-            return "I'm sorry, I couldn't generate a response based on the provided data."
+            logger.error("AI model returned an empty or invalid response.")
+            return "I'm sorry, I couldn't generate a specific answer. Could you provide more details?"
+
     except Exception as e:
         logger.error(f"Error generating AI recommendation: {e}")
-        return "An error occurred while generating a response."
+        return "An unexpected error occurred while generating a response. Please try again later."
 
 
 async def generate_chat_title(user_query: str) -> str:
