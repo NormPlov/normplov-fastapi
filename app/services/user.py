@@ -3,7 +3,7 @@ import os
 import shutil
 import logging
 
-from typing import Optional, List, Tuple
+from typing import Optional, Tuple, List
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import joinedload, selectinload
@@ -17,7 +17,7 @@ from app.exceptions.file_exceptions import FileExtensionError, handle_file_error
 from app.models import UserRole, Role, UserTest
 from app.models.user import User
 from app.schemas.payload import BaseResponse
-from app.schemas.test import UserTestResponseSchema, PaginationMetadata
+from app.schemas.test import PaginationMetadata, UserTestWithUserSchema
 from app.schemas.user import UpdateUser, UserResponse
 from app.utils.format_date import format_date
 from app.utils.pagination import paginate_results
@@ -28,50 +28,46 @@ from app.utils.verify import is_valid_uuid
 logger = logging.getLogger(__name__)
 
 
-async def fetch_user_tests(
+async def fetch_all_tests(
     db: AsyncSession,
-    user_id: int,
     page: int,
     page_size: int
-) -> Tuple[list[UserTestResponseSchema], PaginationMetadata]:
+) -> Tuple[List[UserTestWithUserSchema], PaginationMetadata]:
     try:
         query = (
             select(UserTest)
             .options(
-                selectinload(UserTest.assessment_type),
+                selectinload(UserTest.user),
                 selectinload(UserTest.user_responses)
             )
-            .where(
-                UserTest.user_id == user_id,
-                UserTest.is_deleted == False
-            )
+            .where(UserTest.is_deleted == False)
             .order_by(UserTest.created_at.desc())
         )
 
         result = await db.execute(query)
-        user_tests = result.scalars().all()
+        all_tests = result.scalars().all()
 
-        # Paginate results
-        paginated_data = paginate_results(user_tests, page, page_size)
+        paginated_data = paginate_results(all_tests, page, page_size)
 
         formatted_tests = [
-            UserTestResponseSchema(
+            UserTestWithUserSchema(
                 test_uuid=str(test.uuid),
                 test_name=test.name,
-                assessment_type_name=(
-                    test.assessment_type.name if test.assessment_type else None
-                ),
+                user_avatar=test.user.avatar if test.user else None,
+                user_name=test.user.username if test.user else "Unknown",
+                user_email=test.user.email if test.user else "Unknown",
                 response_data=[
                     json.loads(response.response_data) if isinstance(response.response_data, str) else response.response_data
                     for response in test.user_responses
-                    if not response.is_deleted and response.response_data  # Ensure valid responses only
+                    if not response.is_deleted and response.response_data  # Valid responses only
                 ],
+                is_draft=any(response.is_draft for response in test.user_responses),
+                is_completed=test.is_completed,
                 created_at=test.created_at
             )
             for test in paginated_data["items"]
         ]
 
-        # Pagination metadata
         metadata = PaginationMetadata(
             page=paginated_data["metadata"]["page"],
             page_size=paginated_data["metadata"]["page_size"],
@@ -83,7 +79,7 @@ async def fetch_user_tests(
 
     except SQLAlchemyError as e:
         logger.error(f"Database error: {e}")
-        raise Exception("Error retrieving user tests.")
+        raise Exception("Error retrieving all tests.")
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
         raise Exception("An unexpected error occurred.")

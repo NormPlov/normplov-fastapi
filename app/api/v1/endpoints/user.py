@@ -7,7 +7,6 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
-from app.schemas.test import PaginatedUserTestsResponse
 from app.utils.format_date import format_date
 from app.models import User
 from app.schemas.payload import BaseResponse
@@ -23,7 +22,7 @@ from app.services.user import (
     update_user_by_uuid,
     get_all_users,
     get_user_by_uuid,
-    unblock_user, fetch_user_tests
+    unblock_user
 )
 from app.dependencies import (
     is_admin_user,
@@ -33,36 +32,6 @@ from app.dependencies import (
 user_router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 logger = logging.getLogger(__name__)
-
-
-@user_router.get(
-    "/tests",
-    summary="Get list of user tests",
-    response_model=BaseResponse,
-    tags=["User Tests"],
-)
-async def get_all_user_tests_route(
-    page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(10, ge=1, le=100, description="Number of tests per page"),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_data),
-):
-    try:
-        user_id = current_user.id
-        tests, metadata = await fetch_user_tests(db, user_id, page, page_size)
-
-        return BaseResponse(
-            date=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
-            status=200,
-            message="User tests retrieved successfully.",
-            payload=PaginatedUserTestsResponse(tests=tests, metadata=metadata)
-        )
-    except Exception as e:
-        logger.error(f"Error in get_all_user_tests_route: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="An error occurred while retrieving user tests."
-        )
 
 
 # Unblock User Route

@@ -1,119 +1,83 @@
+import json
 import logging
 import uuid
 from uuid import UUID
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 from sqlalchemy.sql import text
 from datetime import date
-from app.models import UserResponse, UserTest, User, AssessmentType
+from app.models import UserResponse, UserTest, User
 from datetime import datetime
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException
 from sqlalchemy import cast
 from app.schemas.payload import BaseResponse
+from app.schemas.test import UserTestResponseSchema, PaginationMetadata
 from app.utils.pagination import paginate_results
-from sqlalchemy.types import String
 
 logger = logging.getLogger(__name__)
 
 
-async def get_all_tests(
+async def fetch_user_tests_for_current_user(
     db: AsyncSession,
-    search: Optional[str] = None,
-    sort_by: str = "created_at",
-    sort_order: str = "desc",
-    filter_by: Optional[str] = None,
-    page: int = 1,
-    page_size: int = 10,
-) -> Dict[str, Any]:
+    current_user: User,
+    page: int,
+    page_size: int
+) -> Tuple[List[UserTestResponseSchema], PaginationMetadata]:
     try:
-        # Base query
         query = (
             select(UserTest)
-            .join(User)
-            .join(AssessmentType, UserTest.assessment_type_id == AssessmentType.id)
             .options(
-                joinedload(UserTest.user),
-                joinedload(UserTest.user_responses),
-                joinedload(UserTest.assessment_type),  # Load assessment type
+                selectinload(UserTest.assessment_type),
+                selectinload(UserTest.user_responses)
             )
-            .where(UserTest.is_deleted == False)
+            .where(
+                UserTest.user_id == current_user.id,  # Use the current user's ID
+                UserTest.is_deleted == False
+            )
+            .order_by(UserTest.created_at.desc())
         )
 
-        # Apply search
-        if search:
-            query = query.where(
-                UserTest.name.ilike(f"%{search}%")
-                | User.username.ilike(f"%{search}%")
-                | AssessmentType.name.ilike(f"%{search}%")  # Search in assessment type
-                | UserResponse.response_data.cast(String).ilike(f"%{search}%")
-            )
-
-        # Apply filters
-        if filter_by:
-            try:
-                import json
-                filters = json.loads(filter_by)
-                if not isinstance(filters, dict):
-                    raise ValueError("Filter must be a JSON object.")
-                for key, value in filters.items():
-                    if hasattr(UserTest, key):
-                        query = query.where(getattr(UserTest, key) == value)
-            except (ValueError, TypeError) as e:
-                raise HTTPException(status_code=400, detail=f"Invalid filter format: {e}")
-
-        # Apply sorting
-        if hasattr(UserTest, sort_by):
-            sort_column = getattr(UserTest, sort_by)
-            query = query.order_by(sort_column.asc() if sort_order == "asc" else sort_column.desc())
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid sort_by field. Choose a valid field from UserTest or User.",
-            )
-
-        # Execute query
         result = await db.execute(query)
-        tests = result.unique().scalars().all()
+        user_tests = result.scalars().all()
 
-        # Format response
+        paginated_data = paginate_results(user_tests, page, page_size)
+
         formatted_tests = [
-            {
-                "test_uuid": str(test.uuid),
-                "test_name": test.name,
-                "assessment_type_name": test.assessment_type.name if test.assessment_type else None,  # Include assessment type name
-                "is_completed": test.is_completed,
-                "is_deleted": test.is_deleted,
-                "created_at": test.created_at.strftime("%d-%B-%Y"),
-                "user": {
-                    "username": test.user.username,
-                    "avatar": test.user.avatar,
-                    "email": test.user.email,
-                },
-                "responses": [
-                    {
-                        "response_uuid": str(response.uuid),
-                        "response_data": response.response_data,
-                        "is_draft": response.is_draft,
-                        "is_completed": response.is_completed,
-                    }
+            UserTestResponseSchema(
+                test_uuid=str(test.uuid),
+                test_name=test.name,
+                assessment_type_name=(
+                    test.assessment_type.name if test.assessment_type else None
+                ),
+                response_data=[
+                    json.loads(response.response_data) if isinstance(response.response_data, str) else response.response_data
                     for response in test.user_responses
+                    if not response.is_deleted and response.response_data  # Only include valid responses
                 ],
-            }
-            for test in tests
+                created_at=test.created_at
+            )
+            for test in paginated_data["items"]
         ]
 
-        # Paginate results
-        paginated_results = paginate_results(formatted_tests, page, page_size)
+        metadata = PaginationMetadata(
+            page=paginated_data["metadata"]["page"],
+            page_size=paginated_data["metadata"]["page_size"],
+            total_items=paginated_data["metadata"]["total_items"],
+            total_pages=paginated_data["metadata"]["total_pages"],
+        )
 
-        return paginated_results
+        return formatted_tests, metadata
 
+    except SQLAlchemyError as e:
+        logger.error(f"Database error: {e}")
+        raise Exception("Error retrieving user tests.")
     except Exception as e:
-        logger.error(f"Error fetching all tests: {e}")
-        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+        logger.error(f"Unexpected error: {e}")
+        raise Exception("An unexpected error occurred.")
 
 
 async def get_user_responses(
