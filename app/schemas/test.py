@@ -6,6 +6,7 @@ from pydantic import BaseModel
 class UserTestWithUserSchema(BaseModel):
     test_uuid: str
     test_name: str
+    assessment_type_name: Optional[str]
     user_avatar: Optional[str]
     user_name: str
     user_email: str

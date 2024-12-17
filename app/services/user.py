@@ -38,7 +38,8 @@ async def fetch_all_tests(
             select(UserTest)
             .options(
                 selectinload(UserTest.user),
-                selectinload(UserTest.user_responses)
+                selectinload(UserTest.user_responses),
+                selectinload(UserTest.assessment_type)
             )
             .where(UserTest.is_deleted == False)
             .order_by(UserTest.created_at.desc())
@@ -56,8 +57,11 @@ async def fetch_all_tests(
                 user_avatar=test.user.avatar if test.user else None,
                 user_name=test.user.username if test.user else "Unknown",
                 user_email=test.user.email if test.user else "Unknown",
+                assessment_type_name=test.assessment_type.name if test.assessment_type else "Unknown",
+                # Extract assessment type name
                 response_data=[
-                    json.loads(response.response_data) if isinstance(response.response_data, str) else response.response_data
+                    json.loads(response.response_data) if isinstance(response.response_data,
+                                                                     str) else response.response_data
                     for response in test.user_responses
                     if not response.is_deleted and response.response_data  # Valid responses only
                 ],
@@ -67,7 +71,6 @@ async def fetch_all_tests(
             )
             for test in paginated_data["items"]
         ]
-
         metadata = PaginationMetadata(
             page=paginated_data["metadata"]["page"],
             page_size=paginated_data["metadata"]["page_size"],
