@@ -231,7 +231,8 @@ async def load_drafts(
             .join(AssessmentType)
             .where(
                 UserResponse.user_id == current_user.id,
-                UserResponse.is_deleted == False
+                UserResponse.is_deleted == False,
+                UserResponse.is_draft == True
             )
         )
 
@@ -280,6 +281,7 @@ async def load_drafts(
                 "uuid": draft.uuid,
                 "draft_name": draft_name,
                 "assessment_name": draft.assessment_name,
+                "is_draft": draft.is_draft,
                 "created_at": draft.created_at.strftime("%d-%B-%Y %H:%M:%S"),
                 "updated_at": draft.updated_at.strftime("%d-%B-%Y %H:%M:%S") if draft.updated_at else None
             })

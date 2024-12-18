@@ -4,6 +4,8 @@ import uuid
 from uuid import UUID
 
 from typing import List, Dict, Any, Optional, Tuple
+
+from pydantic import UUID4
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import joinedload, selectinload
 from sqlalchemy.sql import text
@@ -156,12 +158,12 @@ async def generate_shareable_link(
         )
 
 
-async def delete_test(test_uuid: str, user_id: int, db: AsyncSession):
+async def delete_test(test_uuid: UUID4, user_id: int, db: AsyncSession):
     try:
         stmt = select(UserTest).where(
-            UserTest.uuid == cast(test_uuid, UUID),
+            UserTest.uuid == test_uuid,
             UserTest.user_id == user_id,
-            UserTest.is_deleted == False
+            UserTest.is_deleted == False,
         )
         result = await db.execute(stmt)
         user_test = result.scalars().first()
@@ -169,16 +171,14 @@ async def delete_test(test_uuid: str, user_id: int, db: AsyncSession):
         if not user_test:
             raise HTTPException(status_code=404, detail="Test not found or already deleted.")
 
-        # Soft delete the test
         user_test.is_deleted = True
         await db.commit()
 
-        # Prepare the response
         response = BaseResponse(
             date=date.today(),
             status=200,
             payload={"test_uuid": str(test_uuid)},
-            message="Test deleted successfully."
+            message="Test deleted successfully.",
         )
         return response
 

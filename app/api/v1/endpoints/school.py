@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
@@ -52,15 +54,17 @@ async def upload_school_image_route(
 
 @school_router.get(
     "/{school_uuid}",
-    summary="Get school details and majors by UUID",
+    summary="Get school details and majors by UUID with optional filters",
     response_model=BaseResponse,
     tags=["School"],
 )
 async def get_school_details_route(
     school_uuid: str,
+    degree: Optional[str] = Query(None, description="Filter majors by degree"),
+    faculty_name: Optional[str] = Query(None, description="Filter faculties by name"),
     db: AsyncSession = Depends(get_db),
 ):
-    return await get_school_with_majors(school_uuid, db)
+    return await get_school_with_majors(school_uuid, db, degree, faculty_name)
 
 
 @school_router.get(

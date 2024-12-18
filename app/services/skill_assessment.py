@@ -214,6 +214,7 @@ async def predict_skills(
             user_test_id=user_test.id,
             assessment_type_id=assessment_type_id,
             response_data=json.dumps(response.dict()),
+            is_completed=True,
             created_at=datetime.utcnow(),
         )
         db.add(user_response)

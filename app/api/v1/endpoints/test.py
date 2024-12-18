@@ -192,7 +192,7 @@ async def generate_shareable_link_route(
     summary="Delete a test",
 )
 async def delete_test_route(
-    test_uuid: UUID4,
+    test_uuid: UUID4,  # Use UUID4 type
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user_data),
 ):

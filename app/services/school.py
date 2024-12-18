@@ -2,6 +2,7 @@ import logging
 import shutil
 
 from datetime import datetime
+from typing import Optional
 from uuid import uuid4
 from sqlalchemy import func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -79,13 +80,15 @@ async def upload_school_logo_or_cover_service(
 async def get_school_with_majors(
     school_uuid: str,
     db: AsyncSession,
+    degree: Optional[str] = None,
+    faculty_name: Optional[str] = None,
 ) -> BaseResponse:
     try:
         school_stmt = (
             select(School)
             .options(
                 joinedload(School.majors).joinedload(SchoolMajor.major),
-                joinedload(School.faculties)
+                joinedload(School.faculties),
             )
             .where(School.uuid == school_uuid, School.is_deleted == False)
         )
@@ -101,7 +104,9 @@ async def get_school_with_majors(
         majors = [
             major.major
             for major in school.majors
-            if not major.is_deleted and not major.major.is_deleted
+            if not major.is_deleted
+            and not major.major.is_deleted
+            and (degree is None or major.major.degree.value == degree)
         ]
 
         major_responses = [
@@ -118,7 +123,10 @@ async def get_school_with_majors(
         ]
 
         faculties = [
-            faculty for faculty in school.faculties if not faculty.is_deleted
+            faculty
+            for faculty in school.faculties
+            if not faculty.is_deleted
+            and (faculty_name is None or faculty_name.lower() in faculty.name.lower())
         ]
 
         faculty_responses = [
@@ -130,6 +138,7 @@ async def get_school_with_majors(
             for faculty in faculties
         ]
 
+        # Build response payload
         response_payload = SchoolDetailsResponse(
             uuid=str(school.uuid),
             kh_name=school.kh_name,
