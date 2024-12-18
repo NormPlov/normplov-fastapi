@@ -1,6 +1,7 @@
 import os
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import engine, Base, get_db
 from app.core.init import init_roles_and_admin, create_static_users_batched
 from contextlib import asynccontextmanager
@@ -57,11 +58,9 @@ app = FastAPI(lifespan=lifespan)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 
-from fastapi.middleware.cors import CORSMiddleware
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://normplov-api.shinoshike.studio", "http://localhost:3000", "deploy-norm-plov-v4.vercel.app", "https://dev-normplov.shinoshike.studio"],
+    allow_origins=["https://normplov-api.shinoshike.studio", "http://localhost:3000", "http://localhost:3000/", "deploy-norm-plov-v4.vercel.app", "https://dev-normplov.shinoshike.studio"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
