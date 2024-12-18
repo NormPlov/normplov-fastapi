@@ -143,7 +143,7 @@ async def process_interest_assessment(
                 continue
 
             chart_data.append(ChartData(label=dimension_name, score=round(score_value, 2)))
-            dimension_image_url = f"/uploads/{dimension.image}" if dimension.image else None
+            dimension_image_url = f"{dimension.image}" if dimension.image else None
 
             dimension_descriptions.append({
                 "dimension_name": dimension.name,

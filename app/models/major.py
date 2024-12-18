@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Column, Integer, String, Boolean, Enum, DateTime, Float, Text, func, UUID
+from sqlalchemy import Column, Integer, String, Boolean, Enum, DateTime, Float, Text, func, UUID, ForeignKey
 from sqlalchemy.orm import relationship
 from enum import Enum as PyEnum
 from ..core.database import Base
@@ -25,9 +25,11 @@ class Major(Base):
     is_popular = Column(Boolean, default=False, nullable=False)
     degree = Column(Enum(DegreeType), nullable=False)
     is_deleted = Column(Boolean, default=False, nullable=False)
+    faculty_id = Column(Integer, ForeignKey("faculties.id", ondelete="CASCADE"), nullable=False)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # Relationships
     school_majors = relationship("SchoolMajor", back_populates="major", cascade="all, delete-orphan")
     careers = relationship("CareerMajor", back_populates="major", cascade="all, delete-orphan")
+    faculty = relationship("Faculty", back_populates="majors")

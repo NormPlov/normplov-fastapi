@@ -19,3 +19,4 @@ class Faculty(Base):
 
     # Relationships
     school = relationship("School", back_populates="faculties")
+    majors = relationship("Major", back_populates="faculty", cascade="all, delete-orphan")

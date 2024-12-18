@@ -252,10 +252,16 @@ async def predict_learning_style_route(
 
         learning_style_result = await predict_learning_style(data, final_test_uuid, db, current_user)
 
+        response_data = {
+            "test_uuid": learning_style_result["test_uuid"],
+            "test_name": learning_style_result["test_name"],
+            "assessment_type_name": "Learning Style",
+        }
+
         return BaseResponse(
             date=datetime.utcnow().strftime("%d-%B-%Y"),
             status=200,
-            payload=learning_style_result,
+            payload=response_data,
             message="Learning style predicted successfully.",
         )
 
