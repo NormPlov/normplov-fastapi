@@ -7,6 +7,8 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload
 from datetime import datetime
 from sqlalchemy.sql.functions import current_user
+
+from app.exceptions.formatters import format_http_exception
 from app.models import AssessmentType, UserTest
 from app.models.user_feedback import UserFeedback
 from fastapi import HTTPException
@@ -270,12 +272,17 @@ async def create_feedback(feedback: str, user_test_uuid: str, current_user, db: 
             select(UserTest.id, AssessmentType.name).where(
                 UserTest.uuid == str(uuid.UUID(user_test_uuid)),
                 UserTest.is_deleted == False,
+                UserTest.user_id == current_user.id
             )
         )
         user_test = result.first()
 
         if not user_test:
-            raise HTTPException(status_code=404, detail="User Test not found")
+            raise format_http_exception(
+                status_code=404,
+                message="User Test not found or you are not authorized to provide feedback for this test.",
+                details={"user_test_uuid": user_test_uuid},
+            )
 
         user_test_id, user_test_name = user_test
 
@@ -305,13 +312,17 @@ async def create_feedback(feedback: str, user_test_uuid: str, current_user, db: 
         return feedback_uuid
 
     except ValueError:
-        logger.error("Invalid UUID format for assessment type")
-        raise HTTPException(status_code=400, detail="Invalid assessment type UUID format")
+        logger.error("Invalid UUID format for user test")
+        raise HTTPException(status_code=400, detail="Invalid user test UUID format")
     except IntegrityError:
         logger.error("Database integrity error while creating feedback")
         await db.rollback()
         raise HTTPException(status_code=500, detail="Database error occurred")
+
     except Exception as e:
-        logger.exception("Error creating feedback")
         await db.rollback()
-        raise HTTPException(status_code=500, detail="Failed to create feedback")
+        raise format_http_exception(
+            status_code=400,
+            message="Failed to create feedback",
+            details=str(e),
+        )
