@@ -60,9 +60,17 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://normplov-api.shinoshike.studio", "http://localhost:3000", "http://localhost:3000/", "deploy-norm-plov-v4.vercel.app", "https://dev-normplov.shinoshike.studio"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:3000/",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3000/",
+        "https://normplov-api.shinoshike.studio",
+        "https://dev-normplov.shinoshike.studio",
+        "https://deploy-norm-plov-v4.vercel.app",
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
