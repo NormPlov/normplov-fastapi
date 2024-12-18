@@ -155,6 +155,7 @@ async def get_all_jobs_route(
     order: Optional[str] = Query("desc", description="Order direction ('asc' or 'desc')"),
     location: Optional[str] = Query(None, description="Filter by job location"),
     job_type: Optional[str] = Query(None, description="Filter by job type"),
+    category: Optional[str] = Query(None, description="Filter by job category"),  # New filter parameter
     page: int = Query(1, description="Page number"),
     page_size: int = Query(10, description="Number of jobs per page"),
     db: AsyncSession = Depends(get_db),
@@ -167,6 +168,7 @@ async def get_all_jobs_route(
             order=order,
             location=location,
             job_type=job_type,
+            category=category,
         )
 
         paginated_result = paginate_results(jobs, page=page, page_size=page_size)

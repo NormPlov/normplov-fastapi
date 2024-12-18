@@ -36,7 +36,6 @@ async def init_roles_and_admin(db: AsyncSession):
 
         await db.commit()
 
-        # Ensure the ADMIN role exists
         stmt = select(Role).where(Role.name == "ADMIN", Role.is_deleted == False)
         result = await db.execute(stmt)
         admin_role = result.scalars().first()
@@ -44,7 +43,6 @@ async def init_roles_and_admin(db: AsyncSession):
         if not admin_role:
             raise ValueError("ADMIN role is missing. Please initialize roles first.")
 
-        # Check if an admin user already exists
         stmt = select(User).where(User.email == "admin@gmail.com", User.is_deleted == False)
         result = await db.execute(stmt)
         admin_user = result.scalars().first()
@@ -106,6 +104,7 @@ async def create_static_users_batched(db: AsyncSession, num_users: int = 100, ba
             fake_bio = fake.text()[:500]
             fake_gender = fake.random_element(["Male", "Female"])
             fake_dob = fake.date_of_birth()
+            fake_country = fake.country()[:100]
 
             user = User(
                 uuid=str(uuid.uuid4()),
@@ -118,6 +117,7 @@ async def create_static_users_batched(db: AsyncSession, num_users: int = 100, ba
                 bio=fake_bio,
                 gender=fake_gender,
                 date_of_birth=fake_dob,
+                country=fake_country,
                 is_verified=True,
                 is_active=True,
                 is_deleted=False,
@@ -171,3 +171,4 @@ async def create_static_users_batched(db: AsyncSession, num_users: int = 100, ba
     except Exception as e:
         print(f"Error creating static users: {e}")
         await db.rollback()
+

@@ -18,6 +18,7 @@ class User(Base):
     bio = Column(Text, nullable=False, default="")
     gender = Column(String(10), nullable=False, default="")
     date_of_birth = Column(DateTime, nullable=True)
+    country = Column(String(100), nullable=True)
 
     # User status
     is_active = Column(Boolean, default=False)

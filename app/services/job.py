@@ -126,7 +126,8 @@ async def load_all_jobs(
     sort_by: str = "created_at",
     order: str = "desc",
     location: Optional[str] = None,
-    job_type: Optional[str] = None
+    job_type: Optional[str] = None,
+    category: Optional[str] = None,
 ) -> list[JobDetailsResponse]:
     try:
         stmt = select(Job).where(Job.is_deleted == False)
@@ -135,6 +136,8 @@ async def load_all_jobs(
             stmt = stmt.where(Job.location.ilike(f"%{location}%"))
         if job_type:
             stmt = stmt.where(Job.job_type.ilike(f"%{job_type}%"))
+        if category:
+            stmt = stmt.where(Job.category.ilike(f"%{category}%"))
 
         if search:
             stmt = stmt.where(

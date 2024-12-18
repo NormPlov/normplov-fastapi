@@ -21,7 +21,8 @@ from app.api.v1.endpoints import (
     major,
     job,
     dimension,
-    province
+    province,
+    admin_metrics
 )
 from app.models.app_metadata import AppMetadata
 
@@ -70,7 +71,7 @@ app.add_middleware(
         "https://deploy-norm-plov-v4.vercel.app",
     ],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -96,4 +97,4 @@ app.include_router(school.school_router, prefix="/api/v1/schools", tags=["School
 app.include_router(faculty.faculty_router, prefix="/api/v1/faculties", tags=["Faculty"])
 app.include_router(major.major_router, prefix="/api/v1/majors", tags=["Major"])
 app.include_router(job.job_router, prefix="/api/v1/jobs", tags=["Job"])
-
+app.include_router(admin_metrics.admin_router, prefix="/api/v1/admin", tags=["Admin"])
