@@ -1,7 +1,6 @@
 import os
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import engine, Base, get_db
 from app.core.init import init_roles_and_admin, create_static_users_batched
 from contextlib import asynccontextmanager
@@ -19,7 +18,6 @@ from app.api.v1.endpoints import (
     school,
     faculty,
     major,
-    job_category,
     job,
     dimension,
     province
@@ -90,6 +88,5 @@ app.include_router(province.province_router, prefix="/api/v1/provinces", tags=["
 app.include_router(school.school_router, prefix="/api/v1/schools", tags=["School"])
 app.include_router(faculty.faculty_router, prefix="/api/v1/faculties", tags=["Faculty"])
 app.include_router(major.major_router, prefix="/api/v1/majors", tags=["Major"])
-app.include_router(job_category.job_category_router, prefix="/api/v1/job_categories", tags=["Job"])
 app.include_router(job.job_router, prefix="/api/v1/jobs", tags=["Job"])
 

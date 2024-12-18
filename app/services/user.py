@@ -4,7 +4,6 @@ import shutil
 import logging
 
 from typing import Optional, Tuple, List
-
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import joinedload, selectinload
 from fastapi import HTTPException, status, UploadFile
@@ -63,7 +62,7 @@ async def fetch_all_tests(
                     json.loads(response.response_data) if isinstance(response.response_data,
                                                                      str) else response.response_data
                     for response in test.user_responses
-                    if not response.is_deleted and response.response_data  # Valid responses only
+                    if not response.is_deleted and response.response_data
                 ],
                 is_draft=any(response.is_draft for response in test.user_responses),
                 is_completed=test.is_completed,

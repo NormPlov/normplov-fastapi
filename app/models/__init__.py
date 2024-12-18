@@ -20,7 +20,6 @@ from app.models.major import Major
 from app.models.school_major import SchoolMajor
 from app.models.career_major import CareerMajor
 from app.models.faculty import Faculty
-from app.models.job_category import JobCategory
 
 
 __all__ = ["Role",
@@ -43,7 +42,6 @@ __all__ = ["Role",
            "SchoolMajor",
            "Faculty",
            "CareerMajor",
-           "Province",
-           "JobCategory"
+           "Province"
            ]
 

@@ -9,7 +9,7 @@ from sqlalchemy import select
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import joinedload
 from app.core.config import settings
-from app.models import Job, JobCategory
+from app.models import Job
 from app.schemas.job import JobDetailsResponse, JobResponse
 from datetime import datetime
 from app.utils.file import validate_file_extension, validate_file_size
@@ -37,8 +37,6 @@ async def admin_load_all_jobs(
         else:
             stmt = stmt.order_by(sort_column.asc())
 
-        stmt = stmt.options(joinedload(Job.job_category))
-
         result = await db.execute(stmt)
         jobs = result.scalars().all()
 
@@ -59,7 +57,7 @@ async def admin_load_all_jobs(
                 website=job.website,
                 created_at=job.created_at,
                 closing_date=job.closing_date.strftime("%d.%b.%Y") if job.closing_date else None,
-                job_category_name=job.job_category.name if job.job_category else None,
+                category=job.category if job.category else None,
             )
             for job in jobs
         ]
@@ -127,15 +125,12 @@ async def load_all_jobs(
     search: Optional[str] = None,
     sort_by: str = "created_at",
     order: str = "desc",
-    category: Optional[str] = None,
     location: Optional[str] = None,
     job_type: Optional[str] = None
 ) -> list[JobDetailsResponse]:
     try:
         stmt = select(Job).where(Job.is_deleted == False)
 
-        if category:
-            stmt = stmt.where(Job.job_category.has(name.ilike(f"%{category}%")))
         if location:
             stmt = stmt.where(Job.location.ilike(f"%{location}%"))
         if job_type:
@@ -145,7 +140,6 @@ async def load_all_jobs(
             stmt = stmt.where(
                 Job.title.ilike(f"%{search}%")
                 | Job.company.ilike(f"%{search}%")
-                | Job.job_category.has(JobCategory.name.ilike(f"%{search}%"))
                 | Job.location.ilike(f"%{search}%")
                 | Job.job_type.ilike(f"%{search}%")
             )
@@ -156,7 +150,6 @@ async def load_all_jobs(
         else:
             stmt = stmt.order_by(sort_column.asc())
 
-        stmt = stmt.options(joinedload(Job.job_category))
         result = await db.execute(stmt)
         jobs = result.scalars().all()
 
@@ -177,7 +170,7 @@ async def load_all_jobs(
                 website=job.website,
                 created_at=job.created_at,
                 closing_date=job.closing_date.strftime("%d.%b.%Y") if job.closing_date else None,
-                job_category_name=job.job_category.name if job.job_category else None,
+                category=job.category,
             )
             for job in jobs
         ]
@@ -284,7 +277,7 @@ async def create_job(
     website: Optional[str],
     is_active: bool,
     logo: Optional[UploadFile],
-    job_category_uuid: str,
+    category: Optional[str],
     db: AsyncSession,
 ) -> dict:
     try:
@@ -292,7 +285,6 @@ async def create_job(
         if logo:
             if not validate_file_extension(logo.filename):
                 raise HTTPException(status_code=400, detail="Invalid file type for logo.")
-
             validate_file_size(logo)
 
             logo_directory = Path(settings.BASE_UPLOAD_FOLDER) / "job-logos"
@@ -301,50 +293,19 @@ async def create_job(
             logo_path = logo_directory / f"{uuid.uuid4()}_{logo.filename}"
             with open(logo_path, "wb") as buffer:
                 shutil.copyfileobj(logo.file, buffer)
-
             logo_url = f"{settings.BASE_UPLOAD_FOLDER}/job-logos/{logo_path.name}"
 
         parsed_posted_at = None
         if posted_at:
-            try:
-                parsed_posted_at = datetime.fromisoformat(posted_at)
-                if parsed_posted_at > datetime.utcnow():
-                    raise HTTPException(
-                        status_code=400,
-                        detail="Posted date cannot be in the future.",
-                    )
-            except ValueError:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Invalid posted_at date format. Use ISO 8601 format.",
-                )
+            parsed_posted_at = datetime.fromisoformat(posted_at)
+            if parsed_posted_at > datetime.utcnow():
+                raise HTTPException(status_code=400, detail="Posted date cannot be in the future.")
 
         parsed_closing_date = None
         if closing_date:
-            try:
-                parsed_closing_date = datetime.fromisoformat(closing_date)
-                if parsed_posted_at and parsed_closing_date < parsed_posted_at:
-                    raise HTTPException(
-                        status_code=400,
-                        detail="Closing date cannot be earlier than posted date.",
-                    )
-            except ValueError:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Invalid closing_date format. Use ISO 8601 format.",
-                )
-
-        job_category_id = None
-        if job_category_uuid:
-            stmt = select(JobCategory).where(
-                JobCategory.uuid == job_category_uuid,
-                JobCategory.is_deleted == False
-            )
-            result = await db.execute(stmt)
-            job_category = result.scalars().first()
-            if not job_category:
-                raise HTTPException(status_code=404, detail="Job category not found.")
-            job_category_id = job_category.id
+            parsed_closing_date = datetime.fromisoformat(closing_date)
+            if parsed_posted_at and parsed_closing_date < parsed_posted_at:
+                raise HTTPException(status_code=400, detail="Closing date cannot be earlier than posted date.")
 
         requirements_list = requirements.split(",") if requirements else None
         responsibilities_list = responsibilities.split(",") if responsibilities else None
@@ -370,7 +331,7 @@ async def create_job(
             website=website,
             is_active=is_active,
             logo=logo_url,
-            job_category_id=job_category_id,
+            category=category,
             is_deleted=False,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),

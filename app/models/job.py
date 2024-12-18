@@ -21,8 +21,8 @@ class Job(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     uuid = Column(UUID(as_uuid=True), unique=True, nullable=False, default=uuid.uuid4)
-    job_category_id = Column(Integer, ForeignKey("job_categories.id"), nullable=True)
     title = Column(String(255), nullable=False)
+    category = Column(String(100), nullable=True)
     company = Column(String(255), nullable=False)
     logo = Column(Text, nullable=True)
     facebook_url = Column(Text, nullable=True)
@@ -45,5 +45,3 @@ class Job(Base):
     created_at = Column(DateTime, nullable=False, server_default=func.now())
     updated_at = Column(DateTime, nullable=True, onupdate=func.now())
 
-    # Relationships
-    job_category = relationship("JobCategory", back_populates="jobs")

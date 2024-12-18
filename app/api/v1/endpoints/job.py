@@ -92,6 +92,8 @@ async def get_job_details_route(
             email=job.email,
             phone=job.phone,
             website=job.website,
+            closing_date=job.closing_date.strftime("%d.%b.%Y") if job.closing_date else None,
+            category=job.category,
             created_at=job.created_at,
         )
 
@@ -148,10 +150,9 @@ async def delete_job_route(
     description="Retrieve a searchable, sortable, and filterable list of jobs with pagination."
 )
 async def get_all_jobs_route(
-    search: Optional[str] = Query(None, description="Search term for job title or company name"),
+    search: Optional[str] = Query(None, description="Search term for job title, company name, or location"),
     sort_by: Optional[str] = Query("created_at", description="Sort by column (e.g., title, company, created_at)"),
     order: Optional[str] = Query("desc", description="Order direction ('asc' or 'desc')"),
-    category: Optional[str] = Query(None, description="Filter by job category name"),
     location: Optional[str] = Query(None, description="Filter by job location"),
     job_type: Optional[str] = Query(None, description="Filter by job type"),
     page: int = Query(1, description="Page number"),
@@ -164,7 +165,6 @@ async def get_all_jobs_route(
             search=search,
             sort_by=sort_by,
             order=order,
-            category=category,
             location=location,
             job_type=job_type,
         )
@@ -210,6 +210,7 @@ async def update_job_route(
     website: Optional[str] = Form(None),
     is_active: Optional[bool] = Form(None),
     logo: Optional[UploadFile] = File(None),
+    category: Optional[str] = Form(None),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -230,6 +231,7 @@ async def update_job_route(
             "email": email,
             "phone": phone,
             "website": website,
+            "category": category,
             "is_active": is_active,
         }
 
@@ -277,7 +279,7 @@ async def create_job_route(
     website: str = Form(None),
     is_active: bool = Form(True),
     logo: UploadFile = File(None),
-    job_category_uuid: str = Form(None),
+    category: str = Form(None),
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(is_admin_user),
 ):
@@ -301,7 +303,7 @@ async def create_job_route(
             website=website,
             is_active=is_active,
             logo=logo,
-            job_category_uuid=job_category_uuid,
+            category=category,
             db=db,
         )
 

@@ -35,7 +35,8 @@ class SchoolDetailsResponse(BaseModel):
     phone: Optional[str] = Field(None)
     lowest_price: Optional[float] = Field(None)
     highest_price: Optional[float] = Field(None)
-    google_map_embed_url: Optional[str]
+    latitude: Optional[float] = Field(None)
+    longitude: Optional[float] = Field(None)
     email: Optional[str] = Field(None)
     website: Optional[str] = Field(None)
     description: Optional[str] = Field(None)
