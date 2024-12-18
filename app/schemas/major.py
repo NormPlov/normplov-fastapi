@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator, UUID4
 from typing import Optional, List
 from enum import Enum
 
@@ -31,8 +31,8 @@ class CreateMajorRequest(BaseModel):
     fee_per_year: Optional[float] = Field(None, description="Annual fee for the major.")
     duration_years: Optional[int] = Field(None, description="Duration of the program in years.")
     degree: DegreeTypeEnum = Field(..., description="The degree type for the major.")
+    faculty_uuid: UUID4 = Field(..., description="The UUID of the faculty associated with the major.")
     career_uuids: List[str] = Field(..., description="List of career UUIDs associated with the major.")
-    school_uuids: List[str] = Field(..., description="List of school UUIDs offering the major.")
 
 
 class MajorResponse(BaseModel):

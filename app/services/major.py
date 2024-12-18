@@ -2,6 +2,8 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from fastapi import HTTPException, status
+
+from app.models import Faculty
 from app.models.major import Major
 from app.models.career_major import CareerMajor
 from app.models.school_major import SchoolMajor
@@ -128,6 +130,7 @@ async def delete_major_by_uuid(major_uuid: str, db: AsyncSession) -> dict:
 
 async def create_major(data: CreateMajorRequest, db: AsyncSession) -> MajorResponse:
     try:
+        # Check for duplicate major name
         logger.debug("Checking for duplicate major name.")
         stmt = select(Major).where(Major.name == data.name, Major.is_deleted == False)
         result = await db.execute(stmt)
@@ -138,6 +141,30 @@ async def create_major(data: CreateMajorRequest, db: AsyncSession) -> MajorRespo
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="A major with this name already exists.",
+            )
+
+        # Validate faculty UUID
+        logger.debug("Validating faculty UUID.")
+        try:
+            faculty_query = select(Faculty).where(
+                Faculty.uuid == data.faculty_uuid,
+                Faculty.is_deleted == False,
+            )
+
+            faculty_result = await db.execute(faculty_query)
+            faculty = faculty_result.scalars().first()
+
+            if not faculty:
+                logger.error(f"Invalid faculty UUID: {data.faculty_uuid}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid or non-existent faculty UUID: {data.faculty_uuid}",
+                )
+        except ValueError as e:
+            logger.error(f"Invalid UUID format for faculty UUID: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid UUID format for faculty UUID.",
             )
 
         # Validate career UUIDs
@@ -166,32 +193,6 @@ async def create_major(data: CreateMajorRequest, db: AsyncSession) -> MajorRespo
                 detail="Invalid UUID format in career UUIDs.",
             )
 
-        # Validate school UUIDs
-        logger.debug("Validating school UUIDs.")
-        try:
-            input_school_uuids = set(data.school_uuids)
-            school_query = select(School).where(
-                School.uuid.in_([uuid.UUID(school_uuid) for school_uuid in input_school_uuids]),
-                School.is_deleted == False,
-            )
-            school_result = await db.execute(school_query)
-            schools = school_result.scalars().all()
-            found_school_uuids = {str(school.uuid) for school in schools}
-            missing_school_uuids = input_school_uuids - found_school_uuids
-
-            if missing_school_uuids:
-                logger.error(f"Invalid school UUIDs: {', '.join(missing_school_uuids)}")
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Invalid or non-existent school UUIDs: {', '.join(missing_school_uuids)}",
-                )
-        except ValueError as e:
-            logger.error(f"Invalid UUID format in school UUIDs: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid UUID format in school UUIDs.",
-            )
-
         # Create the major
         logger.info("Creating the new major.")
         new_major = Major(
@@ -201,6 +202,7 @@ async def create_major(data: CreateMajorRequest, db: AsyncSession) -> MajorRespo
             fee_per_year=data.fee_per_year,
             duration_years=data.duration_years,
             degree=data.degree,
+            faculty_id=faculty.id,
         )
 
         db.add(new_major)
@@ -209,7 +211,6 @@ async def create_major(data: CreateMajorRequest, db: AsyncSession) -> MajorRespo
 
         logger.info(f"Major created successfully: {new_major.name} (UUID: {new_major.uuid})")
 
-        # Associate major with careers
         logger.debug("Associating the major with careers.")
         career_majors = [
             CareerMajor(
@@ -220,22 +221,9 @@ async def create_major(data: CreateMajorRequest, db: AsyncSession) -> MajorRespo
             for career in careers
         ]
         db.add_all(career_majors)
-
-        # Associate major with schools
-        logger.debug("Associating the major with schools.")
-        school_majors = [
-            SchoolMajor(
-                school_id=school.id,
-                major_id=new_major.id,
-                created_at=datetime.utcnow(),
-            )
-            for school in schools
-        ]
-        db.add_all(school_majors)
-
         await db.commit()
 
-        logger.info("Major successfully associated with careers and schools.")
+        logger.info("Major successfully associated with careers.")
         return MajorResponse.from_orm(new_major)
 
     except HTTPException as http_error:

@@ -10,7 +10,7 @@ from sqlalchemy.orm import joinedload
 from pathlib import Path
 from app.core.config import settings
 from app.exceptions.formatters import format_http_exception
-from app.models import SchoolMajor, Province
+from app.models import SchoolMajor, Province, Faculty
 from app.models.school import School
 from app.schemas.payload import BaseResponse
 from app.schemas.school import UpdateSchoolRequest, SchoolDetailsResponse
@@ -87,8 +87,7 @@ async def get_school_with_majors(
         school_stmt = (
             select(School)
             .options(
-                joinedload(School.majors).joinedload(SchoolMajor.major),
-                joinedload(School.faculties),
+                joinedload(School.faculties).joinedload(Faculty.majors),
             )
             .where(School.uuid == school_uuid, School.is_deleted == False)
         )
@@ -101,42 +100,36 @@ async def get_school_with_majors(
                 detail="School not found or has been deleted.",
             )
 
-        majors = [
-            major.major
-            for major in school.majors
-            if not major.is_deleted
-            and not major.major.is_deleted
-            and (degree is None or major.major.degree.value == degree)
-        ]
-
-        major_responses = [
-            {
-                "uuid": str(major.uuid),
-                "name": major.name,
-                "description": major.description,
-                "fee_per_year": major.fee_per_year,
-                "duration_years": major.duration_years,
-                "is_popular": major.is_popular,
-                "degree": major.degree.value,
-            }
-            for major in majors
-        ]
-
+        # Filter faculties and majors based on optional parameters
         faculties = [
-            faculty
-            for faculty in school.faculties
-            if not faculty.is_deleted
-            and (faculty_name is None or faculty_name.lower() in faculty.name.lower())
+            faculty for faculty in school.faculties
+            if not faculty.is_deleted and (faculty_name is None or faculty_name.lower() in faculty.name.lower())
         ]
 
-        faculty_responses = [
-            {
+        faculty_responses = []
+        for faculty in faculties:
+            majors = [
+                major for major in faculty.majors
+                if not major.is_deleted and (degree is None or major.degree.value == degree)
+            ]
+
+            faculty_responses.append({
                 "uuid": str(faculty.uuid),
                 "name": faculty.name,
                 "description": faculty.description,
-            }
-            for faculty in faculties
-        ]
+                "majors": [
+                    {
+                        "uuid": str(major.uuid),
+                        "name": major.name,
+                        "description": major.description,
+                        "fee_per_year": major.fee_per_year,
+                        "duration_years": major.duration_years,
+                        "is_popular": major.is_popular,
+                        "degree": major.degree.value,
+                    }
+                    for major in majors
+                ]
+            })
 
         # Build response payload
         response_payload = SchoolDetailsResponse(
@@ -158,14 +151,13 @@ async def get_school_with_majors(
             description=school.description,
             mission=school.mission,
             vision=school.vision,
-            majors=major_responses,
             faculties=faculty_responses,
         )
 
         return BaseResponse(
             date=datetime.utcnow().strftime("%Y-%m-%d"),
             status=status.HTTP_200_OK,
-            message="School details, majors, and faculties retrieved successfully.",
+            message="School details retrieved successfully.",
             payload=response_payload.dict(),
         )
     except HTTPException as e:

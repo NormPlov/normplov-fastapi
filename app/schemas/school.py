@@ -17,32 +17,32 @@ class SchoolType(str, PyEnum):
 class FacultyResponse(BaseModel):
     uuid: str
     name: str
-    description: Optional[str] = None
+    description: Optional[str]
+    majors: List[MajorResponse]
 
     class Config:
         orm_mode = True
 
 
 class SchoolDetailsResponse(BaseModel):
-    uuid: str = Field(...)
-    kh_name: str = Field(...)
-    en_name: str = Field(...)
-    type: SchoolType = Field(...)
-    popular_major: str = Field(...)
-    logo_url: Optional[str] = Field(None)
-    cover_image: Optional[str] = Field(None)
-    location: Optional[str] = Field(None)
-    phone: Optional[str] = Field(None)
-    lowest_price: Optional[float] = Field(None)
-    highest_price: Optional[float] = Field(None)
-    latitude: Optional[float] = Field(None)
-    longitude: Optional[float] = Field(None)
-    email: Optional[str] = Field(None)
-    website: Optional[str] = Field(None)
-    description: Optional[str] = Field(None)
-    mission: Optional[str] = Field(None)
-    vision: Optional[str] = Field(None)
-    majors: List[MajorResponse] = Field(...)
+    uuid: str
+    kh_name: str
+    en_name: str
+    type: SchoolType
+    popular_major: str
+    logo_url: Optional[str]
+    cover_image: Optional[str]
+    location: Optional[str]
+    phone: Optional[str]
+    lowest_price: Optional[float]
+    highest_price: Optional[float]
+    latitude: Optional[float]
+    longitude: Optional[float]
+    email: Optional[str]
+    website: Optional[str]
+    description: Optional[str]
+    mission: Optional[str]
+    vision: Optional[str]
     faculties: List[FacultyResponse]
 
     class Config:
