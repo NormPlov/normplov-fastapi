@@ -16,11 +16,37 @@ from app.services.job import (
     delete_job,
     get_job_details,
     admin_load_all_jobs,
-    create_job, update_job
+    create_job, update_job, get_unique_job_categories
 )
 
 job_router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+@job_router.get(
+    "/categories",
+    response_model=BaseResponse,
+    status_code=200,
+    summary="Get unique job categories",
+    description="Retrieve a list of unique job categories."
+)
+async def get_job_categories_route(db: AsyncSession = Depends(get_db)):
+    try:
+        categories = await get_unique_job_categories(db)
+
+        return BaseResponse(
+            date=datetime.utcnow().strftime("%Y-%m-%d"),
+            status=200,
+            message="Job categories retrieved successfully.",
+            payload={"categories": categories},
+        )
+    except HTTPException as exc:
+        raise exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"An unexpected error occurred while fetching job categories: {str(exc)}"
+        )
 
 
 @job_router.get(

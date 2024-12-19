@@ -7,7 +7,6 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from fastapi import HTTPException, UploadFile
-from sqlalchemy.orm import joinedload
 from app.core.config import settings
 from app.models import Job
 from app.schemas.job import JobDetailsResponse, JobResponse
@@ -15,6 +14,19 @@ from datetime import datetime
 from app.utils.file import validate_file_extension, validate_file_size
 
 logger = logging.getLogger(__name__)
+
+
+async def get_unique_job_categories(db: AsyncSession) -> list[str]:
+    try:
+        stmt = select(Job.category).where(Job.is_deleted == False, Job.category.isnot(None)).distinct()
+        result = await db.execute(stmt)
+        categories = result.scalars().all()
+        return categories
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"An error occurred while retrieving job categories: {str(exc)}"
+        )
 
 
 async def admin_load_all_jobs(
