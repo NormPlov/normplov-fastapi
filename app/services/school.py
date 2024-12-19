@@ -100,7 +100,6 @@ async def get_school_with_majors(
                 detail="School not found or has been deleted.",
             )
 
-        # Filter faculties and majors based on optional parameters
         faculties = [
             faculty for faculty in school.faculties
             if not faculty.is_deleted and (faculty_name is None or faculty_name.lower() in faculty.name.lower())
@@ -131,7 +130,6 @@ async def get_school_with_majors(
                 ]
             })
 
-        # Build response payload
         response_payload = SchoolDetailsResponse(
             uuid=str(school.uuid),
             kh_name=school.kh_name,

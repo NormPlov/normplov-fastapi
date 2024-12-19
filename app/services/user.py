@@ -56,9 +56,12 @@ async def fetch_all_tests(
                 user_avatar=test.user.avatar if test.user else None,
                 user_name=test.user.username if test.user else "Unknown",
                 user_email=test.user.email if test.user else "Unknown",
-                assessment_type_name=test.assessment_type.name if test.assessment_type else "Unknown",
-                # Extract assessment type name
-                response_data=[
+                assessment_type_name=(
+                    "".join(word.capitalize() for word in test.assessment_type.name.split())
+                    if test.assessment_type else "Unknown"
+                ),
+
+            response_data=[
                     json.loads(response.response_data) if isinstance(response.response_data,
                                                                      str) else response.response_data
                     for response in test.user_responses
