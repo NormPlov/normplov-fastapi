@@ -16,11 +16,35 @@ from app.services.job import (
     delete_job,
     get_job_details,
     admin_load_all_jobs,
-    create_job, update_job, get_unique_job_categories
+    create_job, update_job, get_unique_job_categories, get_trending_jobs_data
 )
 
 job_router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+@job_router.get(
+    "/trending-jobs",
+    response_model=BaseResponse,
+    status_code=200,
+    summary="Get trending job data for graph",
+    description="Fetch trending job data grouped by month based on title and category."
+)
+async def get_trending_jobs_data_route(db: AsyncSession = Depends(get_db)):
+    try:
+        trending_data = await get_trending_jobs_data(db)
+
+        return BaseResponse(
+            date=datetime.utcnow().strftime("%Y-%m-%d"),
+            status=200,
+            message="Trending job data retrieved successfully.",
+            payload=trending_data,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"An error occurred while fetching trending job data: {str(exc)}",
+        )
 
 
 @job_router.get(

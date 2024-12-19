@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func, text
 from fastapi import HTTPException, UploadFile
 from app.core.config import settings
 from app.models import Job
@@ -14,6 +14,39 @@ from datetime import datetime
 from app.utils.file import validate_file_extension, validate_file_size
 
 logger = logging.getLogger(__name__)
+
+
+async def get_trending_jobs_data(db: AsyncSession) -> list[dict]:
+    try:
+        raw_query = text("""
+            SELECT 
+                date_trunc('month', jobs.posted_at) AS month,
+                jobs.title AS title,
+                jobs.category AS category,
+                COUNT(jobs.id) AS count
+            FROM jobs
+            WHERE jobs.is_deleted = false 
+              AND jobs.posted_at IS NOT NULL
+            GROUP BY date_trunc('month', jobs.posted_at), jobs.title, jobs.category
+            ORDER BY date_trunc('month', jobs.posted_at) ASC, COUNT(jobs.id) DESC
+        """)
+        result = await db.execute(raw_query)
+        trending_data = result.fetchall()
+
+        return [
+            {
+                "month": row.month.strftime("%Y-%m"),
+                "title": row.title,
+                "category": row.category or "Uncategorized",
+                "count": row.count,
+            }
+            for row in trending_data
+        ]
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"An error occurred while aggregating job data: {str(exc)}",
+        )
 
 
 async def get_unique_job_categories(db: AsyncSession) -> list[str]:
