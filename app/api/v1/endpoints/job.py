@@ -1,4 +1,5 @@
 import logging
+import uuid as uuid_lib
 
 from datetime import datetime
 from typing import Optional
@@ -7,12 +8,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import is_admin_user
 from app.models import User
 from app.schemas.payload import BaseResponse
-from app.services.job import load_all_jobs, delete_job, get_job_details, admin_load_all_jobs, create_job, update_job
 from app.schemas.job import JobDetailsResponse
 from app.core.database import get_db
-import uuid as uuid_lib
-
 from app.utils.pagination import paginate_results
+from app.services.job import (
+    load_all_jobs,
+    delete_job,
+    get_job_details,
+    admin_load_all_jobs,
+    create_job, update_job
+)
 
 job_router = APIRouter()
 logger = logging.getLogger(__name__)
