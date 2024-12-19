@@ -54,7 +54,7 @@ async def upload_school_image_route(
 
 @school_router.get(
     "/{school_uuid}",
-    summary="Get school details and majors by UUID with optional filters and pagination",
+    summary="Get school details and majors by UUID with optional filters",
     response_model=BaseResponse,
     tags=["School"],
 )
@@ -62,11 +62,9 @@ async def get_school_details_route(
     school_uuid: str,
     degree: Optional[str] = Query(None, description="Filter majors by degree"),
     faculty_name: Optional[str] = Query(None, description="Filter faculties by name"),
-    page: int = Query(1, ge=1, description="Page number for pagination"),
-    page_size: int = Query(10, ge=1, le=100, description="Number of items per page"),
     db: AsyncSession = Depends(get_db),
 ):
-    return await get_school_with_majors(school_uuid, db, degree, faculty_name, page, page_size)
+    return await get_school_with_majors(school_uuid, db, degree, faculty_name)
 
 
 @school_router.get(
