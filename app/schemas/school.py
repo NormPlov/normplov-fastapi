@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 from pydantic import BaseModel, Field, EmailStr, HttpUrl, validator
-from typing import Optional, List, Union
+from typing import Optional, List, Union, Dict, Any
 from enum import Enum as PyEnum
 from app.schemas.major import MajorResponse
 from app.utils.format_date import format_date
@@ -14,11 +14,16 @@ class SchoolType(str, PyEnum):
     MAJORS_COURSES = "MAJORS_COURSES"
 
 
+class PaginatedMajorsResponse(BaseModel):
+    items: List[MajorResponse]
+    metadata: Dict[str, Any]
+
+
 class FacultyResponse(BaseModel):
     uuid: str
     name: str
     description: Optional[str]
-    majors: List[MajorResponse]
+    majors: PaginatedMajorsResponse
 
     class Config:
         orm_mode = True

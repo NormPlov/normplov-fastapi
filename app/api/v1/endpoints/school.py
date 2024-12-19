@@ -11,8 +11,7 @@ from app.services.school import (
     delete_school,
     update_school,
     load_all_schools,
-    get_school_with_majors,
-    create_school_service, upload_school_logo_or_cover_service
+    create_school_service, upload_school_logo_or_cover_service, get_school_with_paginated_majors
 )
 from app.schemas.school import (
     UpdateSchoolRequest, UploadImageResponse
@@ -62,9 +61,11 @@ async def get_school_details_route(
     school_uuid: str,
     degree: Optional[str] = Query(None, description="Filter majors by degree"),
     faculty_name: Optional[str] = Query(None, description="Filter faculties by name"),
+    page: int = Query(1, description="Page number for majors pagination"),
+    page_size: int = Query(10, description="Number of majors per page"),
     db: AsyncSession = Depends(get_db),
 ):
-    return await get_school_with_majors(school_uuid, db, degree, faculty_name)
+    return await get_school_with_paginated_majors(school_uuid, db, degree, faculty_name, page, page_size)
 
 
 @school_router.get(

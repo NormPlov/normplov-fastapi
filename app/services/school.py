@@ -14,7 +14,7 @@ from app.models import SchoolMajor, Province, Faculty
 from app.models.school import School, SchoolType
 from app.schemas.payload import BaseResponse
 from app.schemas.school import UpdateSchoolRequest, SchoolDetailsResponse
-from fastapi import HTTPException, status, UploadFile
+from fastapi import HTTPException, status, UploadFile, Query
 from sqlalchemy.future import select
 from app.utils.file import validate_file_extension, validate_file_size
 from app.utils.maps import generate_google_map_embed_url
@@ -77,11 +77,93 @@ async def upload_school_logo_or_cover_service(
         )
 
 
+async def get_school_with_paginated_majors(
+    school_uuid: str,
+    db: AsyncSession,
+    degree: Optional[str] = None,
+    faculty_name: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 10,
+) -> BaseResponse:
+    try:
+        school_stmt = (
+            select(School)
+            .options(joinedload(School.faculties).joinedload(Faculty.majors))
+            .where(School.uuid == school_uuid, School.is_deleted == False)
+        )
+        school_result = await db.execute(school_stmt)
+        school = school_result.scalars().first()
+
+        if not school:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="School not found or has been deleted.",
+            )
+
+        faculties = [
+            faculty for faculty in school.faculties
+            if not faculty.is_deleted and (faculty_name is None or faculty_name.lower() in faculty.name.lower())
+        ]
+
+        faculty_responses = []
+        for faculty in faculties:
+            filtered_majors = [
+                major for major in faculty.majors
+                if not major.is_deleted and (degree is None or major.degree.value == degree)
+            ]
+            paginated_majors = paginate_results(filtered_majors, page, page_size)
+
+            faculty_responses.append({
+                "uuid": str(faculty.uuid),
+                "name": faculty.name,
+                "description": faculty.description,
+                "majors": paginated_majors,
+            })
+
+        response_payload = SchoolDetailsResponse(
+            uuid=str(school.uuid),
+            kh_name=school.kh_name,
+            en_name=school.en_name,
+            type=school.type.value,
+            popular_major=school.popular_major or "",
+            logo_url=school.logo_url,
+            cover_image=school.cover_image,
+            location=school.location,
+            phone=school.phone,
+            lowest_price=school.lowest_price,
+            highest_price=school.highest_price,
+            latitude=school.latitude,
+            longitude=school.longitude,
+            email=school.email,
+            website=school.website,
+            description=school.description,
+            mission=school.mission,
+            vision=school.vision,
+            faculties=faculty_responses,
+        )
+
+        return BaseResponse(
+            date=datetime.utcnow().strftime("%Y-%m-%d"),
+            status=status.HTTP_200_OK,
+            message="School details retrieved successfully.",
+            payload=response_payload.dict(),
+        )
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred while retrieving school details: {str(e)}",
+        )
+
+
 # async def get_school_with_majors(
 #     school_uuid: str,
 #     db: AsyncSession,
 #     degree: Optional[str] = None,
 #     faculty_name: Optional[str] = None,
+#     page: int = 1,
+#     page_size: int = 10,
 # ) -> BaseResponse:
 #     try:
 #         school_stmt = (
@@ -112,22 +194,14 @@ async def upload_school_logo_or_cover_service(
 #                 if not major.is_deleted and (degree is None or major.degree.value == degree)
 #             ]
 #
+#             # Apply pagination to majors
+#             paginated_majors = paginate_results(majors, page, page_size)
+#
 #             faculty_responses.append({
 #                 "uuid": str(faculty.uuid),
 #                 "name": faculty.name,
 #                 "description": faculty.description,
-#                 "majors": [
-#                     {
-#                         "uuid": str(major.uuid),
-#                         "name": major.name,
-#                         "description": major.description,
-#                         "fee_per_year": major.fee_per_year,
-#                         "duration_years": major.duration_years,
-#                         "is_popular": major.is_popular,
-#                         "degree": major.degree.value,
-#                     }
-#                     for major in majors
-#                 ]
+#                 "majors": paginated_majors["items"],  # Use only the items here
 #             })
 #
 #         response_payload = SchoolDetailsResponse(
@@ -156,7 +230,10 @@ async def upload_school_logo_or_cover_service(
 #             date=datetime.utcnow().strftime("%Y-%m-%d"),
 #             status=status.HTTP_200_OK,
 #             message="School details retrieved successfully.",
-#             payload=response_payload.dict(),
+#             payload={
+#                 "school": response_payload.dict(),
+#                 "pagination_metadata": paginated_majors["metadata"],
+#             },
 #         )
 #     except HTTPException as e:
 #         raise e
@@ -165,111 +242,6 @@ async def upload_school_logo_or_cover_service(
 #             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
 #             detail=f"An error occurred while retrieving school details: {str(e)}",
 #         )
-
-
-async def get_school_with_majors(
-    school_uuid: str,
-    db: AsyncSession,
-    degree: Optional[str] = None,
-    faculty_name: Optional[str] = None,
-    page: int = 1,
-    page_size: int = 10,
-    majors_page: int = 1,
-    majors_page_size: int = 5,  # Defaults for majors pagination
-) -> BaseResponse:
-    try:
-        # Fetch the school with related faculties and majors
-        school_stmt = (
-            select(School)
-            .options(
-                joinedload(School.faculties).joinedload(Faculty.majors),
-            )
-            .where(School.uuid == school_uuid, School.is_deleted == False)
-        )
-        school_result = await db.execute(school_stmt)
-        school = school_result.scalars().first()
-
-        if not school:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="School not found or has been deleted.",
-            )
-
-        # Filter faculties based on optional faculty_name
-        faculties = [
-            faculty for faculty in school.faculties
-            if not faculty.is_deleted and (faculty_name is None or faculty_name.lower() in faculty.name.lower())
-        ]
-
-        # Build the faculty responses with majors pagination
-        faculty_responses = [
-            {
-                "uuid": str(faculty.uuid),
-                "name": faculty.name,
-                "description": faculty.description,
-                "majors": paginate_results(
-                    [
-                        {
-                            "uuid": str(major.uuid),
-                            "name": major.name,
-                            "description": major.description,
-                            "fee_per_year": major.fee_per_year,
-                            "duration_years": major.duration_years,
-                            "is_popular": major.is_popular,
-                            "degree": major.degree.value,
-                        }
-                        for major in faculty.majors
-                        if not major.is_deleted and (degree is None or major.degree.value == degree)
-                    ],
-                    majors_page,
-                    majors_page_size,
-                ),
-            }
-            for faculty in faculties
-        ]
-
-        # Paginate faculty responses
-        paginated_faculties = paginate_results(faculty_responses, page, page_size)
-
-        # Build the response payload
-        response_payload = {
-            "school": {
-                "uuid": str(school.uuid),
-                "kh_name": school.kh_name,
-                "en_name": school.en_name,
-                "type": school.type.value,
-                "popular_major": school.popular_major or "",
-                "logo_url": school.logo_url,
-                "cover_image": school.cover_image,
-                "location": school.location,
-                "phone": school.phone,
-                "lowest_price": school.lowest_price,
-                "highest_price": school.highest_price,
-                "latitude": school.latitude,
-                "longitude": school.longitude,
-                "email": school.email,
-                "website": school.website,
-                "description": school.description,
-                "mission": school.mission,
-                "vision": school.vision,
-            },
-            "faculties": paginated_faculties["items"],
-            "faculties_pagination": paginated_faculties["metadata"],
-        }
-
-        return BaseResponse(
-            date=datetime.utcnow().strftime("%Y-%m-%d"),
-            status=status.HTTP_200_OK,
-            message="School details retrieved successfully.",
-            payload=response_payload,
-        )
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while retrieving school details: {str(e)}",
-        )
 
 
 async def load_all_schools(
