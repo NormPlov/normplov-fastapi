@@ -31,8 +31,6 @@ class ChangePassword(BaseModel):
 
 class UpdateUser(BaseModel):
     username: Optional[str] = Field(None, max_length=100)
-    email: Optional[EmailStr] = None
-    avatar: Optional[str] = None
     address: Optional[str] = None
     phone_number: Optional[str] = None
     bio: Optional[str] = None

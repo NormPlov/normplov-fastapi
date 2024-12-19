@@ -179,7 +179,7 @@ async def upload_profile_picture_route(
 
 
 # Update user profile
-@user_router.patch("/profile/update/{uuid}", response_model=BaseResponse)
+@user_router.put("/profile/update/{uuid}", response_model=BaseResponse)
 async def update_profile_route(uuid: str, profile_update: UpdateUser, db: AsyncSession = Depends(get_db)):
     return await update_user_profile(uuid, profile_update, db)
 

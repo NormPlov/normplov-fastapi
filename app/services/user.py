@@ -378,7 +378,6 @@ async def update_user_profile(uuid: str, profile_update: UpdateUser, db: AsyncSe
 
     update_data = profile_update.dict(exclude_unset=True)
 
-    # Validate date_of_birth
     if "date_of_birth" in update_data:
         date_of_birth = update_data["date_of_birth"]
 
@@ -395,16 +394,14 @@ async def update_user_profile(uuid: str, profile_update: UpdateUser, db: AsyncSe
                 detail="User must be at least 13 years old."
             )
 
-    # Update user attributes
     for key, value in update_data.items():
         setattr(user, key, value)
 
     user.updated_at = datetime.utcnow()
 
-    # Persist changes
     db.add(user)
     await db.commit()
-    await db.refresh(user)  # Refresh after commit to avoid closed transaction error
+    await db.refresh(user)
 
     return BaseResponse(
         date=datetime.utcnow().strftime("%d-%B-%Y"),
@@ -413,8 +410,6 @@ async def update_user_profile(uuid: str, profile_update: UpdateUser, db: AsyncSe
         payload={
             "uuid": user.uuid,
             "username": user.username,
-            "email": user.email,
-            "avatar": user.avatar,
             "address": user.address,
             "phone_number": user.phone_number,
             "bio": user.bio,
