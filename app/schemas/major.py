@@ -50,6 +50,7 @@ class MajorResponse(BaseModel):
     duration_years: Optional[int]
     degree: DegreeTypeEnum
 
+
     @validator("uuid", pre=True)
     def uuid_to_string(cls, value):
         if isinstance(value, UUID):

@@ -11,7 +11,7 @@ from pathlib import Path
 from app.core.config import settings
 from app.exceptions.formatters import format_http_exception
 from app.models import SchoolMajor, Province, Faculty
-from app.models.school import School
+from app.models.school import School, SchoolType
 from app.schemas.payload import BaseResponse
 from app.schemas.school import UpdateSchoolRequest, SchoolDetailsResponse
 from fastapi import HTTPException, status, UploadFile
@@ -77,13 +77,108 @@ async def upload_school_logo_or_cover_service(
         )
 
 
+# async def get_school_with_majors(
+#     school_uuid: str,
+#     db: AsyncSession,
+#     degree: Optional[str] = None,
+#     faculty_name: Optional[str] = None,
+# ) -> BaseResponse:
+#     try:
+#         school_stmt = (
+#             select(School)
+#             .options(
+#                 joinedload(School.faculties).joinedload(Faculty.majors),
+#             )
+#             .where(School.uuid == school_uuid, School.is_deleted == False)
+#         )
+#         school_result = await db.execute(school_stmt)
+#         school = school_result.scalars().first()
+#
+#         if not school:
+#             raise HTTPException(
+#                 status_code=status.HTTP_404_NOT_FOUND,
+#                 detail="School not found or has been deleted.",
+#             )
+#
+#         faculties = [
+#             faculty for faculty in school.faculties
+#             if not faculty.is_deleted and (faculty_name is None or faculty_name.lower() in faculty.name.lower())
+#         ]
+#
+#         faculty_responses = []
+#         for faculty in faculties:
+#             majors = [
+#                 major for major in faculty.majors
+#                 if not major.is_deleted and (degree is None or major.degree.value == degree)
+#             ]
+#
+#             faculty_responses.append({
+#                 "uuid": str(faculty.uuid),
+#                 "name": faculty.name,
+#                 "description": faculty.description,
+#                 "majors": [
+#                     {
+#                         "uuid": str(major.uuid),
+#                         "name": major.name,
+#                         "description": major.description,
+#                         "fee_per_year": major.fee_per_year,
+#                         "duration_years": major.duration_years,
+#                         "is_popular": major.is_popular,
+#                         "degree": major.degree.value,
+#                     }
+#                     for major in majors
+#                 ]
+#             })
+#
+#         response_payload = SchoolDetailsResponse(
+#             uuid=str(school.uuid),
+#             kh_name=school.kh_name,
+#             en_name=school.en_name,
+#             type=school.type.value,
+#             popular_major=school.popular_major or "",
+#             logo_url=school.logo_url,
+#             cover_image=school.cover_image,
+#             location=school.location,
+#             phone=school.phone,
+#             lowest_price=school.lowest_price,
+#             highest_price=school.highest_price,
+#             latitude=school.latitude,
+#             longitude=school.longitude,
+#             email=school.email,
+#             website=school.website,
+#             description=school.description,
+#             mission=school.mission,
+#             vision=school.vision,
+#             faculties=faculty_responses,
+#         )
+#
+#         return BaseResponse(
+#             date=datetime.utcnow().strftime("%Y-%m-%d"),
+#             status=status.HTTP_200_OK,
+#             message="School details retrieved successfully.",
+#             payload=response_payload.dict(),
+#         )
+#     except HTTPException as e:
+#         raise e
+#     except Exception as e:
+#         raise HTTPException(
+#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+#             detail=f"An error occurred while retrieving school details: {str(e)}",
+#         )
+
+
 async def get_school_with_majors(
     school_uuid: str,
     db: AsyncSession,
     degree: Optional[str] = None,
     faculty_name: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 10,
+    majors_page: int = 1,
+    majors_page_size: int = 5,  # Defaults for majors pagination
 ) -> BaseResponse:
     try:
+        # Fetch the school with related faculties and majors
         school_stmt = (
             select(School)
             .options(
@@ -100,63 +195,73 @@ async def get_school_with_majors(
                 detail="School not found or has been deleted.",
             )
 
+        # Filter faculties based on optional faculty_name
         faculties = [
             faculty for faculty in school.faculties
             if not faculty.is_deleted and (faculty_name is None or faculty_name.lower() in faculty.name.lower())
         ]
 
-        faculty_responses = []
-        for faculty in faculties:
-            majors = [
-                major for major in faculty.majors
-                if not major.is_deleted and (degree is None or major.degree.value == degree)
-            ]
-
-            faculty_responses.append({
+        # Build the faculty responses with majors pagination
+        faculty_responses = [
+            {
                 "uuid": str(faculty.uuid),
                 "name": faculty.name,
                 "description": faculty.description,
-                "majors": [
-                    {
-                        "uuid": str(major.uuid),
-                        "name": major.name,
-                        "description": major.description,
-                        "fee_per_year": major.fee_per_year,
-                        "duration_years": major.duration_years,
-                        "is_popular": major.is_popular,
-                        "degree": major.degree.value,
-                    }
-                    for major in majors
-                ]
-            })
+                "majors": paginate_results(
+                    [
+                        {
+                            "uuid": str(major.uuid),
+                            "name": major.name,
+                            "description": major.description,
+                            "fee_per_year": major.fee_per_year,
+                            "duration_years": major.duration_years,
+                            "is_popular": major.is_popular,
+                            "degree": major.degree.value,
+                        }
+                        for major in faculty.majors
+                        if not major.is_deleted and (degree is None or major.degree.value == degree)
+                    ],
+                    majors_page,
+                    majors_page_size,
+                ),
+            }
+            for faculty in faculties
+        ]
 
-        response_payload = SchoolDetailsResponse(
-            uuid=str(school.uuid),
-            kh_name=school.kh_name,
-            en_name=school.en_name,
-            type=school.type.value,
-            popular_major=school.popular_major or "",
-            logo_url=school.logo_url,
-            cover_image=school.cover_image,
-            location=school.location,
-            phone=school.phone,
-            lowest_price=school.lowest_price,
-            highest_price=school.highest_price,
-            latitude=school.latitude,
-            longitude=school.longitude,
-            email=school.email,
-            website=school.website,
-            description=school.description,
-            mission=school.mission,
-            vision=school.vision,
-            faculties=faculty_responses,
-        )
+        # Paginate faculty responses
+        paginated_faculties = paginate_results(faculty_responses, page, page_size)
+
+        # Build the response payload
+        response_payload = {
+            "school": {
+                "uuid": str(school.uuid),
+                "kh_name": school.kh_name,
+                "en_name": school.en_name,
+                "type": school.type.value,
+                "popular_major": school.popular_major or "",
+                "logo_url": school.logo_url,
+                "cover_image": school.cover_image,
+                "location": school.location,
+                "phone": school.phone,
+                "lowest_price": school.lowest_price,
+                "highest_price": school.highest_price,
+                "latitude": school.latitude,
+                "longitude": school.longitude,
+                "email": school.email,
+                "website": school.website,
+                "description": school.description,
+                "mission": school.mission,
+                "vision": school.vision,
+            },
+            "faculties": paginated_faculties["items"],
+            "faculties_pagination": paginated_faculties["metadata"],
+        }
 
         return BaseResponse(
             date=datetime.utcnow().strftime("%Y-%m-%d"),
             status=status.HTTP_200_OK,
             message="School details retrieved successfully.",
-            payload=response_payload.dict(),
+            payload=response_payload,
         )
     except HTTPException as e:
         raise e
@@ -356,6 +461,16 @@ async def create_school_service(
     db: AsyncSession = None,
 ):
     try:
+        # Validate school type
+        try:
+            validated_school_type = SchoolType(school_type.upper())
+        except ValueError:
+            raise format_http_exception(
+                status_code=400,
+                message="Invalid school type.",
+                details=f"Must be one of: {', '.join([t.value for t in SchoolType])}",
+            )
+
         existing_school_stmt = select(School).where(
             (School.kh_name == kh_name) | (School.en_name == en_name),
             School.is_deleted == False
@@ -367,7 +482,7 @@ async def create_school_service(
             raise format_http_exception(
                 status_code=400,
                 message="Duplicate school names.",
-                details="A school with the same Khmer name or English name already exists."
+                details="A school with the same Khmer or English name already exists.",
             )
 
         province_stmt = select(Province).where(Province.uuid == province_uuid, Province.is_deleted == False)
@@ -378,7 +493,7 @@ async def create_school_service(
             raise format_http_exception(
                 status_code=404,
                 message="Province not found.",
-                details="The specified province does not exist or has been deleted."
+                details="The specified province does not exist or has been deleted.",
             )
 
         google_map_embed_url = generate_google_map_embed_url(latitude, longitude) if latitude and longitude else None
@@ -389,49 +504,39 @@ async def create_school_service(
         cover_image_directory.mkdir(parents=True, exist_ok=True)
 
         logo_url = None
-        try:
-            if logo:
-                logger.debug(f"Uploading logo: {logo.filename}")
-                try:
-                    if not validate_file_extension(logo.filename):
-                        raise HTTPException(status_code=400, detail="Invalid file type for logo.")
-                    validate_file_size(logo)
-                except Exception as e:
-                    logger.error(f"Validation failed for logo: {str(e)}")
-                    raise HTTPException(status_code=400, detail="Logo validation failed.")
-
-                try:
-                    logo_path = logo_directory / f"{uuid4()}_{logo.filename}"
-                    with open(logo_path, "wb") as buffer:
-                        shutil.copyfileobj(logo.file, buffer)
-                    logo_url = f"{settings.BASE_UPLOAD_FOLDER}/school_logos/{logo_path.name}"
-                    logger.debug(f"Logo successfully uploaded: {logo_url}")
-                except Exception as e:
-                    logger.error(f"Error saving logo: {str(e)}")
-                    raise HTTPException(status_code=500, detail="Error saving logo.")
-
-        except Exception as e:
-            logger.error(f"Error uploading logo: {str(e)}")
-            raise HTTPException(status_code=500, detail="Logo upload failed.")
+        if logo:
+            if not validate_file_extension(logo.filename):
+                raise format_http_exception(
+                    status_code=400,
+                    message="Invalid logo file type.",
+                    details="Accepted file types: jpg, jpeg, png, etc.",
+                )
+            validate_file_size(logo)
+            logo_path = logo_directory / f"{uuid4()}_{logo.filename}"
+            with open(logo_path, "wb") as buffer:
+                shutil.copyfileobj(logo.file, buffer)
+            logo_url = f"{settings.BASE_UPLOAD_FOLDER}/school_logos/{logo_path.name}"
 
         cover_image_url = None
         if cover_image:
-            logger.debug(f"Uploading cover image: {cover_image.filename}")
             if not validate_file_extension(cover_image.filename):
-                raise HTTPException(status_code=400, detail="Invalid file type for cover image.")
+                raise format_http_exception(
+                    status_code=400,
+                    message="Invalid cover image file type.",
+                    details="Accepted file types: jpg, jpeg, png, etc.",
+                )
             validate_file_size(cover_image)
-
             cover_image_path = cover_image_directory / f"{uuid4()}_{cover_image.filename}"
             with open(cover_image_path, "wb") as buffer:
                 shutil.copyfileobj(cover_image.file, buffer)
             cover_image_url = f"{settings.BASE_UPLOAD_FOLDER}/school_cover_images/{cover_image_path.name}"
-            logger.debug(f"Cover Image URL set to: {cover_image_url}")
 
+        # Create new school
         new_school = School(
             uuid=uuid4(),
             kh_name=kh_name,
             en_name=en_name,
-            type=school_type,
+            type=validated_school_type.value,
             popular_major=popular_major,
             location=location,
             phone=phone,
@@ -454,14 +559,16 @@ async def create_school_service(
         await db.commit()
         await db.refresh(new_school)
 
-        logger.debug(f"School created with UUID: {new_school.uuid}, Logo URL: {new_school.logo_url}")
-
         return new_school
 
+    except HTTPException as e:
+        raise e
+
     except Exception as e:
-        logger.error(f"Error in create_school_service: {str(e)}")
+        logger.error(f"Unexpected error in create_school_service: {str(e)}")
         await db.rollback()
-        raise HTTPException(
+        raise format_http_exception(
             status_code=500,
-            detail=f"An unexpected error occurred: {str(e)}"
+            message="An unexpected error occurred.",
+            details=str(e),
         )
