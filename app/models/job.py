@@ -12,7 +12,7 @@ from sqlalchemy import (
     Text,
     Boolean,
     func,
-    ARRAY, ForeignKey,
+    ARRAY
 )
 
 

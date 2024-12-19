@@ -17,7 +17,7 @@ class User(Base):
     phone_number = Column(String(20), nullable=False, default="")
     bio = Column(Text, nullable=False, default="")
     gender = Column(String(10), nullable=False, default="")
-    date_of_birth = Column(DateTime, nullable=True)
+    date_of_birth = Column(DateTime, nullable=True, default=None)
     country = Column(String(100), nullable=True)
 
     # User status
