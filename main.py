@@ -63,16 +63,15 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
-        "http://localhost:3000/",
         "http://127.0.0.1:3000",
-        "http://127.0.0.1:3000/",
         "https://normplov-api.shinoshike.studio",
         "https://dev-normplov.shinoshike.studio",
         "https://deploy-norm-plov-v4.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
+    allow_headers=["authorization", "content-type"],
+    max_age=600,
 )
 
 
