@@ -1,7 +1,68 @@
+import logging
+
+from typing import Optional, List, Dict, Any
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 from sqlalchemy.sql import func, text
-from app.models import User, UserFeedback, UserTest
+from app.models import User, UserFeedback, UserTest, UserResponse
+
+
+logger = logging.getLogger(__name__)
+
+
+async def get_admin_user_responses(
+    db: AsyncSession,
+    test_uuid: str,
+    user_id: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    try:
+        query = select(UserResponse).options(
+            joinedload(UserResponse.user_test),
+            joinedload(UserResponse.assessment_type),
+            joinedload(UserResponse.user),
+        ).where(
+            UserResponse.is_deleted == False,
+            UserResponse.user_test.has(UserTest.uuid == test_uuid),
+        )
+
+        if user_id:
+            query = query.where(UserResponse.user_id == user_id)
+
+        result = await db.execute(query)
+        responses = result.scalars().all()
+
+        if not responses:
+            logger.info(f"No responses found for test UUID {test_uuid}")
+            return []
+
+        return [
+            {
+                "test_uuid": str(response.user_test.uuid),
+                "test_name": response.user_test.name,
+                "user_id": response.user.id if response.user else None,
+                "user_username": response.user.username if response.user else "Unknown",
+                "assessment_type_name": response.assessment_type.name if response.assessment_type else "Unknown",
+                "user_response_data": response.response_data,
+                "created_at": response.created_at.strftime("%Y-%m-%d %H:%M:%S") if response.created_at else None,
+                "is_deleted": response.is_deleted,
+            }
+            for response in responses
+        ]
+
+    except AttributeError as attr_err:
+        logger.error(f"AttributeError while processing responses for test {test_uuid}: {attr_err}")
+        raise HTTPException(
+            status_code=500,
+            detail="An internal error occurred while processing user responses.",
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error while fetching user responses for test {test_uuid}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="An error occurred while fetching user responses.",
+        )
 
 
 async def fetch_metrics(db: AsyncSession):
