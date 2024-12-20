@@ -11,7 +11,7 @@ from app.services.school import (
     delete_school,
     update_school,
     load_all_schools,
-    create_school_service, upload_school_logo_or_cover_service, get_school_with_paginated_majors
+    create_school_service, upload_school_logo_or_cover_service, get_school_with_paginated_majors, get_popular_schools
 )
 from app.schemas.school import (
     UpdateSchoolRequest, UploadImageResponse
@@ -19,6 +19,16 @@ from app.schemas.school import (
 
 
 school_router = APIRouter()
+
+
+@school_router.get(
+    "/popular",
+    response_model=BaseResponse,
+    summary="Get popular schools",
+    tags=["School"],
+)
+async def fetch_popular_schools(db: AsyncSession = Depends(get_db)):
+    return await get_popular_schools(db)
 
 
 @school_router.patch("/{school_uuid}/upload_school_logo_cover", response_model=BaseResponse)

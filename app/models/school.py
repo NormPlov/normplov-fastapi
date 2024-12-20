@@ -38,6 +38,7 @@ class School(Base):
     description = Column(Text, nullable=True)
     mission = Column(Text, nullable=True)
     vision = Column(Text, nullable=True)
+    is_popular = Column(Boolean, default=False, nullable=True)
     is_deleted = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)

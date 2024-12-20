@@ -381,18 +381,23 @@ async def update_user_profile(uuid: str, profile_update: UpdateUser, db: AsyncSe
     if "date_of_birth" in update_data:
         date_of_birth = update_data["date_of_birth"]
 
-        if date_of_birth > datetime.utcnow():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="date_of_birth cannot be in the future."
-            )
+        if date_of_birth is not None:  # Only validate if date_of_birth is provided
+            date_of_birth = datetime.strptime(date_of_birth, "%Y-%m-%d")
 
-        min_age_date = datetime.utcnow() - timedelta(days=13 * 365)
-        if date_of_birth > min_age_date:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="User must be at least 13 years old."
-            )
+            if date_of_birth > datetime.utcnow():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="date_of_birth cannot be in the future."
+                )
+
+            min_age_date = datetime.utcnow() - timedelta(days=13 * 365)
+            if date_of_birth > min_age_date:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="User must be at least 13 years old."
+                )
+
+        update_data["date_of_birth"] = date_of_birth  # Update with parsed datetime
 
     for key, value in update_data.items():
         setattr(user, key, value)
@@ -417,6 +422,7 @@ async def update_user_profile(uuid: str, profile_update: UpdateUser, db: AsyncSe
             "date_of_birth": user.date_of_birth,
         },
     )
+
 
 
 async def delete_user_by_uuid(uuid: str, db: AsyncSession, current_user: User) -> BaseResponse:

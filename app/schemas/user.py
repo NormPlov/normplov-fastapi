@@ -35,7 +35,7 @@ class UpdateUser(BaseModel):
     phone_number: Optional[str] = None
     bio: Optional[str] = None
     gender: Optional[str] = None
-    date_of_birth: Optional[datetime] = None
+    date_of_birth: Optional[str] = None
 
     class Config:
         orm_mode = True

@@ -23,6 +23,51 @@ from app.utils.pagination import paginate_results
 logger = logging.getLogger(__name__)
 
 
+async def get_popular_schools(db: AsyncSession) -> BaseResponse:
+    try:
+        stmt = (
+            select(
+                School.uuid,
+                School.en_name,
+                School.kh_name,
+                School.logo_url,
+                School.popular_major,
+                School.created_at
+            )
+            .where(School.is_popular == True, School.is_deleted == False)
+            .order_by(School.created_at.desc())
+            .limit(4)
+        )
+
+        result = await db.execute(stmt)
+        popular_schools = result.fetchall()
+
+        schools = [
+            {
+                "uuid": school.uuid,
+                "en_name": school.en_name,
+                "kh_name": school.kh_name,
+                "logo_url": school.logo_url,
+                "popular_major": school.popular_major,
+                "created_at": school.created_at
+            }
+            for school in popular_schools
+        ]
+
+        return BaseResponse(
+            date=datetime.utcnow().strftime("%d-%B-%Y"),
+            status=200,
+            message="Popular schools retrieved successfully.",
+            payload=schools
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred while retrieving popular schools: {str(e)}"
+        )
+
+
 async def upload_school_logo_or_cover_service(
     school_uuid: str,
     logo: UploadFile = None,

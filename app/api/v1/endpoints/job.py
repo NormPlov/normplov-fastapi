@@ -16,26 +16,13 @@ from app.services.job import (
     delete_job,
     get_job_details,
     admin_load_all_jobs,
-    create_job, update_job, get_unique_job_categories, get_trending_jobs_data,
-    disable_expired_jobs_with_raw_query
+    create_job, update_job,
+    get_unique_job_categories,
+    get_trending_jobs_data
 )
 
 job_router = APIRouter()
 logger = logging.getLogger(__name__)
-
-
-@job_router.post("/disable-expired-jobs", tags=["Jobs"])
-async def trigger_disable_expired_jobs(
-    db: AsyncSession = Depends(get_db)
-):
-    try:
-        await disable_expired_jobs_with_raw_query(db)
-        return {"message": "Expired jobs have been disabled successfully."}
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"An error occurred while disabling expired jobs: {str(e)}",
-        )
 
 
 @job_router.get(

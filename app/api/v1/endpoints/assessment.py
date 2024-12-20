@@ -182,7 +182,6 @@ async def personality_assessment(
         )
 
 
-# API Endpoint for Skill Assessment✨
 @assessment_router.post(
     "/predict-skills",
     response_model=BaseResponse,
@@ -201,10 +200,16 @@ async def predict_skills_endpoint(
         final_test_uuid = data.test_uuid
         skill_result = await predict_skills(data, db, current_user)
 
+        response_data = {
+            "test_uuid": skill_result.test_uuid,
+            "test_name": skill_result.test_name,
+            "assessment_type_name": "Skills",
+        }
+
         return BaseResponse(
             date=datetime.utcnow().strftime("%d-%B-%Y"),
             status=200,
-            payload=skill_result,
+            payload=response_data,
             message="Skill assessment completed successfully.",
         )
 
@@ -296,7 +301,7 @@ async def predict_learning_style_route(
 # API Endpoint for Interest Assessment✨
 @assessment_router.post(
     "/process-interest-assessment",
-    response_model=InterestAssessmentResponseWithBase,
+    response_model=BaseResponse,
     summary="Process user's interest assessment",
     description="Analyze user responses to determine Holland code, traits, career paths, majors, and schools.",
 )
@@ -306,14 +311,23 @@ async def process_interest_assessment_route(
         current_user: User = Depends(get_current_user_data),
 ):
     try:
-        assessment_response = await process_interest_assessment(input_data.responses, db, current_user)
+        validate_authentication(current_user)
 
-        return InterestAssessmentResponseWithBase(
+        assessment_result = await process_interest_assessment(input_data.responses, db, current_user)
+
+        response_data = {
+            "test_uuid": assessment_result.test_uuid,
+            "test_name": assessment_result.test_name,
+            "assessment_type_name": "Interest",
+        }
+
+        return BaseResponse(
             date=datetime.utcnow().strftime("%d-%B-%Y"),
             status=200,
+            payload=response_data,
             message="Interest assessment processed successfully.",
-            payload=assessment_response
         )
+
     except ValidationError as exc:
         raise format_http_exception(
             status_code=422,
@@ -338,4 +352,5 @@ async def process_interest_assessment_route(
             message="An unexpected error occurred while processing the interest assessment.",
             details=str(exc),
         )
+
 

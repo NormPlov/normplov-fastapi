@@ -5,36 +5,16 @@ import logging
 from pathlib import Path
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, text
+from sqlalchemy import select, text, or_
 from fastapi import HTTPException, UploadFile
 from app.core.config import settings
-from app.core.database import get_db
 from app.models import Job
 from app.schemas.job import JobDetailsResponse, JobResponse
 from datetime import datetime
 from app.utils.file import validate_file_extension, validate_file_size
+from sqlalchemy import and_
 
 logger = logging.getLogger(__name__)
-
-
-async def disable_expired_jobs_with_raw_query(db: AsyncSession):
-    try:
-        raw_query = text("""
-            UPDATE jobs
-            SET is_active = false
-            WHERE closing_date <= now()
-              AND is_active = true
-              AND is_deleted = false
-        """)
-
-        result = await db.execute(raw_query)
-        await db.commit()
-
-        logger.info(f"Disabled {result.rowcount} expired jobs.")
-    except Exception as e:
-        await db.rollback()
-        logger.error(f"Error while disabling expired jobs with raw query: {e}")
-        raise
 
 
 async def get_trending_jobs_data(db: AsyncSession) -> list[dict]:
@@ -90,7 +70,17 @@ async def admin_load_all_jobs(
     order: str = "desc"
 ) -> list[JobDetailsResponse]:
     try:
-        stmt = select(Job).where(Job.is_deleted == False)
+        current_datetime = datetime.utcnow()
+
+        stmt = select(Job).where(
+            and_(
+                Job.is_deleted == False,
+                or_(
+                    Job.closing_date.is_(None),
+                    Job.closing_date >= current_datetime
+                )
+            )
+        )
 
         if search:
             stmt = stmt.where(

@@ -167,7 +167,12 @@ async def load_all_user_recommendations(db: AsyncSession, user: User) -> BaseRes
         recommendations = result.scalars().all()
 
         if not recommendations:
-            raise HTTPException(status_code=404, detail="No recommendations found.")
+            return BaseResponse(
+                date=str(datetime.utcnow().date()),
+                status=200,
+                payload=[],
+                message="No recommendations found for this user."
+            )
 
         summaries = [
             {
@@ -185,8 +190,11 @@ async def load_all_user_recommendations(db: AsyncSession, user: User) -> BaseRes
             payload=summaries,
             message="User recommendations loaded successfully."
         )
+
+    except HTTPException as http_exc:
+        raise http_exc
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Failed to fetch recommendations.")
+        raise HTTPException(status_code=500, detail="An unexpected error occurred while fetching recommendations.")
 
 
 async def rename_ai_recommendation(
