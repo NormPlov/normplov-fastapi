@@ -1,8 +1,14 @@
+from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
 class ContinueConversationRequest(BaseModel):
     new_query: str
+
+
+class StartConversationRequest(BaseModel):
+    query: Optional[str] = None
 
 
 class AIRecommendationCreate(BaseModel):

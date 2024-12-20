@@ -1,13 +1,20 @@
+import asyncio
+import logging
 import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
 from app.core.database import engine, Base, get_db
 from app.core.init import init_roles_and_admin, create_static_users_batched
 from contextlib import asynccontextmanager
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.future import select
+from app.models.app_metadata import AppMetadata
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.interval import IntervalTrigger
+from app.services.job import disable_expired_jobs_with_raw_query
 from app.api.v1.endpoints import (
     auth,
     user,
@@ -24,7 +31,33 @@ from app.api.v1.endpoints import (
     province,
     admin
 )
-from app.models.app_metadata import AppMetadata
+
+scheduler = AsyncIOScheduler()
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+async def disable_expired_jobs_task():
+    logger.info("Running scheduled task: Disabling expired jobs.")
+    try:
+        await disable_expired_jobs_with_raw_query()
+        logger.info("Successfully disabled expired jobs.")
+    except Exception as e:
+        logger.error(f"Error in scheduled task: {str(e)}")
+    logger.info("Scheduled task completed.")
+
+
+def setup_scheduled_jobs():
+    logger.info("Setting up scheduled jobs...")
+    scheduler.add_job(
+        lambda: asyncio.run(disable_expired_jobs_task()),
+        trigger=IntervalTrigger(seconds=30),
+        id="disable_expired_jobs",
+        replace_existing=True,
+    )
+    logger.info("Scheduled job 'disable_expired_jobs' added.")
+    scheduler.start()
+    logger.info("Scheduler started.")
 
 
 @asynccontextmanager
@@ -97,3 +130,17 @@ app.include_router(faculty.faculty_router, prefix="/api/v1/faculties", tags=["Fa
 app.include_router(major.major_router, prefix="/api/v1/majors", tags=["Major"])
 app.include_router(job.job_router, prefix="/api/v1/jobs", tags=["Job"])
 app.include_router(admin.admin_router, prefix="/api/v1/admin", tags=["Admin"])
+
+
+@app.on_event("startup")
+async def startup_event():
+    logger.info("Application startup event triggered.")
+    setup_scheduled_jobs()
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    logger.info("Shutting down scheduler...")
+    scheduler.shutdown(wait=False)
+
+

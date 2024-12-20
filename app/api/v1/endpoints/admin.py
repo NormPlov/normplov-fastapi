@@ -7,7 +7,7 @@ from app.schemas.payload import BaseResponse
 from app.services.admin import fetch_metrics, get_admin_user_responses
 from app.core.database import get_db
 from app.models import User
-from app.dependencies import is_admin_user, get_current_user_data
+from app.dependencies import is_admin_user
 from datetime import datetime
 
 admin_router = APIRouter()

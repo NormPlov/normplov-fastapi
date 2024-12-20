@@ -16,11 +16,26 @@ from app.services.job import (
     delete_job,
     get_job_details,
     admin_load_all_jobs,
-    create_job, update_job, get_unique_job_categories, get_trending_jobs_data
+    create_job, update_job, get_unique_job_categories, get_trending_jobs_data,
+    disable_expired_jobs_with_raw_query
 )
 
 job_router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+@job_router.post("/disable-expired-jobs", tags=["Jobs"])
+async def trigger_disable_expired_jobs(
+    db: AsyncSession = Depends(get_db)
+):
+    try:
+        await disable_expired_jobs_with_raw_query(db)
+        return {"message": "Expired jobs have been disabled successfully."}
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"An error occurred while disabling expired jobs: {str(e)}",
+        )
 
 
 @job_router.get(
@@ -250,6 +265,7 @@ async def get_all_jobs_route(
 async def update_job_route(
     uuid: str,
     title: Optional[str] = Form(None),
+    category: Optional[str] = Form(None),
     company: Optional[str] = Form(None),
     location: Optional[str] = Form(None),
     facebook_url: Optional[str] = Form(None),
@@ -265,14 +281,13 @@ async def update_job_route(
     email: Optional[str] = Form(None),
     phone: Optional[str] = Form(None),
     website: Optional[str] = Form(None),
-    is_active: Optional[bool] = Form(None),
     logo: Optional[UploadFile] = File(None),
-    category: Optional[str] = Form(None),
     db: AsyncSession = Depends(get_db),
 ):
     try:
         update_data = {
             "title": title,
+            "category": category,
             "company": company,
             "location": location,
             "facebook_url": facebook_url,
@@ -288,8 +303,6 @@ async def update_job_route(
             "email": email,
             "phone": phone,
             "website": website,
-            "category": category,
-            "is_active": is_active,
         }
 
         update_data = {key: value for key, value in update_data.items() if value is not None}

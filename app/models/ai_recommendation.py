@@ -11,7 +11,7 @@ class AIRecommendation(Base):
     id = Column(Integer, primary_key=True, index=True)
     uuid = Column(String, unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    query = Column(Text, nullable=False)
+    query = Column(Text, nullable=True)
     recommendation = Column(Text, nullable=False)
     chat_title = Column(String, nullable=False)
     conversation_history = Column(JSON, nullable=True, default=[])

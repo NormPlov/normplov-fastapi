@@ -5,15 +5,36 @@ import logging
 from pathlib import Path
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, text
+from sqlalchemy import select, text
 from fastapi import HTTPException, UploadFile
 from app.core.config import settings
+from app.core.database import get_db
 from app.models import Job
 from app.schemas.job import JobDetailsResponse, JobResponse
 from datetime import datetime
 from app.utils.file import validate_file_extension, validate_file_size
 
 logger = logging.getLogger(__name__)
+
+
+async def disable_expired_jobs_with_raw_query(db: AsyncSession):
+    try:
+        raw_query = text("""
+            UPDATE jobs
+            SET is_active = false
+            WHERE closing_date <= now()
+              AND is_active = true
+              AND is_deleted = false
+        """)
+
+        result = await db.execute(raw_query)
+        await db.commit()
+
+        logger.info(f"Disabled {result.rowcount} expired jobs.")
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Error while disabling expired jobs with raw query: {e}")
+        raise
 
 
 async def get_trending_jobs_data(db: AsyncSession) -> list[dict]:
@@ -246,6 +267,25 @@ async def update_job(
                 status_code=404, detail="Job not found or has been deleted."
             )
 
+        if "closing_date" in update_data:
+            try:
+                closing_date = datetime.fromisoformat(update_data["closing_date"])
+                if closing_date < datetime.utcnow():
+                    update_data["is_active"] = False
+                update_data["closing_date"] = closing_date
+            except ValueError:
+                raise HTTPException(400, detail="Invalid date format for closing_date.")
+
+        if "posted_at" in update_data:
+            try:
+                posted_at = datetime.fromisoformat(update_data["posted_at"])
+                if posted_at > datetime.utcnow():
+                    raise HTTPException(400, detail="Posted date cannot be in the future.")
+                update_data["posted_at"] = posted_at
+            except ValueError:
+                raise HTTPException(400, detail="Invalid date format for posted_at.")
+
+        # Handle logo updates
         if logo:
             if not validate_file_extension(logo.filename):
                 raise HTTPException(status_code=400, detail="Invalid file type for logo.")
@@ -260,17 +300,7 @@ async def update_job(
 
             update_data["logo"] = f"{settings.BASE_UPLOAD_FOLDER}/job-logos/{logo_path.name}"
 
-        if "posted_at" in update_data:
-            try:
-                update_data["posted_at"] = datetime.fromisoformat(update_data["posted_at"])
-            except ValueError:
-                raise HTTPException(400, detail="Invalid date format for posted_at.")
-        if "closing_date" in update_data:
-            try:
-                update_data["closing_date"] = datetime.fromisoformat(update_data["closing_date"])
-            except ValueError:
-                raise HTTPException(400, detail="Invalid date format for closing_date.")
-
+        # Apply updates
         for field, value in update_data.items():
             if hasattr(job, field):
                 setattr(job, field, value)
@@ -282,6 +312,7 @@ async def update_job(
         return JobResponse(
             uuid=str(job.uuid),
             title=job.title,
+            category=job.category,
             company=job.company,
             logo=job.logo,
             facebook_url=job.facebook_url,
@@ -298,12 +329,13 @@ async def update_job(
             email=job.email,
             phone=job.phone,
             website=job.website,
-            is_active=job.is_active,
         )
-
     except Exception as exc:
         await db.rollback()
-        raise HTTPException(500, detail=f"An error occurred while updating the job: {exc}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"An error occurred while updating the job: {exc}"
+        )
 
 
 async def create_job(
@@ -329,6 +361,22 @@ async def create_job(
     db: AsyncSession,
 ) -> dict:
     try:
+        parsed_posted_at = None
+        if posted_at:
+            parsed_posted_at = datetime.fromisoformat(posted_at)
+            if parsed_posted_at > datetime.utcnow():
+                raise HTTPException(status_code=400, detail="Posted date cannot be in the future.")
+
+        parsed_closing_date = None
+        if closing_date:
+            parsed_closing_date = datetime.fromisoformat(closing_date)
+            if parsed_closing_date < datetime.utcnow():
+                is_active = False
+
+        requirements_list = requirements.split(",") if requirements else None
+        responsibilities_list = responsibilities.split(",") if responsibilities else None
+        benefits_list = benefits.split(",") if benefits else None
+
         logo_url = None
         if logo:
             if not validate_file_extension(logo.filename):
@@ -342,22 +390,6 @@ async def create_job(
             with open(logo_path, "wb") as buffer:
                 shutil.copyfileobj(logo.file, buffer)
             logo_url = f"{settings.BASE_UPLOAD_FOLDER}/job-logos/{logo_path.name}"
-
-        parsed_posted_at = None
-        if posted_at:
-            parsed_posted_at = datetime.fromisoformat(posted_at)
-            if parsed_posted_at > datetime.utcnow():
-                raise HTTPException(status_code=400, detail="Posted date cannot be in the future.")
-
-        parsed_closing_date = None
-        if closing_date:
-            parsed_closing_date = datetime.fromisoformat(closing_date)
-            if parsed_posted_at and parsed_closing_date < parsed_posted_at:
-                raise HTTPException(status_code=400, detail="Closing date cannot be earlier than posted date.")
-
-        requirements_list = requirements.split(",") if requirements else None
-        responsibilities_list = responsibilities.split(",") if responsibilities else None
-        benefits_list = benefits.split(",") if benefits else None
 
         new_job = Job(
             uuid=uuid.uuid4(),
@@ -392,9 +424,6 @@ async def create_job(
         return {
             "uuid": str(new_job.uuid),
         }
-
-    except HTTPException as exc:
-        raise exc
     except Exception as exc:
         await db.rollback()
         raise HTTPException(

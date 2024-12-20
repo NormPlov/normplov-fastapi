@@ -101,6 +101,7 @@ class JobCreateRequest(BaseModel):
 class JobResponse(BaseModel):
     uuid: str
     title: str
+    category: str
     company: str
     logo: Optional[str]
     facebook_url: Optional[str]
@@ -117,7 +118,6 @@ class JobResponse(BaseModel):
     email: Optional[str]
     phone: Optional[str]
     website: Optional[str]
-    is_active: bool
 
     class Config:
         from_attributes = True

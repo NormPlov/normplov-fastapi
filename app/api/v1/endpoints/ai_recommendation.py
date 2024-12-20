@@ -8,11 +8,9 @@ from app.core.database import get_db
 from app.dependencies import get_current_user_data
 from app.models import AIRecommendation
 from app.models.user import User
-from app.schemas.ai_recommendation import AIRecommendationCreate, RenameAIRecommendationRequest, \
-    ContinueConversationRequest
+from app.schemas.ai_recommendation import RenameAIRecommendationRequest, StartConversationRequest
 from app.schemas.payload import BaseResponse
 from app.services.ai_recommendation import (
-    generate_ai_recommendation,
     delete_ai_recommendation,
     rename_ai_recommendation,
     load_all_user_recommendations,
@@ -138,43 +136,33 @@ async def delete_ai_recommendation_endpoint(
     summary="Start a new conversation"
 )
 async def start_new_conversation(
-        data: dict,
+        data: StartConversationRequest,
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user_data),
 ):
     try:
-        # Validate query input
-        if not data.get("query") or data["query"].strip() == "":
-            raise HTTPException(status_code=400, detail="Query cannot be empty.")
-
-        # Generate AI reply for the initial query
-        query = data["query"].strip()
-
-        # Pass db and user_id to generate_ai_response
+        query = data.query
         ai_reply = await generate_ai_response(
-            context={"user_query": query, "user_responses": []},
+            context={"user_query": query or "Start a conversation", "user_responses": []},
             db=db,
             user_id=current_user.id
         )
 
-        # Initialize conversation history
         conversation_history = [{
             "user_query": query,
             "ai_reply": ai_reply,
             "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
         }]
 
-        # Create a new conversation
         new_conversation = AIRecommendation(
             uuid=str(uuid.uuid4()),
             user_id=current_user.id,
             query=query,
             recommendation=ai_reply,
-            chat_title="Career Recommendation",  # Or dynamically generate a title
+            chat_title="Career Recommendation",
             conversation_history=conversation_history
         )
 
-        # Persist to database
         db.add(new_conversation)
         await db.commit()
         await db.refresh(new_conversation)

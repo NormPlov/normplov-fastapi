@@ -57,17 +57,20 @@ async def continue_user_ai_conversation(
             try:
                 conversation_history = json.loads(conversation_history_raw)
             except json.JSONDecodeError:
-                logger.error("Failed to deserialize conversation history.")
+                logger.error("Invalid conversation history format.")
                 raise HTTPException(status_code=500, detail="Invalid conversation history format.")
         else:
             conversation_history = conversation_history_raw
 
         validated_history = []
         for idx, entry in enumerate(conversation_history):
-            if not isinstance(entry, dict) or 'user_query' not in entry or 'ai_reply' not in entry:
-                logger.warning(f"Skipping invalid entry at index {idx}: {entry}")
-                continue
-            validated_history.append(entry)
+            user_query = (entry.get("user_query") or "").strip()
+            ai_reply = (entry.get("ai_reply") or "").strip()
+            validated_history.append({
+                "user_query": user_query,
+                "ai_reply": ai_reply,
+                "timestamp": entry.get("timestamp", datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
+            })
 
         user_responses_stmt = select(UserResponse.response_data).where(
             UserResponse.user_id == user.id,
@@ -76,12 +79,13 @@ async def continue_user_ai_conversation(
         )
         user_responses_result = await db.execute(user_responses_stmt)
         response_data = user_responses_result.scalars().all()
+
         formatted_response_data = "\n".join(
             [f"User Response: {data}" for data in response_data]
         ) if response_data else "No additional user responses provided."
 
         formatted_history = ""
-        for entry in validated_history:
+        for entry in validated_history[-5:]:
             formatted_history += f"User: {entry['user_query']}\nAI: {entry['ai_reply']}\n"
 
         formatted_prompt = (
@@ -92,10 +96,7 @@ async def continue_user_ai_conversation(
         )
 
         ai_reply = await generate_ai_response(
-            context={
-                "user_query": new_query.strip(),
-                "user_responses": conversation_history
-            },
+            context={"user_query": new_query.strip(), "user_responses": validated_history},
             db=db,
             user_id=user.id
         )
