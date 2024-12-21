@@ -55,42 +55,25 @@ async def delete_draft_endpoint(
 @draft_router.post(
     "/submit-draft-assessment/{draft_uuid}",
     response_model=BaseResponse,
-    summary="Submit the draft for the current user, based on the assessment type."
+    summary="Submit a saved draft and process the assessment."
 )
-async def submit_assessment_endpoint(
+async def submit_draft_assessment_route(
     draft_uuid: str,
+    new_responses: dict,  # Accept new responses as part of the request body
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user_data),
+    current_user: User = Depends(get_current_user_data),
 ):
     try:
-        if not current_user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User is not authenticated."
-            )
-
-        result = await submit_assessment(db=db, current_user=current_user, draft_uuid=draft_uuid)
-
+        result = await submit_assessment(db, current_user, draft_uuid, new_responses)
         return BaseResponse(
-            status=status.HTTP_200_OK,
             date=datetime.utcnow().strftime("%d-%B-%Y"),
-            message="Assessment submitted successfully.",
-            payload={
-                "uuid": result["uuid"],
-                "draft_name": result["draft_name"],
-                "response_data": result["response_data"],
-                "is_draft": result["is_draft"],
-                "is_completed": result["is_completed"],
-                "created_at": result["created_at"],
-                "updated_at": result["updated_at"],
-            },
-
+            status=200,
+            message="Draft assessment submitted successfully.",
+            payload=result,
         )
-
     except HTTPException as e:
         raise e
     except Exception as e:
-        logger.error(f"Unexpected error in submit_assessment_endpoint: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An error occurred while submitting the assessment: {str(e)}",

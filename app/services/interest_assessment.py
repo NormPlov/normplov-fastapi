@@ -40,6 +40,16 @@ async def process_interest_assessment(
         test_uuid: str | None = None
 ) -> InterestAssessmentResponse:
     try:
+        # Validate that all required keys are present
+        required_keys = [f"q{i}" for i in range(1, 13)]
+        missing_keys = [key for key in required_keys if key not in responses]
+
+        if missing_keys:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Missing required keys in responses: {', '.join(missing_keys)}"
+            )
+
         assessment_type_id = await get_assessment_type_id("Interests", db)
 
         if test_uuid:

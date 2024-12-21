@@ -90,6 +90,7 @@ async def submit_assessment(
     db: AsyncSession,
     current_user: User,
     draft_uuid: str,
+    new_responses: dict,
 ) -> dict:
     try:
         stmt = select(
@@ -100,49 +101,83 @@ async def submit_assessment(
             UserResponse.is_completed,
             UserResponse.created_at,
             UserResponse.updated_at,
-            UserResponse.assessment_type_id
+            UserResponse.assessment_type_id,
         ).where(
             UserResponse.uuid.cast(UUID) == draft_uuid,
             UserResponse.user_id == current_user.id,
-            UserResponse.is_draft == True,
-            UserResponse.is_deleted == False
+            UserResponse.is_deleted == False,
         )
-
         result = await db.execute(stmt)
         draft = result.first()
 
         if not draft:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Draft not found."
+                detail="Draft not found.",
+            )
+
+        if draft.is_draft is False:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This draft has already been submitted.",
             )
 
         assessment_type_id = draft.assessment_type_id
-        responses = draft.response_data if isinstance(draft.response_data, dict) else json.loads(draft.response_data)
+        saved_responses = (
+            draft.response_data if isinstance(draft.response_data, dict) else json.loads(draft.response_data)
+        )
+
+        if not isinstance(new_responses, dict):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid format for new responses. Expected a flat dictionary.",
+            )
+
+        merged_responses = saved_responses.copy()
+        merged_responses.update(new_responses)
+
+        missing_keys = [f"q{i}" for i in range(1, 13) if f"q{i}" not in merged_responses]
+        if missing_keys:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Missing required keys in responses: {', '.join(missing_keys)}",
+            )
 
         if assessment_type_id == 1:
-            response_data = await process_personality_assessment(responses, db, current_user)
+            response_data = await process_personality_assessment(merged_responses, db, current_user)
         elif assessment_type_id == 2:
-            response_data = await process_interest_assessment(responses, db, current_user)
+            response_data = await process_interest_assessment(merged_responses, db, current_user)
         elif assessment_type_id == 3:
-            response_data = await process_value_assessment(responses, db, current_user)
+            response_data = await process_value_assessment(merged_responses, db, current_user)
         elif assessment_type_id == 4:
-            response_data = await predict_skills(responses, draft_uuid, db, current_user)
+            response_data = await predict_skills(merged_responses, draft_uuid, db, current_user)
         elif assessment_type_id == 5:
-            response_data = await predict_learning_style(responses, draft_uuid, db, current_user)
+            response_data = await predict_learning_style(merged_responses, draft_uuid, db, current_user)
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Unsupported assessment type."
+                detail="Unsupported assessment type.",
             )
+
+        update_stmt = (
+            UserResponse.__table__.update()
+            .where(UserResponse.uuid.cast(UUID) == draft_uuid)
+            .values(
+                is_draft=False,
+                draft_name=None,
+                response_data=json.dumps(merged_responses),
+            )
+        )
+        await db.execute(update_stmt)
+        await db.commit()
 
         return {
             "message": "Assessment submitted successfully.",
             "uuid": str(draft.uuid),
-            "draft_name": draft.draft_name,
+            "draft_name": None,
             "response_data": response_data,
-            "is_draft": draft.is_draft,
-            "is_completed": draft.is_completed,
+            "is_draft": False,
+            "is_completed": True,
             "created_at": draft.created_at.strftime("%d-%B-%Y %H:%M:%S"),
             "updated_at": draft.updated_at.strftime("%d-%B-%Y %H:%M:%S") if draft.updated_at else None,
         }
@@ -150,7 +185,6 @@ async def submit_assessment(
     except HTTPException as e:
         raise e
     except Exception as e:
-        logger.error(f"Error during submission: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An error occurred while submitting the assessment: {str(e)}",
@@ -286,7 +320,6 @@ async def load_drafts(
                 "updated_at": draft.updated_at.strftime("%d-%B-%Y %H:%M:%S") if draft.updated_at else None
             })
 
-        # Prepare metadata
         metadata = {
             "page": page,
             "page_size": page_size,
