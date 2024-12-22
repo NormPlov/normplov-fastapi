@@ -739,6 +739,12 @@ The **NormPlov API** is a robust platform built with **FastAPI**, seamlessly int
 
 ---
 
+### 🌐 Swagger and Postman Access
+
+- 📜 **Swagger Documentation:** [Access Here](http://136.228.158.126:3300/docs)
+- 📩 **Postman Collection:** [Download Here](https://app.getpostman.com/join-team?invite_code=cb6074ce859e29ccf5918869dc237bf4896bafbafef96b3ac1cdba63c2d6f4d1&target_code=35e98d91d65a07ed66f3ba2ec5aae9ec)
+
+
 ### 🎉 Acknowledgements
 
 We would like to express our deepest appreciation to:
