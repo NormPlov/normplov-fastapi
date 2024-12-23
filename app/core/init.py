@@ -95,6 +95,8 @@ async def create_static_users_batched(db: AsyncSession, num_users: int = 100, ba
         users = []
         user_roles = []
 
+        countries = ["Cambodia", "Singapore", "Indonesia", "Korea"]
+
         for i in range(num_users):
             fake_name = fake.name()[:100]
             fake_email = fake.email()[:255]
@@ -104,7 +106,7 @@ async def create_static_users_batched(db: AsyncSession, num_users: int = 100, ba
             fake_bio = fake.text()[:500]
             fake_gender = fake.random_element(["Male", "Female"])
             fake_dob = fake.date_of_birth()
-            fake_country = fake.country()[:100]
+            fake_country = fake.random_element(countries)
 
             user = User(
                 uuid=str(uuid.uuid4()),
@@ -171,4 +173,5 @@ async def create_static_users_batched(db: AsyncSession, num_users: int = 100, ba
     except Exception as e:
         print(f"Error creating static users: {e}")
         await db.rollback()
+
 

@@ -56,9 +56,11 @@ async def get_user_responses_by_test_uuid(
 @admin_router.get("/metrics", response_model=BaseResponse)
 async def get_metrics(
     db: AsyncSession = Depends(get_db),
-    current_admin: User = Depends(is_admin_user)
+    current_admin: User = Depends(is_admin_user),
+    year: int = Query(None, description="Filter data by year"),
+    month: int = Query(None, description="Filter data by month"),
 ):
-    metrics = await fetch_metrics(db)
+    metrics = await fetch_metrics(db, year=year, month=month)
 
     return BaseResponse(
         date=datetime.utcnow(),

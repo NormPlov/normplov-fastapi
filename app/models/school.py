@@ -32,7 +32,6 @@ class School(Base):
     highest_price = Column(Float, nullable=True)
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
-    google_map_embed_url = Column(Text, nullable=True)
     email = Column(String, nullable=True)
     website = Column(String, nullable=True)
     description = Column(Text, nullable=True)
