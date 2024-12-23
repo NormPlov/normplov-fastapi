@@ -17,32 +17,62 @@ from sqlalchemy import and_
 logger = logging.getLogger(__name__)
 
 
-async def get_trending_jobs_data(db: AsyncSession) -> list[dict]:
+async def get_trending_jobs_data(db: AsyncSession) -> dict:
     try:
-        raw_query = text("""
+        title_query = text("""
             SELECT 
                 date_trunc('month', jobs.posted_at) AS month,
-                jobs.title AS title,
-                jobs.category AS category,
+                jobs.title AS label,
                 COUNT(jobs.id) AS count
             FROM jobs
             WHERE jobs.is_deleted = false 
               AND jobs.posted_at IS NOT NULL
-            GROUP BY date_trunc('month', jobs.posted_at), jobs.title, jobs.category
+            GROUP BY date_trunc('month', jobs.posted_at), jobs.title
             ORDER BY date_trunc('month', jobs.posted_at) ASC, COUNT(jobs.id) DESC
         """)
-        result = await db.execute(raw_query)
-        trending_data = result.fetchall()
+        title_result = await db.execute(title_query)
+        title_data = title_result.fetchall()
 
-        return [
+        category_query = text("""
+            SELECT 
+                date_trunc('month', jobs.posted_at) AS month,
+                REGEXP_REPLACE(jobs.category, '[\"\\\\]', '', 'g') AS cleaned_label,
+                COUNT(jobs.id) AS count
+            FROM jobs
+            WHERE jobs.is_deleted = false 
+              AND jobs.posted_at IS NOT NULL
+            GROUP BY date_trunc('month', jobs.posted_at), cleaned_label
+            HAVING TRIM(REGEXP_REPLACE(jobs.category, '[\"\\\\]', '', 'g')) != ''
+            ORDER BY date_trunc('month', jobs.posted_at) ASC, COUNT(jobs.id) DESC
+        """)
+        category_result = await db.execute(category_query)
+        category_data = category_result.fetchall()
+
+        title_line_data = [
             {
                 "month": row.month.strftime("%Y-%m"),
-                "title": row.title,
-                "category": row.category or "Uncategorized",
+                "label": row.label.strip(),
                 "count": row.count,
             }
-            for row in trending_data
+            for row in title_data
         ]
+
+        seen_categories = set()
+        category_line_data = []
+        for row in category_data:
+            cleaned_label = row.cleaned_label.strip()
+            if cleaned_label not in seen_categories:
+                seen_categories.add(cleaned_label)
+                category_line_data.append({
+                    "month": row.month.strftime("%Y-%m"),
+                    "label": cleaned_label,
+                    "count": row.count,
+                })
+
+        return {
+            "titles": title_line_data,
+            "categories": category_line_data
+        }
     except Exception as exc:
         raise HTTPException(
             status_code=500,
