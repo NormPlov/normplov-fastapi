@@ -31,6 +31,7 @@ async def get_popular_schools(db: AsyncSession) -> BaseResponse:
                 School.en_name,
                 School.kh_name,
                 School.logo_url,
+                School.location,
                 School.popular_major,
                 School.created_at
             )
@@ -48,6 +49,7 @@ async def get_popular_schools(db: AsyncSession) -> BaseResponse:
                 "en_name": school.en_name,
                 "kh_name": school.kh_name,
                 "logo_url": school.logo_url,
+                "location": school.location,
                 "popular_major": school.popular_major,
                 "created_at": school.created_at
             }
