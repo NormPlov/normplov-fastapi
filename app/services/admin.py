@@ -71,28 +71,6 @@ async def fetch_metrics(db: AsyncSession, year: int = None, month: int = None):
     total_tests = await db.scalar(select(func.count(UserTest.id)))
     total_active_users = await db.scalar(select(func.count(User.id)).where(User.is_active == True))
 
-    job_filters = "WHERE is_deleted = FALSE AND is_active = TRUE"
-    params = {}
-
-    if year:
-        job_filters += " AND EXTRACT(YEAR FROM created_at) = :year"
-        params["year"] = year
-    if month:
-        job_filters += " AND EXTRACT(MONTH FROM created_at) = :month"
-        params["month"] = month
-
-    bar_chart_jobs_query = text(f"""
-        SELECT category, COUNT(*) AS count
-        FROM jobs
-        {job_filters}
-        GROUP BY category
-        ORDER BY count DESC
-    """)
-    bar_chart_jobs_result = await db.execute(bar_chart_jobs_query, params)
-    bar_chart_jobs_data = [
-        {"category": row["category"], "count": row["count"]} for row in bar_chart_jobs_result.mappings()
-    ]
-
     pie_chart_query = text("""
         SELECT type, COUNT(*) AS count
         FROM schools
@@ -100,18 +78,22 @@ async def fetch_metrics(db: AsyncSession, year: int = None, month: int = None):
         GROUP BY type
     """)
     pie_chart_result = await db.execute(pie_chart_query)
-    pie_chart_data = [
+    pie_chart_raw_data = [
         {"type": row["type"], "count": row["count"]} for row in pie_chart_result.mappings()
     ]
+    total_schools = sum(item["count"] for item in pie_chart_raw_data)
+    pie_chart_data = [
+        {"type": item["type"], "percentage": round((item["count"] / total_schools) * 100, 2)}
+        for item in pie_chart_raw_data
+    ]
 
-    # Bar Chart: Count jobs by category
     bar_chart_jobs_query = text("""
-            SELECT category, COUNT(*) AS count
-            FROM jobs
-            WHERE is_deleted = FALSE AND is_active = TRUE
-            GROUP BY category
-            ORDER BY count DESC
-        """)
+        SELECT category, COUNT(*) AS count
+        FROM jobs
+        WHERE is_deleted = FALSE AND is_active = TRUE
+        GROUP BY category
+        ORDER BY count DESC
+    """)
     bar_chart_jobs_result = await db.execute(bar_chart_jobs_query)
     bar_chart_jobs_data = [
         {"category": row["category"], "count": row["count"]} for row in bar_chart_jobs_result.mappings()
@@ -128,37 +110,29 @@ async def fetch_metrics(db: AsyncSession, year: int = None, month: int = None):
         params["month"] = month
 
     bar_chart_assessments_query = text(f"""
-            SELECT at.name AS assessment_type, COUNT(ur.id) AS count
-            FROM user_responses ur
-            JOIN assessment_types at ON ur.assessment_type_id = at.id
-            {filters}
-            GROUP BY at.name
-            ORDER BY count DESC
-        """)
+        SELECT at.name AS assessment_type, COUNT(ur.id) AS count
+        FROM user_responses ur
+        JOIN assessment_types at ON ur.assessment_type_id = at.id
+        {filters}
+        GROUP BY at.name
+        ORDER BY count DESC
+    """)
     bar_chart_assessments_result = await db.execute(bar_chart_assessments_query, params)
     bar_chart_assessments_data = [
-        {"assessment_type": row["assessment_type"], "count": row["count"]} for row in
-        bar_chart_assessments_result.mappings()
+        {"assessment_type": row["assessment_type"], "count": row["count"]} for row in bar_chart_assessments_result.mappings()
     ]
 
     line_chart_query = text("""
-        SELECT country, COUNT(*) AS user_count
+        SELECT DATE_TRUNC('month', created_at) AS month, COUNT(*) AS user_count
         FROM users
-        WHERE is_deleted = FALSE
-        GROUP BY country
-        ORDER BY user_count DESC;
+        WHERE is_deleted = FALSE AND EXTRACT(YEAR FROM created_at) IN (EXTRACT(YEAR FROM NOW()), EXTRACT(YEAR FROM NOW()) - 1)
+        GROUP BY DATE_TRUNC('month', created_at)
+        ORDER BY DATE_TRUNC('month', created_at)
     """)
     line_chart_result = await db.execute(line_chart_query)
-    line_chart_data_raw = [
-        {"country": row["country"], "user_count": row["user_count"]} for row in line_chart_result.mappings()
+    line_chart_data = [
+        {"month": row["month"].strftime("%Y-%m"), "user_count": row["user_count"]} for row in line_chart_result.mappings()
     ]
-
-    line_chart_data = defaultdict(int)
-    for row in line_chart_data_raw:
-        normalized_country = row["country"].strip() if row["country"] else "Unknown"
-        line_chart_data[normalized_country] += row["user_count"]
-
-    line_chart_data = [{"country": k, "user_count": v} for k, v in line_chart_data.items()]
 
     return {
         "total_users": total_users,
@@ -170,3 +144,4 @@ async def fetch_metrics(db: AsyncSession, year: int = None, month: int = None):
         "bar_chart_assessments_data": bar_chart_assessments_data,
         "line_chart_data": line_chart_data,
     }
+
