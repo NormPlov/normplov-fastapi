@@ -6,7 +6,7 @@ from app.dependencies import get_db, get_current_user_data
 from app.models import AssessmentType, User
 from sqlalchemy.future import select
 from app.schemas.payload import BaseResponse
-from app.schemas.draft import SaveDraftRequest
+from app.schemas.draft import SaveDraftRequest, SubmitDraftAssessmentRequest
 from app.services.draft import load_drafts, retrieve_draft_by_uuid, submit_assessment, delete_draft, \
     save_user_response_as_draft, update_user_response_draft
 from datetime import datetime
@@ -59,17 +59,32 @@ async def delete_draft_endpoint(
 )
 async def submit_draft_assessment_route(
     draft_uuid: str,
-    new_responses: dict,  # Accept new responses as part of the request body
+    request: SubmitDraftAssessmentRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_data),
 ):
     try:
+        new_responses = request.responses
+
         result = await submit_assessment(db, current_user, draft_uuid, new_responses)
+
+        response_payload = {
+            "test_uuid": result.get("uuid"),
+            "test_name": result.get("test_name", "Unnamed Test"),
+            "assessment_type_name": result.get("assessment_type_name", "Unknown Type"),
+        }
+
+        assessment_type_name = response_payload.get("assessment_type_name", "Assessment")
+        if assessment_type_name == "Learning Style":
+            message = "Learning style predicted successfully."
+        else:
+            message = "Assessment submitted successfully."
+
         return BaseResponse(
             date=datetime.utcnow().strftime("%d-%B-%Y"),
             status=200,
-            message="Draft assessment submitted successfully.",
-            payload=result,
+            message=message,
+            payload=response_payload,
         )
     except HTTPException as e:
         raise e
@@ -237,13 +252,12 @@ async def save_draft(
 
         draft = await save_user_response_as_draft(
             db=db,
-            response_data=draft_request.response_data,
+            response_data=draft_request.responses,
             assessment_type_name=assessment_type_name,
             assessment_type_id=assessment_type.id,
             current_user=current_user,
         )
 
-        # Prepare the response
         response_payload = {
             "draft_uuid": str(draft.uuid),
             "draft_name": draft.draft_name,

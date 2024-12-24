@@ -4,6 +4,10 @@ from pydantic import BaseModel, Field
 from typing import Dict, Optional
 
 
+class SubmitDraftAssessmentRequest(BaseModel):
+    responses: Dict[str, int] = Field(..., description="The updated responses for the assessment.")
+
+
 class DraftItem(BaseModel):
     uuid: str = Field(...)
     draft_name: str = Field(...)
@@ -14,7 +18,7 @@ class DraftItem(BaseModel):
 
 
 class SaveDraftRequest(BaseModel):
-    response_data: Dict = Field(..., description="The draft response data as a dictionary.")
+    responses: Dict = Field(..., description="The draft response data as a dictionary.")
 
 
 class DraftResponse(BaseModel):

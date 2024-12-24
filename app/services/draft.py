@@ -102,6 +102,9 @@ async def submit_assessment(
             UserResponse.created_at,
             UserResponse.updated_at,
             UserResponse.assessment_type_id,
+            AssessmentType.name.label("assessment_type_name"),  # Include assessment type name
+        ).join(
+            AssessmentType, AssessmentType.id == UserResponse.assessment_type_id
         ).where(
             UserResponse.uuid.cast(UUID) == draft_uuid,
             UserResponse.user_id == current_user.id,
@@ -122,7 +125,6 @@ async def submit_assessment(
                 detail="This draft has already been submitted.",
             )
 
-        assessment_type_id = draft.assessment_type_id
         saved_responses = (
             draft.response_data if isinstance(draft.response_data, dict) else json.loads(draft.response_data)
         )
@@ -143,15 +145,15 @@ async def submit_assessment(
                 detail=f"Missing required keys in responses: {', '.join(missing_keys)}",
             )
 
-        if assessment_type_id == 1:
+        if draft.assessment_type_id == 1:
             response_data = await process_personality_assessment(merged_responses, db, current_user)
-        elif assessment_type_id == 2:
+        elif draft.assessment_type_id == 2:
             response_data = await process_interest_assessment(merged_responses, db, current_user)
-        elif assessment_type_id == 3:
+        elif draft.assessment_type_id == 3:
             response_data = await process_value_assessment(merged_responses, db, current_user)
-        elif assessment_type_id == 4:
+        elif draft.assessment_type_id == 4:
             response_data = await predict_skills(merged_responses, draft_uuid, db, current_user)
-        elif assessment_type_id == 5:
+        elif draft.assessment_type_id == 5:
             response_data = await predict_learning_style(merged_responses, draft_uuid, db, current_user)
         else:
             raise HTTPException(
@@ -172,14 +174,10 @@ async def submit_assessment(
         await db.commit()
 
         return {
-            "message": "Assessment submitted successfully.",
             "uuid": str(draft.uuid),
-            "draft_name": None,
+            "test_name": f"{draft.assessment_type_name} Test {draft.created_at.strftime('%d-%m-%Y')}",
+            "assessment_type_name": draft.assessment_type_name,
             "response_data": response_data,
-            "is_draft": False,
-            "is_completed": True,
-            "created_at": draft.created_at.strftime("%d-%B-%Y %H:%M:%S"),
-            "updated_at": draft.updated_at.strftime("%d-%B-%Y %H:%M:%S") if draft.updated_at else None,
         }
 
     except HTTPException as e:
