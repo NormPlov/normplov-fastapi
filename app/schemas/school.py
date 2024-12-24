@@ -100,11 +100,10 @@ class CreateSchoolRequest(BaseModel):
 
 
 class UpdateSchoolRequest(BaseModel):
-
     kh_name: Optional[str] = Field(None)
     en_name: Optional[str] = Field(None)
     popular_major: Optional[str] = Field(None)
-    type: Optional[SchoolType] = Field(None)
+    type: Union[str, SchoolType] = Field(...)
     logo_url: Optional[HttpUrl] = Field(None)
     cover_image: Optional[HttpUrl] = Field(None)
     location: Optional[str] = Field(None)
@@ -117,6 +116,17 @@ class UpdateSchoolRequest(BaseModel):
     description: Optional[str] = Field(None)
     mission: Optional[str] = Field(None)
     vision: Optional[str] = Field(None)
+
+    @validator("type", pre=True)
+    def validate_type(cls, v):
+        if isinstance(v, str):
+            try:
+                return SchoolType(v).value  # Convert to Enum and return its value
+            except ValueError:
+                raise ValueError(f"Invalid school type: {v}. Allowed values: {[e.value for e in SchoolType]}")
+        elif isinstance(v, SchoolType):
+            return v.value  # Return Enum value
+        return v
 
 
 class SchoolResponse(BaseModel):

@@ -328,7 +328,25 @@ async def update_school(school_uuid: str, data: UpdateSchoolRequest, db: AsyncSe
             )
 
     for key, value in data.dict(exclude_unset=True).items():
-        setattr(school, key, value)
+        if key == "type":
+            if isinstance(value, str):
+                try:
+                    validated_type = SchoolType(value)
+                    setattr(school, key, validated_type.value)
+                except ValueError:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Invalid school type: {value}. Allowed values: {[e.value for e in SchoolType]}"
+                    )
+            elif isinstance(value, SchoolType):
+                setattr(school, key, value.value)
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid type value: {value}. Expected string or SchoolType Enum."
+                )
+        else:
+            setattr(school, key, value)
 
     school.updated_at = datetime.utcnow()
 
