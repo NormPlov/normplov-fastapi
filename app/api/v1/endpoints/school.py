@@ -171,6 +171,7 @@ async def create_school_endpoint(
     highest_price: float = Form(None),
     latitude: float = Form(None),
     longitude: float = Form(None),
+    map_url: str = Form(None),
     email: str = Form(None),
     website: str = Form(None),
     description: str = Form(None),
@@ -178,6 +179,7 @@ async def create_school_endpoint(
     vision: str = Form(None),
     logo: UploadFile = File(None),
     cover_image: UploadFile = File(None),
+    is_popular: bool = Form(False),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -193,6 +195,7 @@ async def create_school_endpoint(
             highest_price=highest_price,
             latitude=latitude,
             longitude=longitude,
+            map_url=map_url,
             email=email,
             website=website,
             description=description,
@@ -200,6 +203,7 @@ async def create_school_endpoint(
             vision=vision,
             logo=logo,
             cover_image=cover_image,
+            is_popular=is_popular,
             db=db,
         )
 

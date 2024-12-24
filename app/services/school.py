@@ -1,5 +1,6 @@
 import logging
 import shutil
+import re
 
 from datetime import datetime
 from typing import Optional
@@ -10,15 +11,16 @@ from sqlalchemy.orm import joinedload
 from pathlib import Path
 from app.core.config import settings
 from app.exceptions.formatters import format_http_exception
-from app.models import SchoolMajor, Province, Faculty
+from app.models import Province, Faculty
 from app.models.school import School, SchoolType
 from app.schemas.payload import BaseResponse
 from app.schemas.school import UpdateSchoolRequest, SchoolDetailsResponse
-from fastapi import HTTPException, status, UploadFile, Query
+from fastapi import HTTPException, status, UploadFile
 from sqlalchemy.future import select
 from app.utils.file import validate_file_extension, validate_file_size
-from app.utils.maps import generate_google_map_embed_url
 from app.utils.pagination import paginate_results
+from urllib.parse import urlparse, parse_qs
+
 
 logger = logging.getLogger(__name__)
 
@@ -261,7 +263,6 @@ async def load_all_schools(
             "total_pages": (total_schools + page_size - 1) // page_size,
         }
 
-        # Format the response
         formatted_schools = [
             {
                 "uuid": str(school.uuid),
@@ -371,6 +372,22 @@ async def delete_school(school_uuid: str, db: AsyncSession):
     )
 
 
+def extract_lat_long_from_map_url(map_url: str):
+    if not map_url:
+        return None, None
+
+    lat_long_regex = re.compile(r"@(-?\d+\.\d+),(-?\d+\.\d+)")
+    match = lat_long_regex.search(map_url)
+    if match:
+        return float(match.group(1)), float(match.group(2))
+
+    query_params = parse_qs(urlparse(map_url).query)
+    if "3d" in query_params and "4d" in query_params:
+        return float(query_params["3d"][0]), float(query_params["4d"][0])
+
+    return None, None
+
+
 async def create_school_service(
     province_uuid: str,
     kh_name: str,
@@ -383,6 +400,7 @@ async def create_school_service(
     highest_price: float,
     latitude: float,
     longitude: float,
+    map_url: str,
     email: str,
     website: str,
     description: str,
@@ -390,11 +408,17 @@ async def create_school_service(
     vision: str,
     logo: UploadFile = None,
     cover_image: UploadFile = None,
+    is_popular: bool = False,
     db: AsyncSession = None,
 ):
     try:
-        # Validate school type
         try:
+            if map_url:
+                extracted_lat, extracted_long = extract_lat_long_from_map_url(map_url)
+                if extracted_lat and extracted_long:
+                    latitude = latitude or extracted_lat
+                    longitude = longitude or extracted_long
+
             validated_school_type = SchoolType(school_type.upper())
         except ValueError:
             raise format_http_exception(
@@ -427,8 +451,6 @@ async def create_school_service(
                 message="Province not found.",
                 details="The specified province does not exist or has been deleted.",
             )
-
-        google_map_embed_url = generate_google_map_embed_url(latitude, longitude) if latitude and longitude else None
 
         logo_directory = Path(settings.BASE_UPLOAD_FOLDER) / "school_logos"
         cover_image_directory = Path(settings.BASE_UPLOAD_FOLDER) / "school_cover_images"
@@ -463,7 +485,8 @@ async def create_school_service(
                 shutil.copyfileobj(cover_image.file, buffer)
             cover_image_url = f"{settings.BASE_UPLOAD_FOLDER}/school_cover_images/{cover_image_path.name}"
 
-        # Create new school
+        reference_url = "https://edurank.org/geo/kh/" if is_popular else None
+
         new_school = School(
             uuid=uuid4(),
             kh_name=kh_name,
@@ -476,7 +499,7 @@ async def create_school_service(
             highest_price=highest_price,
             latitude=latitude,
             longitude=longitude,
-            google_map_embed_url=google_map_embed_url,
+            map_url=map_url,
             email=email,
             website=website,
             description=description,
@@ -485,6 +508,8 @@ async def create_school_service(
             province_id=province.id,
             logo_url=logo_url,
             cover_image=cover_image_url,
+            is_popular=is_popular,
+            reference_url=reference_url,
         )
 
         db.add(new_school)
