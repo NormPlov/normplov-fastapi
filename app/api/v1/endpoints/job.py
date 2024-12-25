@@ -325,8 +325,8 @@ async def update_job_route(
     summary="Create a new job with a logo",
 )
 async def create_job_route(
-    title: str = Form(...),
-    company: str = Form(...),
+    title: str = Form(None),
+    company: str = Form(None),
     location: str = Form(None),
     facebook_url: str = Form(None),
     posted_at: str = Form(None),

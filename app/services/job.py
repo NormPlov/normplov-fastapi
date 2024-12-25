@@ -359,9 +359,9 @@ async def update_job(
 
 
 async def create_job(
-    title: str,
-    company: str,
-    location: str,
+    title: Optional[str],
+    company: Optional[str],
+    location: Optional[str],
     facebook_url: Optional[str],
     posted_at: Optional[str],
     description: Optional[str],
