@@ -245,8 +245,8 @@ async def load_all_jobs(
         return [
             JobDetailsResponse(
                 uuid=job.uuid,
-                title=job.title,
-                company_name=job.company,
+                title=job.title if job.title else "Unknown Title",
+                company_name=job.company if job.company else "Unknown Company",
                 logo=job.logo,
                 location=job.location,
                 job_type=job.job_type,
@@ -258,10 +258,11 @@ async def load_all_jobs(
                 phone=job.phone,
                 website=job.website,
                 created_at=job.created_at,
-                closing_date=job.closing_date.strftime("%d.%b.%Y") if job.closing_date else None,
+                closing_date=job.closing_date.strftime("%d.%b.%Y") if job.closing_date and job.closing_date >= datetime.utcnow() else None,
                 category=job.category,
             )
             for job in jobs
+            if job.closing_date is None or job.closing_date >= datetime.utcnow()
         ]
 
     except Exception as exc:
