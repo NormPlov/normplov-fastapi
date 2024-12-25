@@ -41,6 +41,7 @@ class SchoolDetailsResponse(BaseModel):
     phone: Optional[str]
     lowest_price: Optional[float]
     highest_price: Optional[float]
+    map_url: Optional[str]
     latitude: Optional[float]
     longitude: Optional[float]
     email: Optional[str]
@@ -103,14 +104,14 @@ class UpdateSchoolRequest(BaseModel):
     kh_name: Optional[str] = Field(None)
     en_name: Optional[str] = Field(None)
     popular_major: Optional[str] = Field(None)
-    type: Union[str, SchoolType] = Field(...)
+    type: Optional[Union[str, SchoolType]] = Field(None)
     logo_url: Optional[HttpUrl] = Field(None)
     cover_image: Optional[HttpUrl] = Field(None)
     location: Optional[str] = Field(None)
     phone: Optional[str] = Field(None)
     lowest_price: Optional[float] = Field(None)
     highest_price: Optional[float] = Field(None)
-    map: Optional[HttpUrl] = Field(None)
+    map_url: Optional[str] = Field(None)
     email: Optional[EmailStr] = Field(None)
     website: Optional[HttpUrl] = Field(None)
     description: Optional[str] = Field(None)

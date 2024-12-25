@@ -1,7 +1,5 @@
 import uuid
 
-from sqlalchemy.orm import relationship
-
 from app.core.database import Base
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy import (

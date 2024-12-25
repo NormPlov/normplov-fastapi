@@ -181,6 +181,7 @@ async def get_school_with_paginated_majors(
             phone=school.phone,
             lowest_price=school.lowest_price,
             highest_price=school.highest_price,
+            map_url=school.map_url,
             latitude=school.latitude,
             longitude=school.longitude,
             email=school.email,
@@ -298,6 +299,22 @@ async def load_all_schools(
         )
 
 
+def extract_lat_long_from_map_url(map_url: str):
+    if not map_url:
+        return None, None
+
+    lat_long_regex = re.compile(r"@(-?\d+\.\d+),(-?\d+\.\d+)")
+    match = lat_long_regex.search(map_url)
+    if match:
+        return float(match.group(1)), float(match.group(2))
+
+    query_params = parse_qs(urlparse(map_url).query)
+    if "3d" in query_params and "4d" in query_params:
+        return float(query_params["3d"][0]), float(query_params["4d"][0])
+
+    return None, None
+
+
 async def update_school(school_uuid: str, data: UpdateSchoolRequest, db: AsyncSession):
     stmt = select(School).where(School.uuid == school_uuid, School.is_deleted == False)
     result = await db.execute(stmt)
@@ -328,6 +345,12 @@ async def update_school(school_uuid: str, data: UpdateSchoolRequest, db: AsyncSe
             )
 
     for key, value in data.dict(exclude_unset=True).items():
+        if key == "map_url" and value:
+            lat, long = extract_lat_long_from_map_url(value)
+            if lat is not None and long is not None:
+                school.latitude = lat
+                school.longitude = long
+
         if key == "type":
             if isinstance(value, str):
                 try:
@@ -336,7 +359,7 @@ async def update_school(school_uuid: str, data: UpdateSchoolRequest, db: AsyncSe
                 except ValueError:
                     raise HTTPException(
                         status_code=400,
-                        detail=f"Invalid school type: {value}. Allowed values: {[e.value for e in SchoolType]}"
+                        detail=f"Invalid school type: {value}. Allowed values: {[e.value for e in SchoolType]}."
                     )
             elif isinstance(value, SchoolType):
                 setattr(school, key, value.value)
@@ -388,22 +411,6 @@ async def delete_school(school_uuid: str, db: AsyncSession):
         payload={"id": school.id, "uuid": str(school.uuid)},
         message="School deleted successfully."
     )
-
-
-def extract_lat_long_from_map_url(map_url: str):
-    if not map_url:
-        return None, None
-
-    lat_long_regex = re.compile(r"@(-?\d+\.\d+),(-?\d+\.\d+)")
-    match = lat_long_regex.search(map_url)
-    if match:
-        return float(match.group(1)), float(match.group(2))
-
-    query_params = parse_qs(urlparse(map_url).query)
-    if "3d" in query_params and "4d" in query_params:
-        return float(query_params["3d"][0]), float(query_params["4d"][0])
-
-    return None, None
 
 
 async def create_school_service(

@@ -15,7 +15,6 @@ from app.services.learning_style_assessment import predict_learning_style
 from app.services.personality_assessment import process_personality_assessment
 from app.services.skill_assessment import predict_skills
 from app.services.value_assessment import process_value_assessment
-from app.utils.pagination import paginate_results
 
 logging.basicConfig(
     level=logging.DEBUG,
