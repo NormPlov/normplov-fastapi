@@ -1,5 +1,6 @@
 import logging
 import uuid as uuid_lib
+import re
 
 from datetime import datetime
 from typing import Optional
@@ -58,7 +59,13 @@ async def get_trending_jobs_data_route(db: AsyncSession = Depends(get_db)):
 )
 async def get_job_categories_route(db: AsyncSession = Depends(get_db)):
     try:
-        categories = await get_unique_job_categories(db)
+        # Fetch unique categories
+        raw_categories = await get_unique_job_categories(db)
+
+        # Clean the categories
+        categories = [
+            re.sub(r'[\\/"]+', '', category).strip() for category in raw_categories if category
+        ]
 
         return BaseResponse(
             date=datetime.utcnow().strftime("%Y-%m-%d"),

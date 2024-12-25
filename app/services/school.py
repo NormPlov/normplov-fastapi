@@ -380,7 +380,7 @@ async def update_school(school_uuid: str, data: UpdateSchoolRequest, db: AsyncSe
     return BaseResponse(
         date=datetime.utcnow(),
         status=status.HTTP_200_OK,
-        payload={"id": school.id, "uuid": str(school.uuid)},
+        payload={"uuid": str(school.uuid)},
         message="School updated successfully."
     )
 
