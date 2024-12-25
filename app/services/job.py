@@ -129,8 +129,8 @@ async def admin_load_all_jobs(
         return [
             JobDetailsResponse(
                 uuid=job.uuid,
-                title=job.title,
-                company_name=job.company,
+                title=job.title if job.title else "Unknown Title",
+                company_name=job.company if job.company else "Unknown Company",
                 logo=job.logo,
                 location=job.location,
                 job_type=job.job_type,

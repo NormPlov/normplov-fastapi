@@ -19,9 +19,9 @@ class Job(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     uuid = Column(UUID(as_uuid=True), unique=True, nullable=False, default=uuid.uuid4)
-    title = Column(String(255), nullable=False)
+    title = Column(String(255), nullable=True)
     category = Column(String(100), nullable=True)
-    company = Column(String(255), nullable=False)
+    company = Column(String(255), nullable=True)
     logo = Column(Text, nullable=True)
     facebook_url = Column(Text, nullable=True)
     location = Column(String(255), nullable=True)

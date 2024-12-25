@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 
 from typing import Optional, List, Dict, Any
 from fastapi import HTTPException
@@ -123,16 +124,29 @@ async def fetch_metrics(db: AsyncSession, year: int = None, month: int = None):
     ]
 
     line_chart_query = text("""
-        SELECT DATE_TRUNC('month', created_at) AS month, COUNT(*) AS user_count
-        FROM users
-        WHERE is_deleted = FALSE AND EXTRACT(YEAR FROM created_at) IN (EXTRACT(YEAR FROM NOW()), EXTRACT(YEAR FROM NOW()) - 1)
-        GROUP BY DATE_TRUNC('month', created_at)
-        ORDER BY DATE_TRUNC('month', created_at)
-    """)
+            SELECT EXTRACT(MONTH FROM created_at) AS month, 
+                   COUNT(*) AS user_count, 
+                   EXTRACT(YEAR FROM created_at) AS year
+            FROM users
+            WHERE is_deleted = FALSE AND EXTRACT(YEAR FROM created_at) IN (EXTRACT(YEAR FROM NOW()), EXTRACT(YEAR FROM NOW()) - 1)
+            GROUP BY EXTRACT(MONTH FROM created_at), EXTRACT(YEAR FROM created_at)
+            ORDER BY month
+        """)
     line_chart_result = await db.execute(line_chart_query)
-    line_chart_data = [
-        {"month": row["month"].strftime("%Y-%m"), "user_count": row["user_count"]} for row in line_chart_result.mappings()
-    ]
+
+    months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    line_chart_data = [{"month": month,
+                        str(datetime.utcnow().year - 1): 0,
+                        str(datetime.utcnow().year): 0} for month in months]
+
+    for row in line_chart_result.mappings():
+        month_index = int(row["month"]) - 1
+        year = int(row["year"])
+
+        if year == datetime.utcnow().year - 1:
+            line_chart_data[month_index][str(datetime.utcnow().year - 1)] = row["user_count"]
+        elif year == datetime.utcnow().year:
+            line_chart_data[month_index][str(datetime.utcnow().year)] = row["user_count"]
 
     return {
         "total_users": total_users,
