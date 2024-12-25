@@ -21,7 +21,6 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     try:
         return decode_jwt_token(token)
     except Exception as e:
-        logger.error(f"Error in get_current_user: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials.",
@@ -36,14 +35,11 @@ async def get_current_user_data(
     try:
         user_uuid = current_user.get("uuid")
         if not user_uuid:
-            logger.error("Missing UUID in current user data.")
             raise format_http_exception(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 message="Authentication required.",
                 details="Invalid user data.",
             )
-
-        logger.info(f"Fetching user data for UUID: {user_uuid}")
 
         stmt = (
             select(User)
@@ -62,7 +58,6 @@ async def get_current_user_data(
             )
 
         if user.is_blocked:
-            logger.warning(f"Blocked user attempted access: UUID {user.uuid}")
             raise format_http_exception(
                 status_code=status.HTTP_403_FORBIDDEN,
                 message="Permission denied.",
@@ -73,7 +68,6 @@ async def get_current_user_data(
 
         return user
     except Exception as e:
-        logger.error(f"Error in get_current_user_data: {e}")
         raise format_http_exception(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             message="An error occurred while retrieving user data.",
@@ -87,7 +81,6 @@ async def is_admin_user(current_user: User = Depends(get_current_user_data)) -> 
         validate_authentication(current_user)
 
         if not any(role.role.name == "ADMIN" for role in current_user.roles):
-            logger.warning(f"Non-admin user attempted admin-only action: UUID {current_user.uuid}")
             raise format_http_exception(
                 status_code=status.HTTP_403_FORBIDDEN,
                 message="Permission denied.",
@@ -96,7 +89,6 @@ async def is_admin_user(current_user: User = Depends(get_current_user_data)) -> 
 
         return current_user
     except Exception as e:
-        logger.error(f"Error in is_admin_user: {e}")
         raise format_http_exception(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             message="An error occurred while checking admin privileges.",

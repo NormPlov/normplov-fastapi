@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     # JWT Configuration
     JWT_SECRET: str = Field(default="-vv7YfCkPifps-Vg7sc-dOXHzImbV3sN8NJN-vfTiBuDCmzTtCVHMHGNhQJ5FsvIbk3Q8hyKClFRW_DnZ7uswQ", env="JWT_SECRET")
     JWT_ALGORITHM: str = Field(default="HS256", env="JWT_ALGORITHM")
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=3, env="JWT_TOKEN_EXPIRE_MINUTES")
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=60, env="JWT_TOKEN_EXPIRE_MINUTES")
     SECRET_KEY: str = Field(default="8d5f01d7a83a4c8abf0e3cb7...3c08a3f6f0e5d3d62c12345", env="SECRET_KEY")
 
     # Email Configuration
