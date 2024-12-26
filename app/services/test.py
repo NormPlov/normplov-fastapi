@@ -1,21 +1,19 @@
 import json
 import logging
 import uuid
+
 from uuid import UUID
-
 from typing import List, Dict, Any, Optional, Tuple
-
 from pydantic import UUID4
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import joinedload, selectinload
-from sqlalchemy.sql import text
 from datetime import date
-from app.models import UserResponse, UserTest, User
+from app.exceptions.formatters import format_http_exception
+from app.models import UserResponse, UserTest, User, AssessmentType
 from datetime import datetime
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import HTTPException
-from sqlalchemy import cast
+from fastapi import HTTPException, status
 from app.schemas.payload import BaseResponse
 from app.schemas.test import UserTestResponseSchema, PaginationMetadata
 from app.utils.pagination import paginate_results
@@ -37,7 +35,7 @@ async def fetch_user_tests_for_current_user(
                 selectinload(UserTest.user_responses)
             )
             .where(
-                UserTest.user_id == current_user.id,  # Use the current user's ID
+                UserTest.user_id == current_user.id,
                 UserTest.is_deleted == False
             )
             .order_by(UserTest.created_at.desc())
@@ -58,7 +56,7 @@ async def fetch_user_tests_for_current_user(
                 response_data=[
                     json.loads(response.response_data) if isinstance(response.response_data, str) else response.response_data
                     for response in test.user_responses
-                    if not response.is_deleted and response.response_data  # Only include valid responses
+                    if not response.is_deleted and response.response_data
                 ],
                 created_at=test.created_at
             )
@@ -200,28 +198,19 @@ async def create_user_test(
     assessment_type_id: int
 ) -> UserTest:
     try:
-        stmt = text(
-            """
-            SELECT name
-            FROM user_tests
-            WHERE user_id = :user_id
-            ORDER BY created_at DESC
-            LIMIT 1
-            """
-        )
-        result = await db.execute(stmt, {"user_id": user_id})
-        latest_test = result.scalar()
+        assessment_type = (
+            await db.execute(
+                select(AssessmentType.name).where(AssessmentType.id == assessment_type_id)
+            )
+        ).scalar_one_or_none()
 
-        if latest_test and latest_test.startswith("Test "):
-            try:
-                latest_index = int(latest_test.replace("Test ", "").strip())
-                next_index = latest_index + 1
-            except ValueError:
-                next_index = 1
-        else:
-            next_index = 1
+        if not assessment_type:
+            raise format_http_exception(
+                status_code=status.HTTP_404_NOT_FOUND,
+                message="Assessment type not found."
+            )
 
-        test_name = f"Test {next_index}"
+        test_name = f"{assessment_type} Test"
 
         while True:
             generated_uuid = str(uuid.uuid4())
@@ -249,6 +238,13 @@ async def create_user_test(
 
         return new_test
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to create user test: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="An error occurred while creating the user test.")
+        raise format_http_exception(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            message="An error occurred while creating the user test.",
+            details=str(e),
+        )
+

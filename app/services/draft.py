@@ -479,28 +479,8 @@ async def save_user_response_as_draft(
             )
 
         draft_name_prefix = f"{assessment_type_name} Draft"
-        latest_draft = (
-            await db.execute(
-                select(UserResponse.draft_name).where(
-                    UserResponse.user_id == current_user.id,
-                    UserResponse.assessment_type_id == assessment_type_id,
-                    UserResponse.is_draft == True,
-                    UserResponse.is_deleted == False,
-                    UserResponse.draft_name.like(f"{draft_name_prefix}%"),
-                ).order_by(UserResponse.created_at.desc()).limit(1)
-            )
-        ).scalar_one_or_none()
 
-        if latest_draft:
-            try:
-                latest_number = int(latest_draft.replace(draft_name_prefix, "").strip())
-                next_number = latest_number + 1
-            except ValueError:
-                next_number = 1
-        else:
-            next_number = 1
-
-        draft_name = f"{draft_name_prefix} {next_number}"
+        draft_name = f"{draft_name_prefix}"
 
         draft = UserResponse(
             uuid=uuid.uuid4(),
