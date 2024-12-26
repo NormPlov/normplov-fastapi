@@ -47,7 +47,7 @@ async def trigger_job_scraper(
     headers = {"Authorization": f"Bearer {token}"}
     payload = scrape_request.dict()
 
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=10.0) as client:
         try:
             response = await client.post(f"{DJANGO_BASE_URL}/job-scraper", headers=headers, json=payload)
             response.raise_for_status()
@@ -58,7 +58,15 @@ async def trigger_job_scraper(
                 detail=f"Failed to trigger job scraper: {e.response.text}",
             )
         except httpx.RequestError as e:
-            raise HTTPException(status_code=500, detail=f"Request error: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Request error: {str(e)}",
+            )
+        except httpx.TimeoutException:
+            raise HTTPException(
+                status_code=504,
+                detail="Request to Django service timed out. Please try again later.",
+            )
 
 
 @job_scaper_router.put("/jobs/update/{uuid}", tags=["Django Jobs"])

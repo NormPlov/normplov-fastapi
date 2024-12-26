@@ -189,7 +189,7 @@ async def load_drafts_endpoint(
 @draft_router.put("/update_draft/{draft_uuid}", response_model=BaseResponse)
 async def update_draft(
     draft_uuid: str,
-    update_request: Dict[str, Dict[str, int]],
+    update_request: Dict[str, Dict[str, float]],
     current_user: User = Depends(get_current_user_data),
     db: AsyncSession = Depends(get_db),
 ):
