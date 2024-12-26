@@ -178,10 +178,14 @@ async def upload_profile_picture_route(
     return await upload_profile_picture(uuid, file, db)
 
 
-# Update user profile
 @user_router.put("/profile/update/{uuid}", response_model=BaseResponse)
-async def update_profile_route(uuid: str, profile_update: UpdateUser, db: AsyncSession = Depends(get_db)):
-    return await update_user_profile(uuid, profile_update, db)
+async def update_profile_route(
+    uuid: str,
+    profile_update: UpdateUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user_data),
+):
+    return await update_user_profile(uuid, profile_update, db, current_user)
 
 
 # Soft-delete a user

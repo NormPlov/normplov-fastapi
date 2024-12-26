@@ -6,12 +6,13 @@ import logging
 from typing import Optional, Tuple, List
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import joinedload, selectinload
-from fastapi import HTTPException, status, UploadFile
+from fastapi import HTTPException, status, UploadFile, Depends
 from sqlalchemy import or_, desc, asc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from app.core.config import settings
+from app.dependencies import get_current_user_data
 from app.exceptions.file_exceptions import FileExtensionError, handle_file_error, FileSizeError
 from app.models import UserRole, Role, UserTest
 from app.models.user import User
@@ -309,7 +310,11 @@ async def update_user_bio(uuid: str, bio: str, db: AsyncSession) -> BaseResponse
     )
 
 
-async def upload_profile_picture(uuid: str, file: UploadFile, db: AsyncSession) -> BaseResponse:
+async def upload_profile_picture(
+        uuid: str,
+        file: UploadFile,
+        db: AsyncSession,
+) -> BaseResponse:
     try:
         extension = file.filename.split(".")[-1].lower()
         if extension not in settings.ALLOWED_EXTENSIONS:
@@ -365,7 +370,13 @@ async def upload_profile_picture(uuid: str, file: UploadFile, db: AsyncSession) 
         )
 
 
-async def update_user_profile(uuid: str, profile_update: UpdateUser, db: AsyncSession) -> BaseResponse:
+async def update_user_profile(
+    uuid: str,
+    profile_update: UpdateUser,
+    db: AsyncSession,
+    current_user: User,
+) -> BaseResponse:
+    # Fetch the user profile by UUID
     stmt = select(User).where(User.uuid == uuid)
     result = await db.execute(stmt)
     user = result.scalars().first()
@@ -376,40 +387,48 @@ async def update_user_profile(uuid: str, profile_update: UpdateUser, db: AsyncSe
             detail="User not found."
         )
 
+    if str(user.id) != str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to update this profile."
+        )
+
     update_data = profile_update.dict(exclude_unset=True)
 
     if "date_of_birth" in update_data:
         date_of_birth = update_data["date_of_birth"]
 
-        if date_of_birth is not None:  # Only validate if date_of_birth is provided
-            date_of_birth = datetime.strptime(date_of_birth, "%Y-%m-%d")
+        if date_of_birth is not None:
+            date_of_birth = datetime.strptime(date_of_birth, "%Y-%m-%d").replace(tzinfo=timezone.utc)
 
-            if date_of_birth > datetime.utcnow():
+            if date_of_birth > datetime.now(timezone.utc):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="date_of_birth cannot be in the future."
                 )
 
-            min_age_date = datetime.utcnow() - timedelta(days=13 * 365)
+            min_age_date = datetime.now(timezone.utc) - timedelta(days=13 * 365)
             if date_of_birth > min_age_date:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="User must be at least 13 years old."
                 )
 
-        update_data["date_of_birth"] = date_of_birth  # Update with parsed datetime
+            date_of_birth = date_of_birth.replace(tzinfo=None)
+
+        update_data["date_of_birth"] = date_of_birth
 
     for key, value in update_data.items():
         setattr(user, key, value)
 
-    user.updated_at = datetime.utcnow()
+    user.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
     db.add(user)
     await db.commit()
     await db.refresh(user)
 
     return BaseResponse(
-        date=datetime.utcnow().strftime("%d-%B-%Y"),
+        date=datetime.now(timezone.utc).strftime("%d-%B-%Y"),
         status=status.HTTP_200_OK,
         message="User profile updated successfully.",
         payload={
@@ -419,10 +438,9 @@ async def update_user_profile(uuid: str, profile_update: UpdateUser, db: AsyncSe
             "phone_number": user.phone_number,
             "bio": user.bio,
             "gender": user.gender,
-            "date_of_birth": user.date_of_birth,
+            "date_of_birth": user.date_of_birth.isoformat(),
         },
     )
-
 
 
 async def delete_user_by_uuid(uuid: str, db: AsyncSession, current_user: User) -> BaseResponse:
