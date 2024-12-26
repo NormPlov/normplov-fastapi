@@ -22,7 +22,7 @@ class Job(Base):
     title = Column(String(255), nullable=True)
     category = Column(String(100), nullable=True)
     company = Column(String(255), nullable=True)
-    logo = Column(Text, nullable=True)
+    logo = Column(Text, nullable=True, default=None)
     facebook_url = Column(Text, nullable=True)
     location = Column(String(255), nullable=True)
     posted_at = Column(DateTime, nullable=True)
