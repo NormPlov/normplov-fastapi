@@ -189,21 +189,23 @@ async def load_drafts_endpoint(
 @draft_router.put("/update_draft/{draft_uuid}", response_model=BaseResponse)
 async def update_draft(
     draft_uuid: str,
-    update_request: Dict[str, dict],
+    update_request: Dict[str, Dict[str, int]],
     current_user: User = Depends(get_current_user_data),
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        if "response_data" not in update_request:
+        if "responses" not in update_request:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Missing 'response_data' in request body.",
+                detail="Missing 'responses' in request body."
             )
+
+        responses_data = update_request["responses"]
 
         updated_draft = await update_user_response_draft(
             db=db,
             draft_uuid=draft_uuid,
-            updated_data=update_request["response_data"],
+            updated_data=responses_data,
             current_user=current_user,
         )
 
@@ -227,7 +229,10 @@ async def update_draft(
         raise e
     except Exception as e:
         logger.error(f"Unexpected error in update_draft route: {e}")
-        raise HTTPException(status_code=500, detail="An unexpected error occurred.")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred."
+        )
 
 
 @draft_router.post("/save_draft/{assessment_type_name}", response_model=BaseResponse)
