@@ -11,6 +11,7 @@ import logging
 
 from sqlalchemy.orm import joinedload
 from app.core.config import settings
+from app.exceptions.formatters import format_http_exception
 from app.models.user import User
 from app.schemas.payload import BaseResponse
 from app.schemas.user import UserCreateRequest, VerifyResetPasswordRequest, VerifyResetPasswordResponse
@@ -72,54 +73,63 @@ async def get_or_create_user(db: AsyncSession, user_info: dict) -> dict:
 
 
 async def validate_user_credentials(db: AsyncSession, email: str, password: str) -> User:
-    stmt = (
-        select(User)
-        .where(User.email == email)
-        .options(joinedload(User.roles))
-    )
-    result = await db.execute(stmt)
-    user = result.scalars().first()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password."
+    try:
+        stmt = (
+            select(User)
+            .where(User.email == email)
+            .options(joinedload(User.roles))
         )
+        result = await db.execute(stmt)
+        user = result.scalars().first()
 
-    # Check if the password matches the stored hash
-    if not pwd_context.verify(password, user.password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password."
+        if not user:
+            raise format_http_exception(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                message="Incorrect email or password."
+            )
+
+        if not pwd_context.verify(password, user.password):
+            raise format_http_exception(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                message="Incorrect email or password."
+            )
+
+        if not user.is_verified:
+            raise format_http_exception(
+                status_code=status.HTTP_403_FORBIDDEN,
+                message="User is not verified. Please verify your account."
+            )
+
+        if not user.is_active:
+            raise format_http_exception(
+                status_code=status.HTTP_403_FORBIDDEN,
+                message="User account is inactive. Please contact support."
+            )
+
+        return user
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error validating user credentials for email {email}: {e}")
+        raise format_http_exception(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            message="An unexpected error occurred while validating user credentials.",
+            details=str(e),
         )
-
-    if not user.is_verified:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User is not verified. Please verify your account."
-        )
-
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is inactive. Please contact support."
-        )
-
-    return user
 
 
 async def perform_login(db: AsyncSession, email: str, password: str) -> BaseResponse:
     user = await validate_user_credentials(db, email, password)
 
     if not user.is_active:
-        raise HTTPException(
+        raise format_http_exception(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is inactive. Contact support."
+            message="User account is inactive. Contact support."
         )
     if not user.is_verified:
-        raise HTTPException(
+        raise format_http_exception(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is not verified. Please verify your email."
+            message="User account is not verified. Please verify your email."
         )
 
     stmt = (

@@ -9,6 +9,8 @@ from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from fastapi import HTTPException, status
+
+from app.exceptions.formatters import format_http_exception
 from app.models import AssessmentType, UserResponse, User
 from app.services.interest_assessment import process_interest_assessment
 from app.services.learning_style_assessment import predict_learning_style
@@ -85,6 +87,44 @@ async def delete_draft(
         )
 
 
+def get_required_keys(assessment_type_id: int) -> list:
+    if assessment_type_id == 1:
+        return [f"Q{i}" for i in range(1, 17)]
+    elif assessment_type_id == 2:
+        return [f"q{i}" for i in range(1, 13)]
+    elif assessment_type_id == 3:
+        return [f"Q{i}" for i in range(1, 23)]
+    elif assessment_type_id == 4:
+        return [
+            "Complex Problem Solving",
+            "Critical Thinking Score",
+            "Mathematics Score",
+            "Science Score",
+            "Learning Strategy Score",
+            "Monitoring Score",
+            "Active Listening Score",
+            "Social Perceptiveness Score",
+            "Judgment and Decision Making Score",
+            "Instructing Score",
+            "Active Learning Score",
+            "Time Management Score",
+            "Writing Score",
+            "Speaking Score",
+            "Reading Comprehension Score",
+        ]
+    elif assessment_type_id == 5:
+        return [
+            f"Q{i}_{style}"
+            for i in range(1, 9)
+            for style in ["Visual", "Auditory", "ReadWrite", "Kinesthetic"]
+        ]
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported assessment type.",
+        )
+
+
 async def submit_assessment(
     db: AsyncSession,
     current_user: User,
@@ -101,7 +141,7 @@ async def submit_assessment(
             UserResponse.created_at,
             UserResponse.updated_at,
             UserResponse.assessment_type_id,
-            AssessmentType.name.label("assessment_type_name"),  # Include assessment type name
+            AssessmentType.name.label("assessment_type_name"),
         ).join(
             AssessmentType, AssessmentType.id == UserResponse.assessment_type_id
         ).where(
@@ -113,15 +153,15 @@ async def submit_assessment(
         draft = result.first()
 
         if not draft:
-            raise HTTPException(
+            raise format_http_exception(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Draft not found.",
+                message="Draft not found.",
             )
 
         if draft.is_draft is False:
-            raise HTTPException(
+            raise format_http_exception(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="This draft has already been submitted.",
+                message="This draft has already been submitted.",
             )
 
         saved_responses = (
@@ -129,19 +169,22 @@ async def submit_assessment(
         )
 
         if not isinstance(new_responses, dict):
-            raise HTTPException(
+            raise format_http_exception(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid format for new responses. Expected a flat dictionary.",
+                message="Invalid format for new responses.",
+                details="Expected a flat dictionary.",
             )
 
         merged_responses = saved_responses.copy()
         merged_responses.update(new_responses)
 
-        missing_keys = [f"q{i}" for i in range(1, 13) if f"q{i}" not in merged_responses]
+        required_keys = get_required_keys(draft.assessment_type_id)
+        missing_keys = [key for key in required_keys if key not in merged_responses]
         if missing_keys:
-            raise HTTPException(
+            raise format_http_exception(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Missing required keys in responses: {', '.join(missing_keys)}",
+                message="Missing required keys in responses.",
+                details={"missing_keys": missing_keys},
             )
 
         if draft.assessment_type_id == 1:
@@ -155,9 +198,9 @@ async def submit_assessment(
         elif draft.assessment_type_id == 5:
             response_data = await predict_learning_style(merged_responses, draft_uuid, db, current_user)
         else:
-            raise HTTPException(
+            raise format_http_exception(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Unsupported assessment type.",
+                message="Unsupported assessment type.",
             )
 
         update_stmt = (
@@ -182,9 +225,11 @@ async def submit_assessment(
     except HTTPException as e:
         raise e
     except Exception as e:
-        raise HTTPException(
+        logger.error(f"Error occurred while submitting assessment for user {current_user.id}: {e}")
+        raise format_http_exception(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while submitting the assessment: {str(e)}",
+            message="An error occurred while submitting the assessment.",
+            details=str(e),
         )
 
 
@@ -346,37 +391,54 @@ async def update_user_response_draft(
     current_user: User,
 ):
     try:
-        draft = (
-            await db.execute(
-                select(UserResponse).where(
-                    UserResponse.uuid.cast(UUID) == draft_uuid,
-                    UserResponse.user_id == current_user.id,
-                    UserResponse.is_draft == True,
-                    UserResponse.is_deleted == False,
-                )
-            )
-        ).scalar_one_or_none()
+        stmt = select(
+            UserResponse,
+            AssessmentType.name.label("assessment_type_name")
+        ).join(
+            AssessmentType, UserResponse.assessment_type_id == AssessmentType.id
+        ).where(
+            UserResponse.uuid.cast(UUID) == draft_uuid,
+            UserResponse.user_id == current_user.id,
+            UserResponse.is_draft == True,
+            UserResponse.is_deleted == False,
+        )
+
+        result = await db.execute(stmt)
+        draft = result.first()
 
         if not draft:
-            raise HTTPException(
+            raise format_http_exception(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Draft not found or does not belong to the current user.",
+                message="Draft not found or does not belong to the current user.",
             )
 
-        draft.response_data = updated_data
-        draft.updated_at = func.now()
+        user_response, assessment_type_name = draft
+
+        required_keys = get_required_keys(user_response.assessment_type_id)
+        invalid_keys = [key for key in updated_data.keys() if key not in required_keys]
+
+        if invalid_keys:
+            raise format_http_exception(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                message=f"Invalid keys for assessment type '{assessment_type_name}'",
+                details={"invalid_keys": invalid_keys},
+            )
+
+        user_response.response_data = updated_data
+        user_response.updated_at = func.now()
 
         await db.commit()
-        await db.refresh(draft)
-        return draft
+        await db.refresh(user_response)
+        return user_response
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error updating draft {draft_uuid} for user {current_user.id}: {e}")
-        raise HTTPException(
+        raise format_http_exception(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An unexpected error occurred.",
+            message="An unexpected error occurred while updating the draft.",
+            details=str(e),
         )
 
 
@@ -387,12 +449,11 @@ async def save_user_response_as_draft(
     assessment_type_id: int,
     current_user: User,
 ):
-
     try:
         if not current_user or not current_user.id:
-            raise HTTPException(
+            raise format_http_exception(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User is not authenticated.",
+                message="User is not authenticated.",
             )
 
         assessment_type = (
@@ -402,9 +463,19 @@ async def save_user_response_as_draft(
         ).scalar_one_or_none()
 
         if not assessment_type:
-            raise HTTPException(
+            raise format_http_exception(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Assessment type not found.",
+                message="Assessment type not found.",
+            )
+
+        required_keys = get_required_keys(assessment_type_id)
+        invalid_keys = [key for key in response_data.keys() if key not in required_keys]
+
+        if invalid_keys:
+            raise format_http_exception(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                message=f"Invalid keys for assessment type '{assessment_type_name}'",
+                details={"invalid_keys": invalid_keys},
             )
 
         draft_name_prefix = f"{assessment_type_name} Draft"

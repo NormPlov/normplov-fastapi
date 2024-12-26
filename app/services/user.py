@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 from app.core.config import settings
 from app.dependencies import get_current_user_data
 from app.exceptions.file_exceptions import FileExtensionError, handle_file_error, FileSizeError
+from app.exceptions.formatters import format_http_exception
 from app.models import UserRole, Role, UserTest
 from app.models.user import User
 from app.schemas.payload import BaseResponse
@@ -249,33 +250,42 @@ async def get_user_by_email(email: str, db: AsyncSession, current_user: User) ->
 
 
 async def change_password(user: User, old_password: str, new_password: str, db: AsyncSession) -> BaseResponse:
+    try:
+        if not verify_password(old_password, user.password):
+            raise format_http_exception(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                message="Old password is incorrect."
+            )
 
-    if not verify_password(old_password, user.password):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Old password is incorrect."
+        validate_password(new_password)
+
+        if verify_password(new_password, user.password):
+            raise format_http_exception(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                message="New password must be different from the old password."
+            )
+
+        user.password = hash_password(new_password)
+        user.updated_at = datetime.utcnow()
+
+        db.add(user)
+        await db.commit()
+
+        return BaseResponse(
+            date=datetime.utcnow().strftime("%d-%B-%Y"),
+            status=status.HTTP_200_OK,
+            message="Password updated successfully.",
+            payload=None,
         )
-
-    validate_password(new_password)
-
-    if verify_password(new_password, user.password):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="New password must be different from the old password."
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error changing password for user {user.id}: {e}")
+        raise format_http_exception(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            message="An unexpected error occurred while changing the password.",
+            details=str(e),
         )
-
-    user.password = hash_password(new_password)
-    user.updated_at = datetime.utcnow()
-
-    db.add(user)
-    await db.commit()
-
-    return BaseResponse(
-        date=datetime.utcnow().strftime("%d-%B-%Y"),
-        status=status.HTTP_200_OK,
-        message="Password updated successfully.",
-        payload=None,
-    )
 
 
 async def update_user_bio(uuid: str, bio: str, db: AsyncSession) -> BaseResponse:

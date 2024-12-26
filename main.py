@@ -23,7 +23,8 @@ from app.api.v1.endpoints import (
     job,
     dimension,
     province,
-    admin
+    admin,
+    job_scraper
 )
 
 
@@ -97,5 +98,5 @@ app.include_router(faculty.faculty_router, prefix="/api/v1/faculties", tags=["Fa
 app.include_router(major.major_router, prefix="/api/v1/majors", tags=["Major"])
 app.include_router(job.job_router, prefix="/api/v1/jobs", tags=["Job"])
 app.include_router(admin.admin_router, prefix="/api/v1/admin", tags=["Admin"])
-
+app.include_router(job_scraper.job_scaper_router, prefix="/api/v1/django", tags=["Django Integration"])
 
