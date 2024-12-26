@@ -17,7 +17,7 @@ from sqlalchemy import and_
 logger = logging.getLogger(__name__)
 
 
-async def get_trending_jobs_data(db: AsyncSession) -> dict:
+async def get_trending_jobs(db: AsyncSession) -> dict:
     try:
         title_query = text("""
             SELECT 
@@ -30,53 +30,30 @@ async def get_trending_jobs_data(db: AsyncSession) -> dict:
             GROUP BY date_trunc('month', jobs.posted_at), jobs.title
             ORDER BY date_trunc('month', jobs.posted_at) ASC, COUNT(jobs.id) DESC
         """)
+
         title_result = await db.execute(title_query)
         title_data = title_result.fetchall()
 
-        category_query = text("""
-            SELECT 
-                date_trunc('month', jobs.posted_at) AS month,
-                REGEXP_REPLACE(jobs.category, '[\"\\\\]', '', 'g') AS cleaned_label,
-                COUNT(jobs.id) AS count
-            FROM jobs
-            WHERE jobs.is_deleted = false 
-              AND jobs.posted_at IS NOT NULL
-            GROUP BY date_trunc('month', jobs.posted_at), cleaned_label
-            HAVING TRIM(REGEXP_REPLACE(jobs.category, '[\"\\\\]', '', 'g')) != ''
-            ORDER BY date_trunc('month', jobs.posted_at) ASC, COUNT(jobs.id) DESC
-        """)
-        category_result = await db.execute(category_query)
-        category_data = category_result.fetchall()
+        all_months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        trending_jobs = {month: {"month": month, "label": "", "count": 0} for month in all_months}
 
-        title_line_data = [
-            {
-                "month": row.month.strftime("%Y-%m"),
-                "label": row.label.strip(),
-                "count": row.count,
-            }
-            for row in title_data
-        ]
+        for row in title_data:
+            month = row.month.strftime("%b")
+            label = row.label.strip()
+            count = row.count
 
-        seen_categories = set()
-        category_line_data = []
-        for row in category_data:
-            cleaned_label = row.cleaned_label.strip()
-            if cleaned_label not in seen_categories:
-                seen_categories.add(cleaned_label)
-                category_line_data.append({
-                    "month": row.month.strftime("%Y-%m"),
-                    "label": cleaned_label,
-                    "count": row.count,
-                })
+            if count > trending_jobs[month]["count"]:
+                trending_jobs[month]["label"] = label
+                trending_jobs[month]["count"] = count
 
-        return {
-            "titles": title_line_data,
-            "categories": category_line_data
-        }
+        trending_jobs_list = list(trending_jobs.values())
+
+        return {"trending_jobs": trending_jobs_list}
+
     except Exception as exc:
         raise HTTPException(
             status_code=500,
-            detail=f"An error occurred while aggregating job data: {str(exc)}",
+            detail=f"An error occurred while fetching trending job data: {str(exc)}",
         )
 
 

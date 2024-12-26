@@ -72,6 +72,7 @@ async def fetch_metrics(db: AsyncSession, year: int = None, month: int = None):
     total_tests = await db.scalar(select(func.count(UserTest.id)))
     total_active_users = await db.scalar(select(func.count(User.id)).where(User.is_active == True))
 
+    # Pie chart query
     pie_chart_query = text("""
         SELECT type, COUNT(*) AS count
         FROM schools
@@ -88,18 +89,48 @@ async def fetch_metrics(db: AsyncSession, year: int = None, month: int = None):
         for item in pie_chart_raw_data
     ]
 
+    # Bar chart job title query
     bar_chart_jobs_query = text("""
-        SELECT category, COUNT(*) AS count
-        FROM jobs
-        WHERE is_deleted = FALSE AND is_active = TRUE
-        GROUP BY category
-        ORDER BY count DESC
+        WITH job_counts AS (
+            SELECT 
+                date_trunc('month', jobs.posted_at) AS month,
+                jobs.title AS label,
+                COUNT(jobs.id) AS count
+            FROM jobs
+            WHERE jobs.is_deleted = FALSE AND jobs.is_active = TRUE AND jobs.title IS NOT NULL
+            GROUP BY date_trunc('month', jobs.posted_at), jobs.title
+        )
+        SELECT 
+            month, 
+            label, 
+            count
+        FROM job_counts
+        WHERE (month, count) IN (
+            SELECT 
+                month, 
+                MAX(count) 
+            FROM job_counts 
+            GROUP BY month
+        )
+        ORDER BY month ASC;
     """)
-    bar_chart_jobs_result = await db.execute(bar_chart_jobs_query)
-    bar_chart_jobs_data = [
-        {"category": row["category"], "count": row["count"]} for row in bar_chart_jobs_result.mappings()
-    ]
 
+    # Execute the query to fetch the job counts
+    bar_chart_jobs_result = await db.execute(bar_chart_jobs_query)
+
+    # Initialize dictionary with months from Jan to Dec, all set to 0 initially
+    months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    bar_chart_jobs_data = {month: {"label": "", "count": 0} for month in months}
+
+    # Populate the data for each month, filling in the highest job title per month
+    for row in bar_chart_jobs_result.mappings():
+        month_name = row["month"].strftime("%b")
+        bar_chart_jobs_data[month_name] = {"label": row["label"], "count": row["count"]}
+
+    # Convert the dictionary back to a list of data
+    bar_chart_jobs_data = [{"month": month, **data} for month, data in bar_chart_jobs_data.items()]
+
+    # Existing query for bar chart assessments
     filters = "WHERE ur.is_deleted = FALSE"
     params = {}
 
@@ -120,9 +151,11 @@ async def fetch_metrics(db: AsyncSession, year: int = None, month: int = None):
     """)
     bar_chart_assessments_result = await db.execute(bar_chart_assessments_query, params)
     bar_chart_assessments_data = [
-        {"assessment_type": row["assessment_type"], "count": row["count"]} for row in bar_chart_assessments_result.mappings()
+        {"assessment_type": row["assessment_type"], "count": row["count"]} for row in
+        bar_chart_assessments_result.mappings()
     ]
 
+    # Line chart query for users count per month
     line_chart_query = text("""
             SELECT EXTRACT(MONTH FROM created_at) AS month, 
                    COUNT(*) AS user_count, 
@@ -134,7 +167,7 @@ async def fetch_metrics(db: AsyncSession, year: int = None, month: int = None):
         """)
     line_chart_result = await db.execute(line_chart_query)
 
-    months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    # Initialize the months with default user counts as 0
     line_chart_data = [{"month": month,
                         str(datetime.utcnow().year - 1): 0,
                         str(datetime.utcnow().year): 0} for month in months]
@@ -148,6 +181,7 @@ async def fetch_metrics(db: AsyncSession, year: int = None, month: int = None):
         elif year == datetime.utcnow().year:
             line_chart_data[month_index][str(datetime.utcnow().year)] = row["user_count"]
 
+    # Return the metrics
     return {
         "total_users": total_users,
         "total_feedbacks": total_feedbacks,
@@ -158,4 +192,3 @@ async def fetch_metrics(db: AsyncSession, year: int = None, month: int = None):
         "bar_chart_assessments_data": bar_chart_assessments_data,
         "line_chart_data": line_chart_data,
     }
-
