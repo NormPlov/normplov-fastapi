@@ -59,9 +59,9 @@ async def get_metrics(
     current_admin: User = Depends(is_admin_user),
     year: int = Query(None, description="Filter data by year"),
     month: int = Query(None, description="Filter data by month"),
+    week: int = Query(None, description="Filter data by week")
 ):
-    metrics = await fetch_metrics(db, year=year, month=month)
-
+    metrics = await fetch_metrics(db, year=year, month=month, week=week)
     return BaseResponse(
         date=datetime.utcnow(),
         status=200,
