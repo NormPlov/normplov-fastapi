@@ -197,8 +197,8 @@ async def predict_skills_endpoint(
         validate_authentication(current_user)
         data = SkillAssessmentInput(**data.dict())
 
-        final_test_uuid = data.test_uuid
-        skill_result = await predict_skills(data, db, current_user)
+        # Directly process skill assessment
+        skill_result = await predict_skills(data.responses, db, current_user)
 
         response_data = {
             "test_uuid": skill_result.test_uuid,
@@ -243,19 +243,17 @@ async def predict_skills_endpoint(
     "/predict-learning-style",
     response_model=BaseResponse,
     summary="Predict user's learning style",
-    description="Analyze learning style based on user responses. Optionally associate results with a test UUID."
+    description="Analyze learning style based on user responses."
 )
 async def predict_learning_style_route(
     data: LearningStyleInput,
-    test_uuid: str | None = Query(None, description="Optional test UUID. Overrides test_uuid in the body if provided."),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_data),
 ):
     try:
         data = LearningStyleInput(**data.dict())
-        final_test_uuid = test_uuid or data.test_uuid
 
-        learning_style_result = await predict_learning_style(data, final_test_uuid, db, current_user)
+        learning_style_result = await predict_learning_style(data, db, current_user)
 
         response_data = {
             "test_uuid": learning_style_result["test_uuid"],

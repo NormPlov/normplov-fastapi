@@ -132,6 +132,7 @@ async def submit_assessment(
     new_responses: dict,
 ) -> dict:
     try:
+        # Fetch the draft
         stmt = select(
             UserResponse.uuid,
             UserResponse.draft_name,
@@ -164,22 +165,35 @@ async def submit_assessment(
                 message="This draft has already been submitted.",
             )
 
+        # Load saved responses
         saved_responses = (
             draft.response_data if isinstance(draft.response_data, dict) else json.loads(draft.response_data)
         )
 
+        # Ensure `new_responses` is a valid dictionary
         if not isinstance(new_responses, dict):
             raise format_http_exception(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 message="Invalid format for new responses.",
-                details="Expected a flat dictionary.",
+                details="Expected a dictionary.",
             )
 
-        merged_responses = saved_responses.copy()
-        merged_responses.update(new_responses)
+        # Merge saved and new responses
+        merged_responses = {**saved_responses, **new_responses}
+        logger.debug(f"Merged responses: {merged_responses}")
 
+        # Validate merged responses and fill missing keys
         required_keys = get_required_keys(draft.assessment_type_id)
-        missing_keys = [key for key in required_keys if key not in merged_responses]
+        for key in required_keys:
+            if key not in merged_responses:
+                merged_responses[key] = 0  # Default value for missing keys
+
+        logger.debug(f"Final merged responses: {merged_responses}")
+
+        # Validate the final structure
+        submitted_keys = set(merged_responses.keys())
+        missing_keys = [key for key in required_keys if key not in submitted_keys]
+
         if missing_keys:
             raise format_http_exception(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -187,6 +201,7 @@ async def submit_assessment(
                 details={"missing_keys": missing_keys},
             )
 
+        # Process based on assessment type
         if draft.assessment_type_id == 1:
             response_data = await process_personality_assessment(merged_responses, db, current_user)
         elif draft.assessment_type_id == 2:
@@ -194,15 +209,18 @@ async def submit_assessment(
         elif draft.assessment_type_id == 3:
             response_data = await process_value_assessment(merged_responses, db, current_user)
         elif draft.assessment_type_id == 4:
-            response_data = await predict_skills(merged_responses, draft_uuid, db, current_user)
+            # Debug input for predict_skills
+            logger.debug(f"Input for skill prediction: {merged_responses}")
+            response_data = await predict_skills(merged_responses, db, current_user)
         elif draft.assessment_type_id == 5:
-            response_data = await predict_learning_style(merged_responses, draft_uuid, db, current_user)
+            response_data = await predict_learning_style(merged_responses, db, current_user)
         else:
             raise format_http_exception(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 message="Unsupported assessment type.",
             )
 
+        # Update the draft
         update_stmt = (
             UserResponse.__table__.update()
             .where(UserResponse.uuid.cast(UUID) == draft_uuid)

@@ -1,11 +1,23 @@
 from datetime import datetime
-
-from pydantic import BaseModel, Field
-from typing import Dict, Optional
+from pydantic import BaseModel, Field, validator
+from typing import Dict, Optional, Union
 
 
 class SubmitDraftAssessmentRequest(BaseModel):
-    responses: Dict[str, int] = Field(..., description="The updated responses for the assessment.")
+    responses: Dict[str, Union[int, float]] = Field(
+        ..., description="The updated responses for the assessment."
+    )
+
+    @validator("responses")
+    def validate_scores(cls, responses):
+        if not responses:
+            raise ValueError("Responses cannot be empty.")
+        for key, value in responses.items():
+            if not isinstance(value, (int, float)):
+                raise ValueError(f"Invalid score for {key}: {value}. Must be a number (int or float).")
+            if value < 0:
+                raise ValueError(f"Score for {key} must be non-negative.")
+        return responses
 
 
 class DraftItem(BaseModel):

@@ -88,23 +88,19 @@ async def get_assessment_type_id(name: str, db: AsyncSession) -> int:
 
 async def predict_learning_style(
     data: dict,
-    test_uuid: str | None,
     db: AsyncSession,
     current_user,
 ):
     try:
         assessment_type_id = await get_assessment_type_id("Learning Style", db)
 
-        if test_uuid:
-            test_details = await db.execute(
-                select(UserTest).where(UserTest.uuid == test_uuid)
-            )
-            user_test = test_details.scalars().first()
-
-            if not user_test:
-                raise HTTPException(status_code=404, detail="Test not found.")
-        else:
+        try:
             user_test = await create_user_test(db, current_user.id, assessment_type_id)
+            logger.debug(f"Created new test: uuid={user_test.uuid}, name={user_test.name}")
+        except Exception as e:
+            logger.error(f"Failed to create test for user_id={current_user.id}: {e}")
+            await db.rollback()
+            raise HTTPException(status_code=500, detail="Failed to create a new test.")
 
         stmt = select(Question).options(joinedload(Question.dimension))
         result = await db.execute(stmt)

@@ -1,3 +1,5 @@
+from typing import Dict
+
 import pandas as pd
 import logging
 import uuid
@@ -45,7 +47,7 @@ async def get_assessment_type_id(name: str, db: AsyncSession) -> int:
 
 
 async def predict_skills(
-    data: SkillAssessmentInput,
+    responses: Dict[str, float],
     db: AsyncSession,
     current_user
 ) -> SkillAssessmentResponse:
@@ -56,27 +58,24 @@ async def predict_skills(
 
         assessment_type_id = await get_assessment_type_id("Skills", db)
 
-        if data.test_uuid:
-            test_query = select(UserTest).where(UserTest.uuid == data.test_uuid, UserTest.user_id == user_id)
-            test_result = await db.execute(test_query)
-            user_test = test_result.scalars().first()
-            if not user_test:
-                raise HTTPException(status_code=404, detail="Invalid test UUID provided.")
-        else:
+        try:
             user_test = await create_user_test(db, current_user.id, assessment_type_id)
+            logger.debug(f"Created new test: uuid={user_test.uuid}, name={user_test.name}")
+        except Exception as e:
+            logger.error(f"Failed to create test for user_id={current_user.id}: {e}")
+            await db.rollback()
+            raise HTTPException(status_code=500, detail="Failed to create a new test.")
 
-        input_df = pd.DataFrame([data.responses])
-        logger.debug(f"Input DataFrame: {input_df}")
+        input_df = pd.DataFrame([responses])
+        input_df = input_df.reindex(columns=skill_model.feature_names_in_, fill_value=0)
 
         predictions = skill_model.predict(input_df)
-        logger.debug(f"Model Predictions: {predictions}")
 
         target_columns = list(skill_encoders.keys())
         predicted_labels = {
             column: skill_encoders[column].inverse_transform([predictions[0][idx]])[0]
             for idx, column in enumerate(target_columns)
         }
-        logger.debug(f"Predicted Labels: {predicted_labels}")
 
         category_percentages = {}
         total_skills_per_category = {}
@@ -91,7 +90,6 @@ async def predict_skills(
             dimension = result.scalars().first()
 
             if not dimension:
-                logger.warning(f"No dimension found for skill: {skill_with_level}")
                 continue
 
             skill_category_query = (
@@ -103,7 +101,6 @@ async def predict_skills(
             skill_category = result.scalars().first()
 
             if not skill_category:
-                logger.warning(f"No skill category found for dimension ID: {dimension.id}")
                 continue
 
             category_name = skill_category.category_name

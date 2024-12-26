@@ -5,10 +5,7 @@ from typing import Optional
 
 class SkillAssessmentInput(BaseModel):
     responses: Dict[str, float] = Field(
-        ..., description="Mapping of skill names to their scores."
-    )
-    test_uuid: Optional[str] = Field(
-        None, description="Optional UUID for linking to an existing test."
+        ..., description="Mapping of skill names to their scores as floating-point numbers."
     )
 
     @validator("responses")
@@ -16,9 +13,12 @@ class SkillAssessmentInput(BaseModel):
         if not responses:
             raise ValueError("Responses cannot be empty.")
         for skill, value in responses.items():
-            if not isinstance(value, (int, float)) or value < 0:
-                raise ValueError(f"Invalid score for {skill}: {value}. Must be non-negative.")
+            if not isinstance(value, (int, float)):
+                raise ValueError(f"Invalid score for {skill}: {value}. Must be a number.")
+            if value < 0:
+                raise ValueError(f"Score for {skill} must be non-negative.")
         return responses
+
 
 
 class MajorWithSchools(BaseModel):
