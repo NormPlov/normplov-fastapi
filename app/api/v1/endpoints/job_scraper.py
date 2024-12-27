@@ -47,7 +47,7 @@ async def trigger_job_scraper(
     headers = {"Authorization": f"Bearer {token}"}
     payload = scrape_request.dict()
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(verify=False, timeout=700.0) as client:
         try:
             response = await client.post(f"{DJANGO_BASE_URL}/job-scraper", headers=headers, json=payload)
             response.raise_for_status()
@@ -69,12 +69,14 @@ async def trigger_job_scraper(
             )
 
 
-@job_scaper_router.put("/jobs/update/{uuid}", tags=["Django Jobs"])
+@job_scaper_router.patch("/jobs/update/{uuid}", tags=["Django Jobs"])
 async def update_job(uuid: str, job_data: dict, token: str = Depends(oauth2_scheme)):
     headers = {"Authorization": f"Bearer {token}"}
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=300.0) as client:
         try:
-            response = await client.put(f"{DJANGO_BASE_URL}/jobs/update/{uuid}", json=job_data, headers=headers)
+            response = await client.patch(f"{DJANGO_BASE_URL}/jobs/update/{uuid}", json=job_data, headers=headers)
+            print(f"Request Payload: {job_data}")
+            print(f"Request Headers: {headers}")
             response.raise_for_status()
             return response.json()
         except httpx.HTTPError as e:

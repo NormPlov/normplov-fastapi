@@ -11,11 +11,12 @@ from sqlalchemy.future import select
 from fastapi import HTTPException, status
 
 from app.exceptions.formatters import format_http_exception
-from app.models import AssessmentType, UserResponse, User
+from app.models import AssessmentType, UserResponse, User, UserTest
 from app.services.interest_assessment import process_interest_assessment
 from app.services.learning_style_assessment import predict_learning_style
 from app.services.personality_assessment import process_personality_assessment
 from app.services.skill_assessment import predict_skills
+from app.services.test import create_user_test
 from app.services.value_assessment import process_value_assessment
 
 logging.basicConfig(
@@ -234,7 +235,7 @@ async def submit_assessment(
         await db.commit()
 
         return {
-            "uuid": str(draft.uuid),
+            "uuid": response_data.test_uuid,
             "test_name": f"{draft.assessment_type_name} Test {draft.created_at.strftime('%d-%m-%Y')}",
             "assessment_type_name": draft.assessment_type_name,
             "response_data": response_data,
