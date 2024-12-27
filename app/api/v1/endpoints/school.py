@@ -87,7 +87,7 @@ async def get_school_details_route(
 async def fetch_all_schools_route(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(10, ge=1, le=100, description="Number of items per page"),
-    search: str = Query(None, description="Search by Khmer name, English name, or description"),
+    search: str = Query(None, description="Search by Khmer name and English name"),
     type: str = Query(None, description="Filter by school type"),
     province_uuid: str = Query(None, description="Filter by province uuid"),
     sort_by: str = Query("created_at", description="Field to sort by"),

@@ -226,9 +226,7 @@ async def load_all_schools(
         if search:
             search_filter = or_(
                 School.kh_name.ilike(f"%{search}%"),
-                School.en_name.ilike(f"%{search}%"),
-                School.location.ilike(f"%{search}%"),
-                School.description.ilike(f"%{search}%"),
+                School.en_name.ilike(f"%{search}%")
             )
             query = query.where(search_filter)
 
