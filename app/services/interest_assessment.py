@@ -8,7 +8,7 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from fastapi import HTTPException
-from app.models import UserTest, School, SchoolMajor, Major, CareerMajor
+from app.models import UserTest, School, SchoolMajor, Major, CareerMajor, CareerHollandCode
 from app.models.user_response import UserResponse
 from app.models.user_assessment_score import UserAssessmentScore
 from app.models.dimension import Dimension
@@ -91,7 +91,8 @@ async def process_interest_assessment(
         key_traits_result = await db.execute(key_traits_query)
         key_traits = [trait.key_trait for trait in key_traits_result.scalars().all()]
 
-        career_query = select(Career).where(Career.holland_code_id == holland_code_obj.id)
+        career_query = select(Career).join(CareerHollandCode).where(
+            CareerHollandCode.holland_code_id == holland_code_obj.id)
         career_result = await db.execute(career_query)
         career_paths = career_result.scalars().all()
 

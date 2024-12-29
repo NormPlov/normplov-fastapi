@@ -22,12 +22,12 @@ class Major(Base):
     description = Column(Text, nullable=True)
     fee_per_year = Column(Float, nullable=True)
     duration_years = Column(Integer, nullable=True)
-    is_popular = Column(Boolean, default=False, nullable=False)
-    degree = Column(Enum(DegreeType), nullable=False)
-    is_deleted = Column(Boolean, default=False, nullable=False)
-    faculty_id = Column(Integer, ForeignKey("faculties.id", ondelete="CASCADE"), nullable=False)
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+    is_popular = Column(Boolean, nullable=True)
+    degree = Column(Enum(DegreeType), nullable=True)
+    is_deleted = Column(Boolean, nullable=True)
+    faculty_id = Column(Integer, ForeignKey("faculties.id", ondelete="CASCADE"), nullable=True)
+    created_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
 
     # Relationships
     school_majors = relationship("SchoolMajor", back_populates="major", cascade="all, delete-orphan")

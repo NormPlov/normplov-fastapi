@@ -20,6 +20,12 @@ from app.models.major import Major
 from app.models.school_major import SchoolMajor
 from app.models.career_major import CareerMajor
 from app.models.faculty import Faculty
+from app.models.personality_type import PersonalityType
+from app.models.career_category import CareerCategory
+from app.models.career_personality_type import CareerPersonalityType
+from app.models.career_holland_code import CareerHollandCode
+from app.models.career_value_category import CareerValueCategory
+from app.models.career_category_link import CareerCategoryLink
 
 
 __all__ = ["Role",
@@ -42,6 +48,12 @@ __all__ = ["Role",
            "SchoolMajor",
            "Faculty",
            "CareerMajor",
-           "Province"
+           "Province",
+           "PersonalityType",
+           "CareerCategory",
+           "CareerPersonalityType",
+           "CareerHollandCode",
+           "CareerValueCategory",
+           "CareerCategoryLink"
            ]
 

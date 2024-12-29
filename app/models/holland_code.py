@@ -19,6 +19,5 @@ class HollandCode(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     key_traits = relationship("HollandKeyTrait", back_populates="holland_code", cascade="all, delete-orphan")
-    careers = relationship("Career", back_populates="holland_code", cascade="all, delete-orphan")
-
+    career_holland_codes = relationship("CareerHollandCode", back_populates="holland_code")
 

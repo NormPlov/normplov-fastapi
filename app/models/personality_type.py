@@ -17,10 +17,8 @@ class PersonalityType(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    careers = relationship(
-        "Career",
-        back_populates="personality_type",
-        cascade="all, delete-orphan",
+    career_personality_types = relationship(
+        "CareerPersonalityType", back_populates="personality_type"
     )
     traits = relationship(
         "PersonalityTrait",
