@@ -362,9 +362,13 @@ async def load_drafts(
 
         count_stmt = select(func.count(UserResponse.id)).where(
             UserResponse.user_id == current_user.id,
-            UserResponse.is_deleted == False
+            UserResponse.is_deleted == False,
+            UserResponse.is_draft == True
         )
-        total_items = (await db.execute(count_stmt)).scalar()
+        result = await db.execute(count_stmt)
+        logger.info(f"Count query result: {result}")
+        total_items = result.scalar()
+        logger.info(f"Total items found: {total_items}")
 
         draft_items = []
         for draft in drafts:
