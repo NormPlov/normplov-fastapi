@@ -1,5 +1,6 @@
 import logging
 import httpx
+import requests
 
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.security import OAuth2PasswordBearer
@@ -82,25 +83,35 @@ async def trigger_job_scraper(
 
 @job_scaper_router.patch("/jobs/update/{uuid}", tags=["Django Jobs"])
 async def update_job(
-    uuid: str,
-    job_data: dict,
-    current_user: User = Depends(is_admin_user),
-    token: str = Depends(oauth2_scheme),
+        uuid: str,
+        job_data: dict,
+        current_user: User = Depends(is_admin_user),
+        token: str = Depends(oauth2_scheme),
 ):
     headers = {"Authorization": f"Bearer {token}"}
+    logger.debug(f"Sending token: Bearer {token}")
 
     async with httpx.AsyncClient(timeout=300.0) as client:
         try:
             response = await client.patch(
                 f"{DJANGO_BASE_URL}/jobs/update/{uuid}",
                 json=job_data,
-                headers=headers,
+                headers=headers
             )
             response.raise_for_status()
             return response.json()
-        except httpx.HTTPError as e:
-            logger.error(f"HTTPError: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to update job: {e}")
+
+        except httpx.HTTPStatusError as e:
+            logger.error(f"HTTP error occurred: {e}")
+            raise HTTPException(status_code=e.response.status_code, detail=f"Failed to update job: {e.response.text}")
+
+        except httpx.RequestError as e:
+            logger.error(f"Request error occurred: {e}")
+            raise HTTPException(status_code=500, detail=f"Request error: {str(e)}")
+
+        except httpx.TimeoutException:
+            logger.error("Timeout occurred while updating job")
+            raise HTTPException(status_code=504, detail="Request to Django service timed out. Please try again later.")
 
 
 @job_scaper_router.delete("/jobs/delete/{uuid}", tags=["Django Jobs"])

@@ -93,42 +93,46 @@ async def fetch_metrics(db: AsyncSession, year: int = None, month: int = None, w
     current_month = current_date.month
     current_week = current_date.isocalendar()[1]
 
-    target_week = week if week else current_week
-
+    # Modified bar_chart_jobs_query: Trending Jobs per month (Jan to Dec)
     bar_chart_jobs_query = text("""
         WITH job_counts AS (
             SELECT 
                 EXTRACT(MONTH FROM jobs.posted_at) AS month,
-                EXTRACT(WEEK FROM jobs.posted_at) AS week,
                 jobs.title AS label,
                 COUNT(jobs.id) AS count
             FROM jobs
             WHERE jobs.is_deleted = FALSE 
               AND jobs.is_active = TRUE 
               AND jobs.title IS NOT NULL 
-              AND EXTRACT(MONTH FROM jobs.posted_at) = :current_month 
               AND EXTRACT(YEAR FROM jobs.posted_at) = :current_year
-            GROUP BY EXTRACT(MONTH FROM jobs.posted_at), EXTRACT(WEEK FROM jobs.posted_at), jobs.title
+            GROUP BY EXTRACT(MONTH FROM jobs.posted_at), jobs.title
         )
         SELECT 
+            month, 
             label, 
             count
         FROM job_counts
-        WHERE week = :target_week
-        ORDER BY count DESC
-        LIMIT 5;
+        ORDER BY month, count DESC
     """)
 
     bar_chart_jobs_result = await db.execute(bar_chart_jobs_query, {
-        'current_month': current_month,
-        'current_year': current_year,
-        'target_week': target_week
+        'current_year': current_year
     })
 
-    bar_chart_jobs_data = [
-        {"label": row["label"], "count": row["count"]}
-        for row in bar_chart_jobs_result.mappings()
-    ]
+    # Short month names
+    month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+    # Organizing job data by month, and getting top 5 jobs for each month
+    bar_chart_jobs_data = {month_name: [] for month_name in month_names}  # Initialize a list for each month
+
+    for row in bar_chart_jobs_result.mappings():
+        month = int(row["month"])  # month as integer
+        job_label = row["label"]
+        job_count = row["count"]
+
+        # Append job data to the respective month, but limit to top 5 jobs
+        if len(bar_chart_jobs_data[month_names[month - 1]]) < 5:
+            bar_chart_jobs_data[month_names[month - 1]].append({"label": job_label, "count": job_count})
 
     filters = "WHERE ur.is_deleted = FALSE"
     params = {}
