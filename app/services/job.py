@@ -1,17 +1,13 @@
-import shutil
 import uuid
 import logging
 
-from pathlib import Path
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text, or_
-from fastapi import HTTPException, UploadFile
-from app.core.config import settings
+from fastapi import HTTPException
 from app.models import Job
 from app.schemas.job import JobDetailsResponse, JobResponse
 from datetime import datetime
-from app.utils.file import validate_file_extension, validate_file_size
 from sqlalchemy import and_
 
 logger = logging.getLogger(__name__)
@@ -19,32 +15,31 @@ logger = logging.getLogger(__name__)
 
 async def get_trending_jobs(db: AsyncSession) -> dict:
     try:
-        title_query = text("""
+        category_query = text("""
             SELECT 
                 date_trunc('month', jobs.posted_at) AS month,
-                jobs.title AS label,
+                jobs.category AS label,
                 COUNT(jobs.id) AS count
             FROM jobs
             WHERE jobs.is_deleted = false 
               AND jobs.posted_at IS NOT NULL
-            GROUP BY date_trunc('month', jobs.posted_at), jobs.title
+              AND jobs.category IS NOT NULL
+            GROUP BY date_trunc('month', jobs.posted_at), jobs.category
             ORDER BY date_trunc('month', jobs.posted_at) ASC, COUNT(jobs.id) DESC
         """)
 
-        title_result = await db.execute(title_query)
-        title_data = title_result.fetchall()
+        category_result = await db.execute(category_query)
+        category_data = category_result.fetchall()
 
-        all_months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-        trending_jobs = {month: {"month": month, "label": "", "count": 0} for month in all_months}
+        trending_jobs = {}
 
-        for row in title_data:
+        for row in category_data:
             month = row.month.strftime("%b")
             label = row.label.strip()
             count = row.count
 
-            if count > trending_jobs[month]["count"]:
-                trending_jobs[month]["label"] = label
-                trending_jobs[month]["count"] = count
+            if month not in trending_jobs or count > trending_jobs[month]["count"]:
+                trending_jobs[month] = {"month": month, "label": label, "count": count}
 
         trending_jobs_list = list(trending_jobs.values())
 

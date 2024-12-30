@@ -93,19 +93,19 @@ async def fetch_metrics(db: AsyncSession, year: int = None, month: int = None, w
     current_month = current_date.month
     current_week = current_date.isocalendar()[1]
 
-    # Modified bar_chart_jobs_query: Trending Jobs per month (Jan to Dec)
+    # Modified bar_chart_jobs_query: Trending Jobs per month (Jan to Dec) using job category instead of title
     bar_chart_jobs_query = text("""
         WITH job_counts AS (
             SELECT 
                 EXTRACT(MONTH FROM jobs.posted_at) AS month,
-                jobs.title AS label,
+                jobs.category AS label,
                 COUNT(jobs.id) AS count
             FROM jobs
             WHERE jobs.is_deleted = FALSE 
               AND jobs.is_active = TRUE 
-              AND jobs.title IS NOT NULL 
+              AND jobs.category IS NOT NULL 
               AND EXTRACT(YEAR FROM jobs.posted_at) = :current_year
-            GROUP BY EXTRACT(MONTH FROM jobs.posted_at), jobs.title
+            GROUP BY EXTRACT(MONTH FROM jobs.posted_at), jobs.category
         )
         SELECT 
             month, 
@@ -122,17 +122,20 @@ async def fetch_metrics(db: AsyncSession, year: int = None, month: int = None, w
     # Short month names
     month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
-    # Organizing job data by month, and getting top 5 jobs for each month
+    # Organizing job data by month, and getting top 5 job categories for each month
     bar_chart_jobs_data = {month_name: [] for month_name in month_names}  # Initialize a list for each month
 
     for row in bar_chart_jobs_result.mappings():
         month = int(row["month"])  # month as integer
-        job_label = row["label"]
+        job_category = row["label"]
         job_count = row["count"]
 
-        # Append job data to the respective month, but limit to top 5 jobs
+        # Append job category data to the respective month, but limit to top 5 categories
         if len(bar_chart_jobs_data[month_names[month - 1]]) < 5:
-            bar_chart_jobs_data[month_names[month - 1]].append({"label": job_label, "count": job_count})
+            bar_chart_jobs_data[month_names[month - 1]].append({"label": job_category, "count": job_count})
+
+    # Remove months that have no data (i.e., empty lists)
+    bar_chart_jobs_data = {month: data for month, data in bar_chart_jobs_data.items() if data}
 
     filters = "WHERE ur.is_deleted = FALSE"
     params = {}
@@ -159,14 +162,14 @@ async def fetch_metrics(db: AsyncSession, year: int = None, month: int = None, w
     ]
 
     line_chart_query = text("""
-            SELECT EXTRACT(MONTH FROM created_at) AS month, 
-                   COUNT(*) AS user_count, 
-                   EXTRACT(YEAR FROM created_at) AS year
-            FROM users
-            WHERE is_deleted = FALSE AND EXTRACT(YEAR FROM created_at) IN (EXTRACT(YEAR FROM NOW()), EXTRACT(YEAR FROM NOW()) - 1)
-            GROUP BY EXTRACT(MONTH FROM created_at), EXTRACT(YEAR FROM created_at)
-            ORDER BY month
-        """)
+        SELECT EXTRACT(MONTH FROM created_at) AS month, 
+               COUNT(*) AS user_count, 
+               EXTRACT(YEAR FROM created_at) AS year
+        FROM users
+        WHERE is_deleted = FALSE AND EXTRACT(YEAR FROM created_at) IN (EXTRACT(YEAR FROM NOW()), EXTRACT(YEAR FROM NOW()) - 1)
+        GROUP BY EXTRACT(MONTH FROM created_at), EXTRACT(YEAR FROM created_at)
+        ORDER BY month
+    """)
     line_chart_result = await db.execute(line_chart_query)
 
     months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]

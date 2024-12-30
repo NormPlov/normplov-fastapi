@@ -31,7 +31,7 @@ async def upload_image(file: UploadFile) -> dict:
 
         file_type = file.content_type
 
-        file_url = f"/{upload_dir}/{unique_filename}"
+        file_url = f"{upload_dir}/{unique_filename}"
 
         return {
             "file_url": file_url,

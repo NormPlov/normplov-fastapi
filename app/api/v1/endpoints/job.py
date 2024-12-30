@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
     response_model=BaseResponse,
     status_code=200,
     summary="Get trending job data for graph",
-    description="Fetch trending job data grouped by month based on job title."
+    description="Fetch trending job data grouped by month based on job category."
 )
 async def get_trending_jobs_data_route(db: AsyncSession = Depends(get_db)):
     try:
