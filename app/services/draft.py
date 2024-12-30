@@ -5,7 +5,7 @@ import logging
 from sqlalchemy.sql.expression import or_
 from typing import Dict, Optional
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy import func
+from sqlalchemy import func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from fastapi import HTTPException, status
@@ -33,50 +33,57 @@ async def get_latest_drafts_per_assessment_type(db: AsyncSession, current_user: 
             "Values": "value",
             "Skills": "skill",
             "Learning Style": "learningStyle",
+            "All Tests": "all"
         }
 
-        stmt = (
+        subquery = (
             select(
                 UserResponse.assessment_type_id,
-                func.max(UserResponse.created_at).label("latest_created_at")
+                UserResponse.uuid.label("draft_uuid")
             )
             .where(
                 UserResponse.user_id == current_user.id,
-                UserResponse.is_draft == True,
-                UserResponse.is_deleted == False
+                UserResponse.is_deleted == False,
+                UserResponse.is_draft == True
             )
-            .group_by(UserResponse.assessment_type_id)
+            .distinct(UserResponse.assessment_type_id)
+            .subquery()
         )
 
-        latest_draft_subquery = stmt.subquery()
-
-        query = (
+        stmt = (
             select(
-                UserResponse.uuid.label("draft_uuid"),
-                UserResponse.is_draft,
+                AssessmentType.id,
                 AssessmentType.name,
                 AssessmentType.title,
                 AssessmentType.description,
-                AssessmentType.image
+                AssessmentType.image,
+                func.coalesce(func.max(UserResponse.created_at), None).label("latest_draft_date"),
+                subquery.c.draft_uuid,
+                func.count(UserResponse.id).label("response_count")
             )
-            .join(AssessmentType, AssessmentType.id == UserResponse.assessment_type_id)
-            .join(
-                latest_draft_subquery,
-                (UserResponse.assessment_type_id == latest_draft_subquery.c.assessment_type_id) &
-                (UserResponse.created_at == latest_draft_subquery.c.latest_created_at)
-            )
+            .outerjoin(UserResponse, and_(
+                UserResponse.assessment_type_id == AssessmentType.id,
+                UserResponse.user_id == current_user.id,
+                UserResponse.is_deleted == False,
+                UserResponse.is_draft == True
+            ))
+            .outerjoin(subquery, subquery.c.assessment_type_id == AssessmentType.id)
+            .where(AssessmentType.is_deleted == False)
+            .group_by(AssessmentType.id, subquery.c.draft_uuid)
         )
 
-        result = await db.execute(query)
+        result = await db.execute(stmt)
         drafts = result.fetchall()
 
         draft_items = []
         for draft in drafts:
-            logger.debug(f"Assessment type name: {draft.name}")
+            is_draft = draft.response_count > 0
+
             route = route_mapping.get(draft.name, "unknown")
+
             draft_items.append({
-                "draft_uuid": draft.draft_uuid,
-                "is_draft": draft.is_draft,
+                "draft_uuid": draft.draft_uuid if is_draft else None,
+                "is_draft": is_draft,
                 "title": draft.title,
                 "description": draft.description,
                 "image": draft.image,
@@ -86,7 +93,6 @@ async def get_latest_drafts_per_assessment_type(db: AsyncSession, current_user: 
         return draft_items
 
     except Exception as e:
-        logger.error(f"Error retrieving latest drafts per assessment type: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail="An error occurred while retrieving the latest drafts."
