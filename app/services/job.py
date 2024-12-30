@@ -236,7 +236,7 @@ async def load_all_jobs(
                 website=job.website,
                 created_at=job.created_at,
                 closing_date=job.closing_date.strftime("%d.%b.%Y") if job.closing_date and job.closing_date >= datetime.utcnow() else None,
-                category=job.category,
+                category=" ".join(job.category.split()[:2]) if job.category else None,
             )
             for job in jobs
             if job.closing_date is None or job.closing_date >= datetime.utcnow()
