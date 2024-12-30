@@ -13,6 +13,7 @@ from app.models import AssessmentType, UserTest
 from app.models.user_feedback import UserFeedback
 from fastapi import HTTPException
 from app.schemas.payload import BaseResponse
+from app.utils.email import send_thank_you_email
 from app.utils.format_date import format_date
 from app.utils.pagination import paginate_results
 from app.utils.telegram import send_telegram_message
@@ -298,6 +299,8 @@ async def create_feedback(feedback: str, user_test_uuid: str, current_user, db: 
         )
         db.add(new_feedback)
         await db.commit()
+
+        await send_thank_you_email(current_user.email, current_user.username)
 
         formatted_date = format_date(created_at)
         telegram_message = (

@@ -375,10 +375,8 @@ async def create_job(
             is_active=is_active,
             logo=logo,
             category=category,
-            is_deleted=False,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
         )
+        print("Populated Job instance:", new_job.__dict__)
 
         db.add(new_job)
         await db.commit()
