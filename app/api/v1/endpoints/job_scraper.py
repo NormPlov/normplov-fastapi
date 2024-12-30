@@ -1,6 +1,5 @@
 import logging
 import httpx
-import requests
 
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.security import OAuth2PasswordBearer
