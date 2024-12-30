@@ -8,12 +8,42 @@ from sqlalchemy.future import select
 from app.schemas.payload import BaseResponse
 from app.schemas.draft import SaveDraftRequest, SubmitDraftAssessmentRequest
 from app.services.draft import load_drafts, retrieve_draft_by_uuid, submit_assessment, delete_draft, \
-    save_user_response_as_draft, update_user_response_draft
+    save_user_response_as_draft, update_user_response_draft, get_latest_drafts_per_assessment_type
 from datetime import datetime
 from typing import Optional, Dict
 
 logger = logging.getLogger(__name__)
 draft_router = APIRouter()
+
+
+@draft_router.get(
+    "/latest-drafts",
+    response_model=BaseResponse,
+    summary="Get the latest drafts for each test and assessment type.",
+    description="Fetches the latest drafts for each test under each assessment type for the authenticated user."
+)
+async def get_latest_drafts_endpoint(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user_data),
+):
+    try:
+        drafts = await get_latest_drafts_per_assessment_type(db, current_user)
+
+        return BaseResponse(
+            status=200,
+            message="Latest drafts retrieved successfully.",
+            date=datetime.utcnow().strftime("%d-%B-%Y %H:%M:%S"),
+            payload=drafts
+        )
+    except HTTPException as e:
+        logger.warning(f"HTTPException in get_latest_drafts_endpoint: {e.detail}")
+        raise e
+    except Exception as e:
+        logger.error(f"Unexpected error in get_latest_drafts_endpoint: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="An error occurred while retrieving the latest drafts."
+        )
 
 
 @draft_router.delete(

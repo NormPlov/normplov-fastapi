@@ -1,6 +1,6 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.dependencies import is_admin_user
@@ -11,10 +11,11 @@ from app.services.school import (
     delete_school,
     update_school,
     load_all_schools,
-    create_school_service, upload_school_logo_or_cover_service, get_school_with_paginated_majors, get_popular_schools
+    create_school_service,
+    get_school_with_paginated_majors, get_popular_schools
 )
 from app.schemas.school import (
-    UpdateSchoolRequest, UploadImageResponse
+    UpdateSchoolRequest
 )
 
 
@@ -29,36 +30,6 @@ school_router = APIRouter()
 )
 async def fetch_popular_schools(db: AsyncSession = Depends(get_db)):
     return await get_popular_schools(db)
-
-
-@school_router.patch("/{school_uuid}/upload_school_logo_cover", response_model=BaseResponse)
-async def upload_school_image_route(
-    school_uuid: str,
-    logo: UploadFile = File(None),
-    cover_image: UploadFile = File(None),
-    db: AsyncSession = Depends(get_db),
-):
-    try:
-        result = await upload_school_logo_or_cover_service(
-            school_uuid=school_uuid,
-            logo=logo,
-            cover_image=cover_image,
-            db=db,
-        )
-        return BaseResponse(
-            date=datetime.utcnow().strftime("%d-%B-%Y"),
-            status=status.HTTP_200_OK,
-            message="Image(s) uploaded successfully.",
-            payload=UploadImageResponse(**result),
-        )
-
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An unexpected error occurred: {str(e)}",
-        )
 
 
 @school_router.get(
@@ -177,8 +148,8 @@ async def create_school_endpoint(
     description: str = Form(None),
     mission: str = Form(None),
     vision: str = Form(None),
-    logo: UploadFile = File(None),
-    cover_image: UploadFile = File(None),
+    logo: str = Form(None),
+    cover_image: str = Form(None),
     is_popular: bool = Form(False),
     db: AsyncSession = Depends(get_db),
 ):

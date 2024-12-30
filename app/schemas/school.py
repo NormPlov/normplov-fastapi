@@ -55,24 +55,6 @@ class SchoolDetailsResponse(BaseModel):
         orm_mode = True
 
 
-class UploadSchoolLogoCoverRequest(BaseModel):
-    logo: Optional[str] = Field(None, description="Base64 or file name for the logo")
-    cover_image: Optional[str] = Field(None, description="Base64 or file name for the cover image")
-
-
-class UploadImageResponse(BaseModel):
-    uuid: str = Field(..., description="School UUID")
-    logo_url: Optional[str] = Field(None, description="Uploaded logo URL")
-    cover_image: Optional[str] = Field(None, description="Uploaded cover image URL")
-
-
-class SchoolType(PyEnum):
-    PRIVATE = "PRIVATE"
-    PUBLIC = "PUBLIC"
-    TVET = "TVET"
-    MAJORS_COURSES = "MAJORS_COURSES"
-
-
 class SchoolMajorsResponse(BaseModel):
     school_uuid: str = Field(...)
     majors: List[MajorResponse] = Field(...)
@@ -105,8 +87,8 @@ class UpdateSchoolRequest(BaseModel):
     en_name: Optional[str] = Field(None)
     popular_major: Optional[str] = Field(None)
     type: Optional[Union[str, SchoolType]] = Field(None)
-    logo_url: Optional[HttpUrl] = Field(None)
-    cover_image: Optional[HttpUrl] = Field(None)
+    logo_url: Optional[str] = Field(None)
+    cover_image: Optional[str] = Field(None)
     location: Optional[str] = Field(None)
     phone: Optional[str] = Field(None)
     lowest_price: Optional[float] = Field(None)

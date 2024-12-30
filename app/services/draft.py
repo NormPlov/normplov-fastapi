@@ -16,7 +16,6 @@ from app.services.interest_assessment import process_interest_assessment
 from app.services.learning_style_assessment import predict_learning_style
 from app.services.personality_assessment import process_personality_assessment
 from app.services.skill_assessment import predict_skills
-from app.services.test import create_user_test
 from app.services.value_assessment import process_value_assessment
 
 logging.basicConfig(
@@ -24,6 +23,74 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+
+async def get_latest_drafts_per_assessment_type(db: AsyncSession, current_user: User):
+    try:
+        route_mapping = {
+            "Personality": "personality",
+            "Interests": "interest",
+            "Values": "value",
+            "Skills": "skill",
+            "Learning Style": "learningStyle",
+        }
+
+        stmt = (
+            select(
+                UserResponse.assessment_type_id,
+                func.max(UserResponse.created_at).label("latest_created_at")
+            )
+            .where(
+                UserResponse.user_id == current_user.id,
+                UserResponse.is_draft == True,
+                UserResponse.is_deleted == False
+            )
+            .group_by(UserResponse.assessment_type_id)
+        )
+
+        latest_draft_subquery = stmt.subquery()
+
+        query = (
+            select(
+                UserResponse.uuid.label("draft_uuid"),
+                UserResponse.is_draft,
+                AssessmentType.name,
+                AssessmentType.title,
+                AssessmentType.description,
+                AssessmentType.image
+            )
+            .join(AssessmentType, AssessmentType.id == UserResponse.assessment_type_id)
+            .join(
+                latest_draft_subquery,
+                (UserResponse.assessment_type_id == latest_draft_subquery.c.assessment_type_id) &
+                (UserResponse.created_at == latest_draft_subquery.c.latest_created_at)
+            )
+        )
+
+        result = await db.execute(query)
+        drafts = result.fetchall()
+
+        draft_items = []
+        for draft in drafts:
+            logger.debug(f"Assessment type name: {draft.name}")
+            route = route_mapping.get(draft.name, "unknown")
+            draft_items.append({
+                "draft_uuid": draft.draft_uuid,
+                "is_draft": draft.is_draft,
+                "title": draft.title,
+                "description": draft.description,
+                "image": draft.image,
+                "route": route
+            })
+
+        return draft_items
+
+    except Exception as e:
+        logger.error(f"Error retrieving latest drafts per assessment type: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="An error occurred while retrieving the latest drafts."
+        )
 
 
 async def get_assessment_type_id(assessment_name: str, db: AsyncSession) -> int:

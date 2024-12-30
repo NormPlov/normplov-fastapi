@@ -24,7 +24,8 @@ from app.api.v1.endpoints import (
     dimension,
     province,
     admin,
-    job_scraper
+    job_scraper,
+    media_uploader
 )
 
 
@@ -99,4 +100,6 @@ app.include_router(major.major_router, prefix="/api/v1/majors", tags=["Major"])
 app.include_router(job.job_router, prefix="/api/v1/jobs", tags=["Job"])
 app.include_router(admin.admin_router, prefix="/api/v1/admin", tags=["Admin"])
 app.include_router(job_scraper.job_scaper_router, prefix="/api/v1/django", tags=["Django Integration"])
+app.include_router(media_uploader.media_uploader_router, prefix="/api/v1/media", tags=["Media Uploader"])
+
 

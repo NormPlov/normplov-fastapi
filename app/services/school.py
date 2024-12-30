@@ -72,60 +72,6 @@ async def get_popular_schools(db: AsyncSession) -> BaseResponse:
         )
 
 
-async def upload_school_logo_or_cover_service(
-    school_uuid: str,
-    logo: UploadFile = None,
-    cover_image: UploadFile = None,
-    db: AsyncSession = None,
-):
-    try:
-        school_stmt = select(School).where(School.uuid == school_uuid, School.is_deleted == False)
-        result = await db.execute(school_stmt)
-        school = result.scalars().first()
-
-        if not school:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="School not found or has been deleted.",
-            )
-
-        logo_directory = Path(settings.BASE_UPLOAD_FOLDER) / "school_logos"
-        cover_image_directory = Path(settings.BASE_UPLOAD_FOLDER) / "school_cover_images"
-        logo_directory.mkdir(parents=True, exist_ok=True)
-        cover_image_directory.mkdir(parents=True, exist_ok=True)
-
-        if logo:
-            logo_path = logo_directory / f"{uuid4()}_{logo.filename}"
-            with open(logo_path, "wb") as buffer:
-                shutil.copyfileobj(logo.file, buffer)
-
-            school.logo_url = f"{settings.BASE_UPLOAD_FOLDER}/school_logos/{logo_path.name}"
-
-        if cover_image:
-            cover_image_path = cover_image_directory / f"{uuid4()}_{cover_image.filename}"
-            with open(cover_image_path, "wb") as buffer:
-                shutil.copyfileobj(cover_image.file, buffer)
-
-            school.cover_image = f"{settings.BASE_UPLOAD_FOLDER}/school_cover_images/{cover_image_path.name}"
-
-        school.updated_at = datetime.utcnow()
-        db.add(school)
-        await db.commit()
-        await db.refresh(school)
-
-        return {
-            "uuid": str(school.uuid),
-            "logo_url": school.logo_url,
-            "cover_image": school.cover_image,
-        }
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An unexpected error occurred: {str(e)}",
-        )
-
-
 async def get_school_with_paginated_majors(
     school_uuid: str,
     db: AsyncSession,
@@ -429,8 +375,8 @@ async def create_school_service(
     description: str,
     mission: str,
     vision: str,
-    logo: UploadFile = None,
-    cover_image: UploadFile = None,
+    logo: str = None,
+    cover_image: str = None,
     is_popular: bool = False,
     db: AsyncSession = None,
 ):
@@ -475,39 +421,6 @@ async def create_school_service(
                 details="The specified province does not exist or has been deleted.",
             )
 
-        logo_directory = Path(settings.BASE_UPLOAD_FOLDER) / "school_logos"
-        cover_image_directory = Path(settings.BASE_UPLOAD_FOLDER) / "school_cover_images"
-        logo_directory.mkdir(parents=True, exist_ok=True)
-        cover_image_directory.mkdir(parents=True, exist_ok=True)
-
-        logo_url = None
-        if logo:
-            if not validate_file_extension(logo.filename):
-                raise format_http_exception(
-                    status_code=400,
-                    message="Invalid logo file type.",
-                    details="Accepted file types: jpg, jpeg, png, etc.",
-                )
-            validate_file_size(logo)
-            logo_path = logo_directory / f"{uuid4()}_{logo.filename}"
-            with open(logo_path, "wb") as buffer:
-                shutil.copyfileobj(logo.file, buffer)
-            logo_url = f"{settings.BASE_UPLOAD_FOLDER}/school_logos/{logo_path.name}"
-
-        cover_image_url = None
-        if cover_image:
-            if not validate_file_extension(cover_image.filename):
-                raise format_http_exception(
-                    status_code=400,
-                    message="Invalid cover image file type.",
-                    details="Accepted file types: jpg, jpeg, png, etc.",
-                )
-            validate_file_size(cover_image)
-            cover_image_path = cover_image_directory / f"{uuid4()}_{cover_image.filename}"
-            with open(cover_image_path, "wb") as buffer:
-                shutil.copyfileobj(cover_image.file, buffer)
-            cover_image_url = f"{settings.BASE_UPLOAD_FOLDER}/school_cover_images/{cover_image_path.name}"
-
         reference_url = "https://edurank.org/geo/kh/" if is_popular else None
 
         new_school = School(
@@ -529,8 +442,8 @@ async def create_school_service(
             mission=mission,
             vision=vision,
             province_id=province.id,
-            logo_url=logo_url,
-            cover_image=cover_image_url,
+            logo_url=logo,
+            cover_image=cover_image,
             is_popular=is_popular,
             reference_url=reference_url,
         )
