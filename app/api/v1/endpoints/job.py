@@ -275,7 +275,7 @@ async def update_job_route(
     email: Optional[str] = Form(None),
     phone: Optional[str] = Form(None),
     website: Optional[str] = Form(None),
-    logo: Optional[UploadFile] = File(None),
+    logo: Optional[str] = Form(None),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -297,11 +297,12 @@ async def update_job_route(
             "email": email,
             "phone": phone,
             "website": website,
+            "logo": logo,
         }
 
         update_data = {key: value for key, value in update_data.items() if value is not None}
 
-        updated_job = await update_job(uuid, db, update_data, logo)
+        updated_job = await update_job(uuid, db, update_data)
 
         return BaseResponse(
             date=datetime.utcnow().strftime("%d-%B-%Y"),
@@ -342,7 +343,7 @@ async def create_job_route(
     phone: str = Form(None),
     website: str = Form(None),
     is_active: bool = Form(True),
-    logo: UploadFile = File(None),
+    logo: str = Form(None),
     category: str = Form(None),
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(is_admin_user),

@@ -86,7 +86,7 @@ async def get_latest_drafts_per_assessment_type(db: AsyncSession, current_user: 
                 "is_draft": is_draft,
                 "title": draft.title,
                 "description": draft.description,
-                "image": draft.image,
+                "image": draft.image.strip() if draft.image else None,
                 "route": route
             })
 

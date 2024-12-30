@@ -253,7 +253,6 @@ async def update_job(
     job_uuid: str,
     db: AsyncSession,
     update_data: dict,
-    logo: Optional[UploadFile] = None,
 ) -> JobResponse:
     try:
         stmt = select(Job).where(Job.uuid == job_uuid, Job.is_deleted == False)
@@ -282,21 +281,6 @@ async def update_job(
                 update_data["posted_at"] = posted_at
             except ValueError:
                 raise HTTPException(400, detail="Invalid date format for posted_at.")
-
-        # Handle logo updates
-        if logo:
-            if not validate_file_extension(logo.filename):
-                raise HTTPException(status_code=400, detail="Invalid file type for logo.")
-            validate_file_size(logo)
-
-            logo_directory = Path(settings.BASE_UPLOAD_FOLDER) / "job-logos"
-            logo_directory.mkdir(parents=True, exist_ok=True)
-
-            logo_path = logo_directory / f"{job_uuid}_{uuid.uuid4()}_{logo.filename}"
-            with open(logo_path, "wb") as buffer:
-                shutil.copyfileobj(logo.file, buffer)
-
-            update_data["logo"] = f"{settings.BASE_UPLOAD_FOLDER}/job-logos/{logo_path.name}"
 
         # Apply updates
         for field, value in update_data.items():
@@ -354,7 +338,7 @@ async def create_job(
     phone: Optional[str],
     website: Optional[str],
     is_active: bool,
-    logo: Optional[UploadFile],
+    logo: Optional[str],
     category: Optional[str],
     db: AsyncSession,
 ) -> dict:
@@ -375,20 +359,6 @@ async def create_job(
         responsibilities_list = responsibilities.split(",") if responsibilities else None
         benefits_list = benefits.split(",") if benefits else None
 
-        logo_url = None
-        if logo:
-            if not validate_file_extension(logo.filename):
-                raise HTTPException(status_code=400, detail="Invalid file type for logo.")
-            validate_file_size(logo)
-
-            logo_directory = Path(settings.BASE_UPLOAD_FOLDER) / "job-logos"
-            logo_directory.mkdir(parents=True, exist_ok=True)
-
-            logo_path = logo_directory / f"{uuid.uuid4()}_{logo.filename}"
-            with open(logo_path, "wb") as buffer:
-                shutil.copyfileobj(logo.file, buffer)
-            logo_url = f"{settings.BASE_UPLOAD_FOLDER}/job-logos/{logo_path.name}"
-
         new_job = Job(
             uuid=uuid.uuid4(),
             title=title,
@@ -408,7 +378,7 @@ async def create_job(
             phone=phone,
             website=website,
             is_active=is_active,
-            logo=logo_url,
+            logo=logo,
             category=category,
             is_deleted=False,
             created_at=datetime.utcnow(),
