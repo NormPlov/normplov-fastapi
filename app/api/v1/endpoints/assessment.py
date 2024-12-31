@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.dependencies import get_current_user_data
+from app.schemas.final_assessment import FinalAssessmentInput
 from app.schemas.payload import BaseResponse
 from app.schemas.personality_assessment import PersonalityAssessmentInput
 from app.schemas.skill_assessment import SkillAssessmentInput
@@ -29,6 +30,39 @@ from app.exceptions.file_exceptions import (
 from app.utils.auth_validators import validate_authentication
 
 assessment_router = APIRouter()
+
+
+# API Endpoint for Final Assessment✨
+@assessment_router.post(
+    "/final-assessment",
+    response_model=BaseResponse,
+    summary="Process Final Assessment and Predict Career",
+    tags=["Final Assessment"],
+)
+async def final_assessment_route(
+    input_data: FinalAssessmentInput,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user_data),
+):
+    try:
+        validate_authentication(current_user)
+
+        from app.services.final_assessment import process_final_assessment
+        result = await process_final_assessment(input_data, db, current_user)
+
+        return BaseResponse(
+            date=datetime.utcnow().strftime("%Y-%m-%d"),
+            status=200,
+            message="Final assessment processed successfully.",
+            payload=result.dict(),
+        )
+
+    except Exception as e:
+        raise format_http_exception(
+            status_code=500,
+            message="An error occurred while processing the final assessment.",
+            details=str(e),
+        )
 
 
 # API Endpoint for Uploading Learning Technique Image✨

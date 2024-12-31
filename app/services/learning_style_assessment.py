@@ -141,23 +141,23 @@ async def predict_learning_style(
 
         predicted_probs_df = pd.DataFrame(
             predicted_scores,
-            columns=["Visual_Score", "Auditory_Score", "ReadWrite_Score", "Kinesthetic_Score"],
+            columns=["Visual_Prob", "Auditory_Prob", "ReadWrite_Prob", "Kinesthetic_Prob"],
         )
 
         total_score = predicted_probs_df.sum(axis=1).iloc[0]
         predicted_probs_df = predicted_probs_df.div(total_score, axis=1)
 
         row = predicted_probs_df.iloc[0]
-        learning_style = row.idxmax().replace("_Score", "")
+        learning_style = row.idxmax().replace("_Prob", "")
         max_prob = row.max()
 
         chart_data = {
             "labels": ["Visual Learning", "Auditory Learning", "Read/Write Learning", "Kinesthetic Learning"],
             "values": [
-                round(row["Visual_Score"] * 100, 2),
-                round(row["Auditory_Score"] * 100, 2),
-                round(row["ReadWrite_Score"] * 100, 2),
-                round(row["Kinesthetic_Score"] * 100, 2),
+                round(row["Visual_Prob"] * 100, 2),
+                round(row["Auditory_Prob"] * 100, 2),
+                round(row["ReadWrite_Prob"] * 100, 2),
+                round(row["Kinesthetic_Prob"] * 100, 2),
             ],
         }
 
@@ -166,7 +166,7 @@ async def predict_learning_style(
         related_careers = []
 
         for style, prob in row.items():
-            dimension_name = style.replace("_Score", "")
+            dimension_name = style.replace("_Prob", "")
             dimension_stmt = select(Dimension).where(Dimension.name == dimension_name)
             dimension = await db.execute(dimension_stmt)
             dimension = dimension.scalars().first()
@@ -275,7 +275,7 @@ async def predict_learning_style(
         db.add(user_responses)
 
         for style, prob in row.items():
-            dimension_name = style.replace("_Score", "")
+            dimension_name = style.replace("_Prob", "")
             dimension_stmt = select(Dimension).where(Dimension.name == dimension_name)
             dimension = await db.execute(dimension_stmt)
             dimension = dimension.scalars().first()

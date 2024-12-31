@@ -2,11 +2,32 @@ import os
 import joblib
 import logging
 
+# Import the CareerRecommendationModel for deserialization
+from ml_models.final_assessment_model.career_recommendation_model import CareerRecommendationModel
+
 logger = logging.getLogger(__name__)
 
 MODEL_DIR = os.path.join(os.getcwd(), "ml_models")
 FEATURE_SCORE_MODEL_PATH = os.path.join(MODEL_DIR, "value_assessment_model", "all_models.pkl")
 TARGET_VALUE_MODEL_PATH = os.path.join(MODEL_DIR, "value_assessment_model", "multi_label_model_rf.pkl")
+CAREER_RECOMMENDATION_MODEL_PATH = os.path.join(MODEL_DIR, "final_assessment_model", "career_recommendation_model.pkl")
+
+
+def load_career_recommendation_model():
+    """
+    Load the Career Recommendation Model from the specified path.
+    """
+    try:
+        logger.info("Loading career recommendation model.")
+        career_model = joblib.load(CAREER_RECOMMENDATION_MODEL_PATH)
+        logger.info("Successfully loaded career recommendation model.")
+        return career_model
+    except FileNotFoundError:
+        logger.error(f"Career recommendation model not found at: {CAREER_RECOMMENDATION_MODEL_PATH}")
+        raise RuntimeError(f"Model file not found at: {CAREER_RECOMMENDATION_MODEL_PATH}")
+    except Exception as e:
+        logger.exception("Failed to load career recommendation model.")
+        raise RuntimeError(f"Failed to load career recommendation model: {e}")
 
 
 def load_feature_score_models():
@@ -47,17 +68,12 @@ def load_personality_models():
         logger.info("Loading personality predictor model.")
         personality_predictor = joblib.load(personality_model_path)
 
-        # Load the label encoder
-        logger.info("Loading label encoder.")
         label_encoder = joblib.load(label_encoder_path)
 
-        logger.info("Successfully loaded personality models.")
         return dimension_models, personality_predictor, label_encoder
     except FileNotFoundError as e:
-        logger.error(f"File not found: {e.filename}")
         raise RuntimeError(f"Required model file is missing: {e.filename}")
     except Exception as e:
-        logger.exception("Error loading personality models.")
         raise RuntimeError(f"Failed to load personality model or its dependencies: {e}")
 
 
