@@ -1,7 +1,7 @@
 import logging
 import httpx
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Response
 from fastapi.security import OAuth2PasswordBearer
 from app.dependencies import is_admin_user
 from app.models import User
@@ -62,7 +62,8 @@ async def trigger_job_scraper(
         try:
             response = await client.post(f"{DJANGO_BASE_URL}/job-scraper", headers=headers, json=payload)
             response.raise_for_status()
-            return response.json()
+            # Explicitly set status 201
+            return Response(content=response.text, status_code=201, media_type="application/json")
         except httpx.HTTPStatusError as e:
             raise HTTPException(
                 status_code=e.response.status_code,
