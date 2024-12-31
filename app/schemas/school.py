@@ -99,6 +99,7 @@ class UpdateSchoolRequest(BaseModel):
     description: Optional[str] = Field(None)
     mission: Optional[str] = Field(None)
     vision: Optional[str] = Field(None)
+    is_popular: Optional[bool] = Field(None)
 
     @validator("type", pre=True)
     def validate_type(cls, v):
