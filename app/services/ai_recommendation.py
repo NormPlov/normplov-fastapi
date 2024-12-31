@@ -1,5 +1,8 @@
 import uuid
 import json
+import logging
+import google.generativeai as genai
+
 
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,15 +13,13 @@ from app.models.user import User
 from app.schemas.ai_recommendation import AIRecommendationCreate, AIRecommendationResponse
 from app.core.config import settings
 from datetime import datetime
-import logging
-import google.generativeai as genai
-
 from app.schemas.payload import BaseResponse
+from app.utils.api_key_manager import api_key_manager
 
 logger = logging.getLogger(__name__)
 
 # Google API setup
-genai.configure(api_key=settings.GOOGLE_GENERATIVE_AI_KEY)
+genai.configure(api_key=settings.GOOGLE_GENERATIVE_AI_KEYS)
 
 generation_config = {
     "temperature": 1,
@@ -32,6 +33,10 @@ model = genai.GenerativeModel(
     model_name="gemini-1.5-flash",
     generation_config=generation_config,
 )
+
+
+def configure_ai():
+    genai.configure(api_key=api_key_manager.current_key)
 
 
 async def continue_user_ai_conversation(
@@ -371,7 +376,17 @@ async def generate_ai_response(context: dict, db: AsyncSession, user_id: int) ->
             return "I'm sorry, I couldn't generate a specific answer. Could you provide more details?"
 
     except Exception as e:
+
         logger.error(f"Error generating AI recommendation: {e}")
+
+        if "quota" in str(e).lower() or "limit" in str(e).lower():
+
+            api_key_manager.switch_key()
+
+            configure_ai()
+
+            return await generate_ai_response(context, db, user_id)
+
         return "An unexpected error occurred while generating a response. Please try again later."
 
 

@@ -43,9 +43,16 @@ class Settings(BaseSettings):
     GOOGLE_REDIRECT_URI: str = Field(default="http://localhost:8000/auth/google/callback", env="GOOGLE_REDIRECT_URI")
 
     # Google Generative AI Key
-    GOOGLE_GENERATIVE_AI_KEY: str = Field(default="AIzaSyDLz0bS0Bm1z-km6XeuUX6lQKxqa9ZuJlw", env="GOOGLE_GENERATIVE_AI_KEY")
+    GOOGLE_GENERATIVE_AI_KEYS: List[str] = Field(default=["AIzaSyDLz0bS0Bm1z-km6XeuUX6lQKxqa9ZuJlw"],
+                                                 env="GOOGLE_GENERATIVE_AI_KEYS")
 
-    # In the Settings class
+    @validator("GOOGLE_GENERATIVE_AI_KEYS", pre=True)
+    def parse_google_ai_keys(cls, value):
+        if isinstance(value, str):
+            return [key.strip() for key in value.split(",") if key.strip()]
+        if isinstance(value, list):
+            return value
+        raise ValueError("GOOGLE_GENERATIVE_AI_KEYS must be a comma-separated string or a list.")
 
     TELEGRAM_BOT_TOKEN: str = Field(default="7747910734:AAHKkDzr54-oMuRs7SuEvN13MxmUBKB6QxM", env="TELEGRAM_BOT_TOKEN")
     TELEGRAM_CHAT_ID: str = Field(default="1299615474", env="TELEGRAM_CHAT_ID")

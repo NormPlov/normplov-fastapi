@@ -308,7 +308,7 @@ async def submit_assessment(
         await db.commit()
 
         return {
-            "uuid": response_data.test_uuid,
+            "uuid": response_data.get("test_uuid"),
             "test_name": f"{draft.assessment_type_name} Test {draft.created_at.strftime('%d-%m-%Y')}",
             "assessment_type_name": draft.assessment_type_name,
             "response_data": response_data,
