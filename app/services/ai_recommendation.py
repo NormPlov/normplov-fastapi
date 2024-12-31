@@ -14,7 +14,7 @@ from app.schemas.ai_recommendation import AIRecommendationCreate, AIRecommendati
 from app.core.config import settings
 from datetime import datetime
 from app.schemas.payload import BaseResponse
-from app.utils.api_key_manager import api_key_manager
+from app.utils.api_key_manager import APIKeyManager
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +35,17 @@ model = genai.GenerativeModel(
 )
 
 
+api_key_manager = APIKeyManager(settings.GOOGLE_GENERATIVE_AI_KEYS)
+
+
 def configure_ai():
-    genai.configure(api_key=api_key_manager.current_key)
+    """Configure Google Generative AI with the current key."""
+    genai.configure(api_key=api_key_manager.get_key())
+
+
+# Initial configuration
+configure_ai()
+
 
 
 async def continue_user_ai_conversation(
