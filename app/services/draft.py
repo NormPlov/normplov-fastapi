@@ -260,9 +260,7 @@ async def submit_assessment(
         required_keys = get_required_keys(draft.assessment_type_id)
         for key in required_keys:
             if key not in merged_responses:
-                merged_responses[key] = 0  # Default value for missing keys
-
-        logger.debug(f"Final merged responses: {merged_responses}")
+                merged_responses[key] = 0
 
         # Validate the final structure
         submitted_keys = set(merged_responses.keys())
@@ -283,8 +281,6 @@ async def submit_assessment(
         elif draft.assessment_type_id == 3:
             response_data = await process_value_assessment(merged_responses, db, current_user)
         elif draft.assessment_type_id == 4:
-            # Debug input for predict_skills
-            logger.debug(f"Input for skill prediction: {merged_responses}")
             response_data = await predict_skills(merged_responses, db, current_user)
         elif draft.assessment_type_id == 5:
             response_data = await predict_learning_style(merged_responses, db, current_user)
@@ -316,7 +312,6 @@ async def submit_assessment(
             "assessment_type_name": draft.assessment_type_name,
             "response_data": response_data,
         }
-
 
     except HTTPException as e:
         raise e

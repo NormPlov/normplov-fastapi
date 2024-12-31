@@ -116,7 +116,6 @@ async def process_personality_assessment(
         weaknesses_result = await db.execute(weaknesses_query)
         weaknesses = [w.weakness for w in weaknesses_result.scalars().all()]
 
-        # Query careers related to the predicted personality type
         career_query = (
             select(Career)
             .join(CareerPersonalityType, CareerPersonalityType.career_id == Career.id)

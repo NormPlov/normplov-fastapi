@@ -23,7 +23,6 @@ async def process_final_assessment(
     current_user
 ) -> FinalAssessmentResponse:
     try:
-        # Map user input dynamically to the feature order
         user_input_dict = user_input.dict()
         input_data_list = [user_input_dict.get(feature, 0) for feature in FEATURE_ORDER]
 

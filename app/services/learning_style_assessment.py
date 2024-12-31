@@ -107,7 +107,7 @@ async def predict_learning_style(
         questions = result.scalars().all()
 
         if isinstance(data, dict):
-            normalized_answers = {key.replace("/", ""): value for key, value in data.items()}
+            normalized_answers = {key.replace("/", "").replace("ReadWrite", "Read/Write"): value for key, value in data.items()}
         else:
             normalized_answers = {key.replace("/", ""): value for key, value in data.responses.items()}
 
@@ -166,7 +166,7 @@ async def predict_learning_style(
         related_careers = []
 
         for style, prob in row.items():
-            dimension_name = style.replace("_Prob", "")
+            dimension_name = style.replace("_Prob", "").replace("ReadWrite", "Read/Write")
             dimension_stmt = select(Dimension).where(Dimension.name == dimension_name)
             dimension = await db.execute(dimension_stmt)
             dimension = dimension.scalars().first()
