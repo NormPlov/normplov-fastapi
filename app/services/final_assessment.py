@@ -11,9 +11,8 @@ from app.services.test import create_user_test
 from ml_models.model_loader import load_career_recommendation_model
 
 logger = logging.getLogger(__name__)
-career_model = load_career_recommendation_model()  # Load the model during initialization
+career_model = load_career_recommendation_model()
 
-# Dynamically fetch feature names from the model
 FEATURE_ORDER = career_model.features.columns.tolist()
 
 
@@ -26,22 +25,17 @@ async def process_final_assessment(
         user_input_dict = user_input.dict()
         input_data_list = [user_input_dict.get(feature, 0) for feature in FEATURE_ORDER]
 
-        # Validate input data length
         if len(input_data_list) != len(FEATURE_ORDER):
             raise ValueError(
                 f"Input data length ({len(input_data_list)}) does not match the expected feature length ({len(FEATURE_ORDER)})"
             )
 
-        # Convert input data to a NumPy array
         input_data = np.array(input_data_list).reshape(1, -1)
 
-        # Predict using the career recommendation model
         recommendations = career_model.predict(input_data)
 
-        # Create a user test entry in the database
         user_test = await create_user_test(db, current_user.id, assessment_type_name="Final Assessment")
 
-        # Save predictions to the database
         scores = {
             "recommended_career": recommendations.iloc[0]['Career']
         }
@@ -58,7 +52,6 @@ async def process_final_assessment(
         db.add(assessment_score)
         await db.commit()
 
-        # Construct response
         response = FinalAssessmentResponse(
             test_uuid=user_test.uuid,
             recommended_career=recommendations.iloc[0]['Career'],
