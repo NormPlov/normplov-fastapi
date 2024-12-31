@@ -109,7 +109,7 @@ class UpdateSchoolRequest(BaseModel):
             except ValueError:
                 raise ValueError(f"Invalid school type: {v}. Allowed values: {[e.value for e in SchoolType]}")
         elif isinstance(v, SchoolType):
-            return v.value  # Return Enum value
+            return v.value
         return v
 
 

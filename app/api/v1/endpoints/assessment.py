@@ -8,7 +8,7 @@ from app.schemas.payload import BaseResponse
 from app.schemas.personality_assessment import PersonalityAssessmentInput
 from app.schemas.skill_assessment import SkillAssessmentInput
 from app.schemas.learning_style_assessment import LearningStyleInput
-from app.schemas.interest_assessment import InterestAssessmentInput, InterestAssessmentResponseWithBase
+from app.schemas.interest_assessment import InterestAssessmentInput
 from app.schemas.value_assessment import ValueAssessmentInput
 from app.services.personality_assessment import process_personality_assessment
 from app.services.skill_assessment import predict_skills
@@ -86,6 +86,7 @@ async def upload_technique_image_route(
         )
 
 
+# API Endpoint for Value Assessment✨
 @assessment_router.post(
     "/value-assessment",
     response_model=BaseResponse,
@@ -97,14 +98,20 @@ async def value_assessment_route(
     current_user: User = Depends(get_current_user_data),
 ):
     try:
-        # Validate the input_data explicitly
-        input_data = ValueAssessmentInput(**input_data.dict())
+        validate_authentication(current_user)
+
         result = await process_value_assessment(input_data.responses, db, current_user)
+
+        response_data = {
+            "test_uuid": result.test_uuid,
+            "test_name": result.test_name,
+            "assessment_type_name": "Values",
+        }
 
         return BaseResponse(
             date=datetime.utcnow().strftime("%d-%B-%Y"),
             status=200,
-            payload=result,
+            payload=response_data,
             message="Value assessment processed successfully.",
         )
 
@@ -119,19 +126,19 @@ async def value_assessment_route(
             status_code=400,
             message="Database integrity issue occurred.",
             details="Check for duplicate or invalid data violating constraints.",
-        ) from exc
+        )
     except OperationalError as exc:
         raise format_http_exception(
             status_code=500,
             message="Database operational error occurred.",
             details="There may be connectivity issues or a misconfigured database.",
-        ) from exc
+        )
     except Exception as exc:
         raise format_http_exception(
             status_code=500,
             message="An unexpected error occurred while processing the value assessment.",
             details=str(exc),
-        ) from exc
+        )
 
 
 # API Endpoint for Personality Assessment✨
@@ -147,12 +154,19 @@ async def personality_assessment(
 ):
     try:
         validate_authentication(current_user)
+
         result = await process_personality_assessment(input_data.responses, db, current_user)
+
+        response_data = {
+            "test_uuid": result.test_uuid,
+            "test_name": result.test_name,
+            "assessment_type_name": "Personality",
+        }
 
         return BaseResponse(
             date=datetime.utcnow().strftime("%d-%B-%Y"),
             status=200,
-            payload=result,
+            payload=response_data,
             message="Personality assessment processed successfully.",
         )
 
@@ -177,11 +191,12 @@ async def personality_assessment(
     except Exception as exc:
         raise format_http_exception(
             status_code=500,
-            message="An unexpected error occurred while processing the skill assessment.",
+            message="An unexpected error occurred while processing the personality assessment.",
             details=str(exc),
         )
 
 
+# API Endpoint for Skill Assessment✨
 @assessment_router.post(
     "/predict-skills",
     response_model=BaseResponse,
@@ -239,6 +254,7 @@ async def predict_skills_endpoint(
         )
 
 
+# API Endpoint for Learning Style Assessment✨
 @assessment_router.post(
     "/predict-learning-style",
     response_model=BaseResponse,

@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from fastapi import HTTPException
-from app.models import AssessmentType, Career, CareerMajor, SchoolMajor, School, Major
+from app.models import AssessmentType, Career, CareerMajor, SchoolMajor, School, Major, CareerPersonalityType
 from app.models.user_response import UserResponse
 from app.models.user_assessment_score import UserAssessmentScore
 from app.models.dimension import Dimension
@@ -116,7 +116,13 @@ async def process_personality_assessment(
         weaknesses_result = await db.execute(weaknesses_query)
         weaknesses = [w.weakness for w in weaknesses_result.scalars().all()]
 
-        career_query = select(Career).where(Career.holland_code_id == personality_details.id)
+        # Query careers related to the predicted personality type
+        career_query = (
+            select(Career)
+            .join(CareerPersonalityType, CareerPersonalityType.career_id == Career.id)
+            .where(CareerPersonalityType.personality_type_id == personality_details.id)
+            .distinct()
+        )
         career_result = await db.execute(career_query)
         careers = career_result.scalars().all()
 

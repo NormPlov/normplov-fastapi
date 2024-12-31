@@ -12,7 +12,7 @@ from app.models.career import Career
 from app.models.user_response import UserResponse
 from app.models.user_assessment_score import UserAssessmentScore
 from app.models.assessment_type import AssessmentType
-from app.models import UserTest, School, SchoolMajor, CareerMajor, Major
+from app.models import UserTest, School, SchoolMajor, CareerMajor, Major, CareerValueCategory
 from app.models.dimension import Dimension
 from app.schemas.value_assessment import (
     ValueAssessmentResponse,
@@ -160,7 +160,12 @@ async def process_value_assessment(responses, db: AsyncSession, current_user, te
                 )
             )
 
-            careers_query = select(Career).where(Career.value_category_id == value_category.id)
+            careers_query = (
+                select(Career)
+                .join(CareerValueCategory, CareerValueCategory.career_id == Career.id)
+                .where(CareerValueCategory.value_category_id == value_category.id)
+                .distinct()
+            )
             careers_result = await db.execute(careers_query)
             careers = careers_result.scalars().all()
 
