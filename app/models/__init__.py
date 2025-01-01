@@ -26,7 +26,7 @@ from app.models.career_personality_type import CareerPersonalityType
 from app.models.career_holland_code import CareerHollandCode
 from app.models.career_value_category import CareerValueCategory
 from app.models.career_category_link import CareerCategoryLink
-
+from app.models.bookmark import Bookmark
 
 __all__ = ["Role",
            "UserRole",
@@ -54,6 +54,7 @@ __all__ = ["Role",
            "CareerPersonalityType",
            "CareerHollandCode",
            "CareerValueCategory",
-           "CareerCategoryLink"
+           "CareerCategoryLink",
+           "Bookmark"
            ]
 

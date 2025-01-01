@@ -39,6 +39,20 @@ class JobQueryParams(BaseModel):
         from_attributes = True
 
 
+class CustomJobListingResponse(BaseModel):
+    bookmark_uuid: uuid.UUID
+    job_uuid: uuid.UUID
+    job_type: str
+    title: Optional[str] = None
+    company_name: Optional[str] = None
+    company_logo: Optional[str] = None
+    province_name: Optional[str] = None
+    closing_date: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
 class JobListingResponse(BaseModel):
     uuid: uuid.UUID
     job_type: str

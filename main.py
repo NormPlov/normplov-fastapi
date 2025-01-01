@@ -25,7 +25,8 @@ from app.api.v1.endpoints import (
     province,
     admin,
     job_scraper,
-    media_uploader
+    media_uploader,
+    bookmark
 )
 
 
@@ -101,5 +102,5 @@ app.include_router(job.job_router, prefix="/api/v1/jobs", tags=["Job"])
 app.include_router(admin.admin_router, prefix="/api/v1/admin", tags=["Admin"])
 app.include_router(job_scraper.job_scaper_router, prefix="/api/v1/django", tags=["Django Integration"])
 app.include_router(media_uploader.media_uploader_router, prefix="/api/v1/media", tags=["Media Uploader"])
-
+app.include_router(bookmark.bookmark_router, prefix="/api/v1/bookmarks", tags=["Job Bookmark"])
 

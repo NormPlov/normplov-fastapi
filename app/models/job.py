@@ -1,5 +1,7 @@
 import uuid
 
+from sqlalchemy.orm import relationship
+
 from app.core.database import Base
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy import (
@@ -43,3 +45,4 @@ class Job(Base):
     created_at = Column(DateTime, nullable=False, server_default=func.now())
     updated_at = Column(DateTime, nullable=True, onupdate=func.now())
 
+    bookmarks = relationship("Bookmark", back_populates="job", cascade="all, delete-orphan")
