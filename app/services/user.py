@@ -288,38 +288,6 @@ async def change_password(user: User, old_password: str, new_password: str, db: 
         )
 
 
-async def update_user_bio(uuid: str, bio: str, db: AsyncSession) -> BaseResponse:
-    stmt = select(User).where(User.uuid == uuid)
-    result = await db.execute(stmt)
-    user = result.scalars().first()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found."
-        )
-
-    if not bio.strip():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Bio cannot be empty or whitespace."
-        )
-
-    user.bio = bio
-    user.updated_at = datetime.utcnow()
-
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
-
-    return BaseResponse(
-        date=datetime.utcnow().strftime("%d-%B-%Y"),
-        status=status.HTTP_200_OK,
-        message="User bio updated successfully.",
-        payload={"bio": user.bio},
-    )
-
-
 async def upload_profile_picture(
         uuid: str,
         file: UploadFile,
@@ -448,7 +416,7 @@ async def update_user_profile(
             "phone_number": user.phone_number,
             "bio": user.bio,
             "gender": user.gender,
-            "date_of_birth": user.date_of_birth.isoformat(),
+            "date_of_birth": user.date_of_birth.isoformat() if user.date_of_birth else None,
         },
     )
 

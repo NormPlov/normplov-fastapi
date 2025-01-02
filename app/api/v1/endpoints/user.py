@@ -15,7 +15,6 @@ from app.services.user import (
     block_user,
     get_user_by_email,
     change_password,
-    update_user_bio,
     upload_profile_picture,
     update_user_profile,
     delete_user_by_uuid,
@@ -128,16 +127,6 @@ async def change_password_route(
         new_password=data.new_password,
         db=db
     )
-
-
-# Update Bio Route
-@user_router.put("/bio", response_model=BaseResponse, status_code=status.HTTP_200_OK)
-async def update_bio_route(
-    bio_data: UpdateBio,
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user_data),
-):
-    return await update_user_bio(current_user.uuid, bio_data.bio, db)
 
 
 @user_router.post("/profile/upload/{uuid}", response_model=BaseResponse)
