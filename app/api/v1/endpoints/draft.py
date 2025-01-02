@@ -82,48 +82,6 @@ async def delete_draft_endpoint(
         )
 
 
-# @draft_router.post(
-#     "/submit-draft-assessment/{draft_uuid}",
-#     response_model=BaseResponse,
-#     summary="Submit a saved draft and process the assessment."
-# )
-# async def submit_draft_assessment_route(
-#     draft_uuid: str,
-#     request: SubmitDraftAssessmentRequest,
-#     db: AsyncSession = Depends(get_db),
-#     current_user: User = Depends(get_current_user_data),
-# ):
-#     try:
-#         new_responses = request.responses
-#
-#         result = await submit_assessment(db, current_user, draft_uuid, new_responses)
-#
-#         response_payload = {
-#             "test_uuid": result.get("uuid"),
-#             "test_name": result.get("test_name", "Unnamed Test"),
-#             "assessment_type_name": result.get("assessment_type_name", "Unknown Type"),
-#         }
-#
-#         assessment_type_name = response_payload.get("assessment_type_name", "Assessment")
-#         if assessment_type_name == "Learning Style":
-#             message = "Learning style predicted successfully."
-#         else:
-#             message = "Assessment submitted successfully."
-#
-#         return BaseResponse(
-#             date=datetime.utcnow().strftime("%d-%B-%Y"),
-#             status=200,
-#             message=message,
-#             payload=response_payload,
-#         )
-#     except HTTPException as e:
-#         raise e
-#     except Exception as e:
-#         raise HTTPException(
-#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-#             detail=f"An error occurred while submitting the assessment: {str(e)}",
-#         )
-
 @draft_router.post(
     "/submit-draft-assessment/{draft_uuid}",
     response_model=BaseResponse,

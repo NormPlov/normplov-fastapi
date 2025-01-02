@@ -245,7 +245,6 @@ async def predict_skills_endpoint(
         validate_authentication(current_user)
         data = SkillAssessmentInput(**data.dict())
 
-        # Directly process skill assessment
         skill_result = await predict_skills(data.responses, db, current_user)
 
         response_data = {
