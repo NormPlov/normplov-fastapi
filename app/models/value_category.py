@@ -1,8 +1,6 @@
 from datetime import datetime
-
 from sqlalchemy import Column, Integer, String, Boolean, Text, DateTime
 from sqlalchemy.orm import relationship
-
 from app.core.database import Base
 
 
@@ -19,3 +17,4 @@ class ValueCategory(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     career_value_categories = relationship("CareerValueCategory", back_populates="value_category")
+    key_improvements = relationship("ValueCategoryKeyImprovement", back_populates="value_category")

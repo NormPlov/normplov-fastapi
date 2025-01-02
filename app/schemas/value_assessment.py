@@ -31,6 +31,11 @@ class ValueCategoryDetails(BaseModel):
     percentage: str
 
 
+class KeyImprovement(BaseModel):
+    category: str
+    improvements: List[str]
+
+
 class ValueAssessmentResponse(BaseModel):
     user_uuid: str
     test_uuid: str
@@ -38,3 +43,7 @@ class ValueAssessmentResponse(BaseModel):
     chart_data: List[ChartData]
     value_details: List[ValueCategoryDetails]
     career_recommendations: List[CareerData]
+    key_improvements: List[KeyImprovement] = Field(
+        default=[],
+        description="Key improvements for categories with low scores (<2)."
+    )

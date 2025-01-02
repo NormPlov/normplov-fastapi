@@ -12,12 +12,13 @@ from app.models.career import Career
 from app.models.user_response import UserResponse
 from app.models.user_assessment_score import UserAssessmentScore
 from app.models.assessment_type import AssessmentType
-from app.models import UserTest, School, SchoolMajor, CareerMajor, Major, CareerValueCategory
+from app.models import UserTest, School, SchoolMajor, CareerMajor, Major, CareerValueCategory, \
+    ValueCategoryKeyImprovement
 from app.models.dimension import Dimension
 from app.schemas.value_assessment import (
     ValueAssessmentResponse,
     ChartData,
-    ValueCategoryDetails,
+    ValueCategoryDetails, MajorData, CareerData,
 )
 from app.services.test import create_user_test
 from ml_models.model_loader import load_feature_score_models, load_target_value_model
@@ -77,64 +78,42 @@ async def process_value_assessment(responses, db: AsyncSession, current_user, te
 
             if not user_test:
                 raise HTTPException(status_code=404, detail="Test not found.")
-            logger.info(f"Updating existing test with UUID: {test_uuid}")
         else:
             user_test = await create_user_test(db, current_user.id, assessment_type_id)
 
         input_data = pd.DataFrame([responses])
-        logger.debug(f"User responses converted to DataFrame: {input_data}")
+        feature_scores = {
+            feature: model.predict(input_data)[0]
+            for feature, model in feature_score_models.items()
+        }
 
-        feature_scores = {}
-        for feature, model in feature_score_models.items():
-            feature_scores[feature] = model.predict(input_data)[0]
         feature_scores_df = pd.DataFrame([feature_scores])
-        logger.debug(f"Predicted feature scores: {feature_scores_df}")
-
         normalized_feature_scores = normalize_scores(feature_scores_df)
-        logger.debug(f"Normalized feature scores: {normalized_feature_scores}")
-
         total_score = normalized_feature_scores.iloc[0].sum()
-        logger.debug(f"Total normalized score: {total_score}")
-
-        top_3_features = normalized_feature_scores.iloc[0].nlargest(3).index.tolist()
-        logger.debug(f"Top 3 features extracted: {top_3_features}")
 
         chart_data = []
         value_details = []
-        career_recommendations = []
+        key_improvements = []
         assessment_scores = []
+        career_recommendations = []
 
         for category, score in normalized_feature_scores.iloc[0].items():
+            category_name = category.replace(" Score", "").strip()
             chart_data.append(
                 ChartData(
-                    label=category.replace(" Score", ""),
+                    label=category_name,
                     score=round(score, 2),
                 )
             )
 
-        for feature in top_3_features:
-            feature_name = feature.replace(" Score", "").strip()
-
-            logger.debug(f"Processing feature: {feature_name}")
-
-            category_query = select(ValueCategory).where(ValueCategory.name == feature_name, ValueCategory.is_deleted == False)
+            category_query = select(ValueCategory).where(ValueCategory.name == category_name, ValueCategory.is_deleted == False)
             result = await db.execute(category_query)
             value_category = result.scalars().first()
 
             if not value_category:
-                logger.warning(f"No ValueCategory found for feature: {feature_name}")
                 continue
 
-            dimension_query = select(Dimension.id).where(Dimension.name == f"{feature_name} Score")
-            dimension_result = await db.execute(dimension_query)
-            dimension_id = dimension_result.scalars().first()
-
-            if not dimension_id:
-                logger.error(f"Dimension not found for feature: {feature_name} Score. Skipping.")
-                continue
-
-            score_value = normalized_feature_scores.iloc[0][feature]
-            percentage = (score_value / total_score) * 100
+            percentage = (score / total_score) * 100
 
             value_details.append(
                 ValueCategoryDetails(
@@ -145,26 +124,24 @@ async def process_value_assessment(responses, db: AsyncSession, current_user, te
                 )
             )
 
-            assessment_scores.append(
-                UserAssessmentScore(
-                    uuid=str(uuid.uuid4()),
-                    user_id=current_user.id,
-                    user_test_id=user_test.id,
-                    assessment_type_id=assessment_type_id,
-                    dimension_id=dimension_id,
-                    score={
-                        "score": round(score_value, 2),
-                        "percentage": round(percentage, 2),
-                    },
-                    created_at=datetime.utcnow(),
+            if score < 2:
+                improvements_query = select(ValueCategoryKeyImprovement).where(
+                    ValueCategoryKeyImprovement.value_category_id == value_category.id,
+                    ValueCategoryKeyImprovement.is_deleted == False
                 )
-            )
+                improvements_result = await db.execute(improvements_query)
+                improvements = improvements_result.scalars().all()
 
+                key_improvements.append({
+                    "category": value_category.name,
+                    "improvements": [improvement.improvement_text for improvement in improvements]
+                })
+
+            # Fetch careers associated with the value category
             careers_query = (
                 select(Career)
                 .join(CareerValueCategory, CareerValueCategory.career_id == Career.id)
                 .where(CareerValueCategory.value_category_id == value_category.id)
-                .distinct()
             )
             careers_result = await db.execute(careers_query)
             careers = careers_result.scalars().all()
@@ -187,18 +164,35 @@ async def process_value_assessment(responses, db: AsyncSession, current_user, te
                     )
                     result = await db.execute(schools_stmt)
                     schools = result.scalars().all()
-                    majors_with_schools.append({
-                        "major_name": major.name,
-                        "schools": [school.en_name for school in schools]
-                    })
+                    majors_with_schools.append(MajorData(
+                        major_name=major.name,
+                        schools=[school.en_name for school in schools]
+                    ))
 
-                career_recommendations.append({
-                    "career_name": career.name,
-                    "description": career.description,
-                    "majors": majors_with_schools
-                })
+                career_recommendations.append(CareerData(
+                    career_name=career.name,
+                    description=career.description,
+                    majors=majors_with_schools
+                ))
 
-        career_recommendations = list({career["career_name"]: career for career in career_recommendations}.values())
+            dimension_query = select(Dimension.id).where(Dimension.name == category)
+            dimension_result = await db.execute(dimension_query)
+            dimension_id = dimension_result.scalars().first()
+
+            if not dimension_id:
+                continue
+
+            assessment_scores.append(
+                UserAssessmentScore(
+                    uuid=str(uuid.uuid4()),
+                    user_id=current_user.id,
+                    user_test_id=user_test.id,
+                    assessment_type_id=assessment_type_id,
+                    dimension_id=dimension_id,
+                    score={"score": round(score, 2), "percentage": round(percentage, 2)},
+                    created_at=datetime.utcnow(),
+                )
+            )
 
         db.add_all(assessment_scores)
 
@@ -209,6 +203,7 @@ async def process_value_assessment(responses, db: AsyncSession, current_user, te
             chart_data=chart_data,
             value_details=value_details,
             career_recommendations=career_recommendations,
+            key_improvements=key_improvements,
         )
 
         user_response = UserResponse(
