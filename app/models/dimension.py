@@ -9,6 +9,7 @@ class Dimension(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     uuid = Column(String, unique=True, nullable=False)
+    skill_category_id = Column(Integer, ForeignKey("skill_categories.id", ondelete="CASCADE"), nullable=False)
     assessment_type_id = Column(Integer, ForeignKey("assessment_types.id", ondelete="CASCADE"), nullable=False)
     name = Column(String(100), unique=True, nullable=False)
     description = Column(Text, nullable=True)
@@ -23,9 +24,9 @@ class Dimension(Base):
     learning_style_techniques = relationship(
         "LearningStyleStudyTechnique", back_populates="dimension", cascade="all, delete-orphan"
     )
-    categories = relationship("SkillCategory", back_populates="dimension", cascade="all, delete-orphan")
     dimension_careers = relationship(
         "DimensionCareer",
         back_populates="dimension",
         cascade="all, delete-orphan",
     )
+    skill_category = relationship("SkillCategory", back_populates="dimensions")

@@ -7,6 +7,7 @@ class CareerRecommendationModel:
     def __init__(self, dataset_path):
         self.data = pd.read_csv(dataset_path)
         self.features = self.data.drop(columns=['Career']).select_dtypes(include=[np.number])
+        self.feature_names = self.features.columns.tolist()  # Save feature names for external use
 
     def recommend_career(self, target_profile, top_n=5):
         if len(target_profile) != self.features.shape[1]:

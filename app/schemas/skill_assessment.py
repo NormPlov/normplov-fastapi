@@ -28,7 +28,7 @@ class MajorWithSchools(BaseModel):
 
 class CareerWithMajors(BaseModel):
     career_name: str
-    description: Optional[str] = None
+    description: Optional[str]
     majors: List[MajorWithSchools]
 
 

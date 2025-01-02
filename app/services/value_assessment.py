@@ -89,21 +89,17 @@ async def process_value_assessment(responses, db: AsyncSession, current_user, te
         for feature, model in feature_score_models.items():
             feature_scores[feature] = model.predict(input_data)[0]
         feature_scores_df = pd.DataFrame([feature_scores])
-        logger.debug(f"Predicted feature scores: {feature_scores_df}")
 
         normalized_feature_scores = normalize_scores(feature_scores_df)
-        logger.debug(f"Normalized feature scores: {normalized_feature_scores}")
 
         total_score = normalized_feature_scores.iloc[0].sum()
-        logger.debug(f"Total normalized score: {total_score}")
 
         top_3_features = normalized_feature_scores.iloc[0].nlargest(3).index.tolist()
-        logger.debug(f"Top 3 features extracted: {top_3_features}")
 
         chart_data = []
         value_details = []
         career_recommendations = []
-        key_improvements = []  # Initialize key_improvements here
+        key_improvements = []
         assessment_scores = []
 
         for category, score in normalized_feature_scores.iloc[0].items():
@@ -113,7 +109,6 @@ async def process_value_assessment(responses, db: AsyncSession, current_user, te
                     score=round(score, 2),
                 )
             )
-            # Fetch key improvements for scores below 2
             if score < 2:
                 category_name = category.replace(" Score", "").strip()
                 improvement_query = select(ValueCategoryKeyImprovement.improvement_text).join(ValueCategory).where(
@@ -224,7 +219,7 @@ async def process_value_assessment(responses, db: AsyncSession, current_user, te
             test_name=user_test.name,
             chart_data=chart_data,
             value_details=value_details,
-            key_improvements=key_improvements,  # Add key_improvements to response
+            key_improvements=key_improvements,
             career_recommendations=career_recommendations,
         )
 
