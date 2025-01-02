@@ -29,6 +29,7 @@ class JobDetailsResponse(BaseModel):
     created_at_days_ago: Optional[str]
     closing_date: Optional[str]
     category: Optional[str]
+    bookmarked: bool
 
     class Config:
         from_attributes = True

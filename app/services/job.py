@@ -5,7 +5,7 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text, or_
 from fastapi import HTTPException
-from app.models import Job
+from app.models import Job, Bookmark
 from app.schemas.job import JobDetailsResponse, JobResponse
 from datetime import datetime
 from sqlalchemy import and_
@@ -199,6 +199,7 @@ async def load_all_jobs(
     location: Optional[str] = None,
     job_type: Optional[str] = None,
     category: Optional[str] = None,
+    user_id: Optional[int] = None,
 ) -> list[JobDetailsResponse]:
     try:
         stmt = select(Job).where(Job.is_deleted == False)
@@ -226,6 +227,12 @@ async def load_all_jobs(
 
         result = await db.execute(stmt)
         jobs = result.scalars().all()
+
+        bookmarked_job_ids = set()
+        if user_id:
+            bookmark_stmt = select(Bookmark.job_id).where(Bookmark.user_id == user_id, Bookmark.is_deleted == False)
+            bookmarks_result = await db.execute(bookmark_stmt)
+            bookmarked_job_ids = {row[0] for row in bookmarks_result.fetchall()}
 
         def calculate_days_ago(date):
             if not date:
@@ -258,6 +265,7 @@ async def load_all_jobs(
                 is_scraped=job.is_scraped,
                 closing_date=job.closing_date.strftime("%d.%b.%Y") if job.closing_date and job.closing_date >= datetime.utcnow() else None,
                 category=" ".join(job.category.split()[:2]) if job.category else None,
+                bookmarked=job.uuid in bookmarked_job_ids if user_id else False,
             )
             for job in jobs
             if job.closing_date is None or job.closing_date >= datetime.utcnow()

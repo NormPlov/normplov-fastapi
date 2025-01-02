@@ -6,18 +6,19 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import UUID4
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.config import settings
 from app.dependencies import get_current_user_data
 from app.models import User
 from app.schemas.payload import BaseResponse
 from app.schemas.test import PaginatedUserTestsWithUsersResponse, PaginatedUserTestsResponse
+from app.core.database import get_db
+from app.services.user import fetch_all_tests
 from app.services.test import (
     delete_test,
     generate_shareable_link,
     get_user_responses,
     fetch_user_tests_for_current_user
 )
-from app.core.database import get_db
-from app.services.user import fetch_all_tests
 
 test_router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -114,48 +115,6 @@ async def get_user_responses_route(
         )
 
 
-# @test_router.get(
-#     "/all-tests",
-#     response_model=BaseResponse,
-#     summary="Retrieve all tests with user and response data",
-#     description="Fetch all tests, including user and response data, with support for search, sort, filter, and pagination."
-# )
-# async def get_all_tests_route(
-#     db: AsyncSession = Depends(get_db),
-#     search: Optional[str] = Query(None, description="Search by test name, username, or response data"),
-#     sort_by: str = Query("created_at", description="Sort by field (default: created_at)"),
-#     sort_order: str = Query("desc", description="Sort order: asc or desc (default: desc)"),
-#     filter_by: Optional[str] = Query(None, description="Filter by key-value pairs as a JSON string"),
-#     page: int = Query(1, ge=1, description="Page number (default: 1)"),
-#     page_size: int = Query(10, ge=1, description="Page size (default: 10)"),
-# ):
-#     try:
-#         results = await get_all_tests(
-#             db=db,
-#             search=search,
-#             sort_by=sort_by,
-#             sort_order=sort_order,
-#             filter_by=filter_by,
-#             page=page,
-#             page_size=page_size,
-#         )
-#
-#         return BaseResponse(
-#             date=date.today(),
-#             status=200,
-#             message="Tests retrieved successfully.",
-#             payload=results,
-#         )
-#     except HTTPException as e:
-#         raise e
-#     except Exception as e:
-#         logger.error(f"Error fetching all tests: {str(e)}", exc_info=True)
-#         raise HTTPException(
-#             status_code=500,
-#             detail=f"An unexpected error occurred: {str(e)}",
-#         )
-
-
 @test_router.get(
     "/generate-shareable-link/{test_uuid}",
     response_model=BaseResponse,
@@ -167,7 +126,7 @@ async def generate_shareable_link_route(
         current_user=Depends(get_current_user_data)
 ):
     try:
-        base_url = "http://127.0.0.1:8000"
+        base_url = settings.UI_BASE_URL
         return await generate_shareable_link(test_uuid, current_user.id, base_url, db)
 
     except HTTPException as e:
@@ -192,7 +151,7 @@ async def generate_shareable_link_route(
     summary="Delete a test",
 )
 async def delete_test_route(
-    test_uuid: UUID4,  # Use UUID4 type
+    test_uuid: UUID4,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user_data),
 ):

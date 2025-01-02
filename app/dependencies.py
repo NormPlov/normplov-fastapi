@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -16,24 +17,31 @@ logger = logging.getLogger(__name__)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
-async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
+async def get_optional_token(token: str = Depends(oauth2_scheme)) -> Optional[str]:
+    return token
+
+
+async def get_current_user(token: Optional[str] = Depends(get_optional_token)) -> Optional[dict]:
+    if not token:
+        return None
 
     try:
         return decode_jwt_token(token)
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        logger.error(f"JWT decoding failed: {e}")
+        return None
 
 
 async def get_current_user_data(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> User:
+    if not current_user:
+        return None
     try:
         user_uuid = current_user.get("uuid")
+        if not user_uuid:
+            return None
         if not user_uuid:
             raise format_http_exception(
                 status_code=status.HTTP_401_UNAUTHORIZED,

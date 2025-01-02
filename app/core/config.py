@@ -1,3 +1,4 @@
+import os
 from typing import List
 
 from pydantic import Field, validator
@@ -8,6 +9,9 @@ from urllib.parse import quote_plus
 class Settings(BaseSettings):
     # Environment Configuration
     ENVIRONMENT: str = Field(default="development", env="ENVIRONMENT")
+
+    # UI Base URL
+    UI_BASE_URL: str = os.getenv("UI_BASE_URL", "https://normplov-api.shinoshike.studio")
 
     # File Upload Configuration
     ALLOWED_EXTENSIONS: List[str] = Field(..., env="ALLOWED_EXTENSIONS")

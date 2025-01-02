@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.dependencies import is_admin_user
+from app.dependencies import is_admin_user, get_current_user_data
 from app.models import User
 from app.schemas.payload import BaseResponse
 from app.schemas.job import JobDetailsResponse
@@ -219,12 +219,15 @@ async def get_all_jobs_route(
     order: Optional[str] = Query("desc", description="Order direction ('asc' or 'desc')"),
     location: Optional[str] = Query(None, description="Filter by job location"),
     job_type: Optional[str] = Query(None, description="Filter by job type"),
-    category: Optional[str] = Query(None, description="Filter by job category"),  # New filter parameter
+    category: Optional[str] = Query(None, description="Filter by job category"),
     page: int = Query(1, description="Page number"),
     page_size: int = Query(10, description="Number of jobs per page"),
     db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_data),  # Allow unauthenticated access
 ):
     try:
+        user_id = current_user.id if current_user else None
+
         jobs = await load_all_jobs(
             db=db,
             search=search,
@@ -233,6 +236,7 @@ async def get_all_jobs_route(
             location=location,
             job_type=job_type,
             category=category,
+            user_id=user_id,  # Pass user_id or None
         )
 
         paginated_result = paginate_results(jobs, page=page, page_size=page_size)
@@ -248,6 +252,7 @@ async def get_all_jobs_route(
             status_code=500,
             detail=f"An error occurred: {str(exc)}",
         )
+
 
 
 @job_router.patch(
