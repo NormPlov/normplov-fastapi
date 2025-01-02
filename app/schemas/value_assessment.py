@@ -31,10 +31,16 @@ class ValueCategoryDetails(BaseModel):
     percentage: str
 
 
+class KeyImprovement(BaseModel):
+    category: str
+    improvements: List[str]
+
+
 class ValueAssessmentResponse(BaseModel):
     user_uuid: str
     test_uuid: str
     test_name: str
     chart_data: List[ChartData]
     value_details: List[ValueCategoryDetails]
+    key_improvements: List[KeyImprovement]
     career_recommendations: List[CareerData]

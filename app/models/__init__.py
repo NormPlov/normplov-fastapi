@@ -27,6 +27,7 @@ from app.models.career_holland_code import CareerHollandCode
 from app.models.career_value_category import CareerValueCategory
 from app.models.career_category_link import CareerCategoryLink
 from app.models.bookmark import Bookmark
+from app.models.value_category_key_improvement import ValueCategoryKeyImprovement
 
 __all__ = ["Role",
            "UserRole",
@@ -55,6 +56,7 @@ __all__ = ["Role",
            "CareerHollandCode",
            "CareerValueCategory",
            "CareerCategoryLink",
-           "Bookmark"
+           "Bookmark",
+           "ValueCategoryKeyImprovement"
            ]
 

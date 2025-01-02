@@ -12,7 +12,8 @@ from app.models.career import Career
 from app.models.user_response import UserResponse
 from app.models.user_assessment_score import UserAssessmentScore
 from app.models.assessment_type import AssessmentType
-from app.models import UserTest, School, SchoolMajor, CareerMajor, Major, CareerValueCategory
+from app.models import UserTest, School, SchoolMajor, CareerMajor, Major, CareerValueCategory, \
+    ValueCategoryKeyImprovement
 from app.models.dimension import Dimension
 from app.schemas.value_assessment import (
     ValueAssessmentResponse,
@@ -101,6 +102,7 @@ async def process_value_assessment(responses, db: AsyncSession, current_user, te
 
         chart_data = []
         value_details = []
+        key_improvements = []
         career_recommendations = []
         assessment_scores = []
 
@@ -111,6 +113,20 @@ async def process_value_assessment(responses, db: AsyncSession, current_user, te
                     score=round(score, 2),
                 )
             )
+            # Fetch key improvements for scores below 2
+            if score < 2:
+                category_name = category.replace(" Score", "").strip()
+                improvement_query = select(ValueCategoryKeyImprovement.improvement_text).join(ValueCategory).where(
+                    ValueCategory.name == category_name,
+                    ValueCategoryKeyImprovement.is_deleted == False,
+                )
+                improvements_result = await db.execute(improvement_query)
+                improvements = improvements_result.scalars().all()
+                if improvements:
+                    key_improvements.append({
+                        "category": category_name,
+                        "improvements": improvements
+                    })
 
         for feature in top_3_features:
             feature_name = feature.replace(" Score", "").strip()
@@ -208,6 +224,7 @@ async def process_value_assessment(responses, db: AsyncSession, current_user, te
             test_name=user_test.name,
             chart_data=chart_data,
             value_details=value_details,
+            key_improvements=key_improvements,
             career_recommendations=career_recommendations,
         )
 
