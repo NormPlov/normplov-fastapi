@@ -98,6 +98,12 @@ async def admin_load_all_jobs(
         result = await db.execute(stmt)
         jobs = result.scalars().all()
 
+        def calculate_days_ago(date):
+            if not date:
+                return "Unknown"
+            delta = datetime.utcnow() - date
+            return f"{delta.days} days ago" if delta.days > 0 else "Today"
+
         return [
             JobDetailsResponse(
                 uuid=job.uuid,
@@ -106,6 +112,8 @@ async def admin_load_all_jobs(
                 logo=job.logo,
                 location=job.location,
                 job_type=job.job_type,
+                posted_at=job.posted_at,
+                posted_at_days_ago=calculate_days_ago(job.posted_at),
                 schedule=job.schedule,
                 salary=job.salary,
                 is_scraped=job.is_scraped,
@@ -118,6 +126,7 @@ async def admin_load_all_jobs(
                 phone=job.phone,
                 website=job.website,
                 created_at=job.created_at,
+                created_at_days_ago=calculate_days_ago(job.created_at),
                 closing_date=job.closing_date.strftime("%d.%b.%Y") if job.closing_date else None,
                 category=job.category if job.category else None,
             )
@@ -218,6 +227,12 @@ async def load_all_jobs(
         result = await db.execute(stmt)
         jobs = result.scalars().all()
 
+        def calculate_days_ago(date):
+            if not date:
+                return "Unknown"
+            delta = datetime.utcnow() - date
+            return f"{delta.days} days ago" if delta.days > 0 else "Today"
+
         return [
             JobDetailsResponse(
                 uuid=job.uuid,
@@ -226,14 +241,21 @@ async def load_all_jobs(
                 logo=job.logo,
                 location=job.location,
                 job_type=job.job_type,
+                posted_at=job.posted_at,
+                posted_at_days_ago=calculate_days_ago(job.posted_at),
+                schedule=job.schedule,
+                salary=job.salary,
                 description=job.description,
                 requirements=job.requirements,
                 responsibilities=job.responsibilities,
+                benefits=job.benefits,
                 facebook_url=job.facebook_url,
                 email=job.email,
                 phone=job.phone,
                 website=job.website,
                 created_at=job.created_at,
+                created_at_days_ago=calculate_days_ago(job.created_at),
+                is_scraped=job.is_scraped,
                 closing_date=job.closing_date.strftime("%d.%b.%Y") if job.closing_date and job.closing_date >= datetime.utcnow() else None,
                 category=" ".join(job.category.split()[:2]) if job.category else None,
             )

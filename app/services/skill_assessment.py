@@ -340,13 +340,12 @@ async def predict_skills(
 
         suggested_careers = list({career["career_name"]: career for career in suggested_careers}.values())
 
-        # Final response
         response = SkillAssessmentResponse(
             user_uuid=user_uuid,
             test_uuid=str(user_test.uuid),
             test_name=user_test.name,
             top_category=top_category,
-            category_percentages=overall_category_percentages,  # Adjusted to be a dictionary of floats
+            category_percentages=overall_category_percentages,
             skills_grouped=skills_by_levels,
             strong_careers=suggested_careers,
         )

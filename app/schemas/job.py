@@ -1,7 +1,6 @@
 import uuid
 
-from fastapi import HTTPException
-from pydantic import BaseModel, Field, HttpUrl, EmailStr
+from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
 
@@ -13,6 +12,8 @@ class JobDetailsResponse(BaseModel):
     logo: Optional[str]
     location: Optional[str]
     job_type: Optional[str]
+    posted_at: datetime
+    posted_at_days_ago: Optional[str]
     schedule: Optional[str]
     salary: Optional[str]
     is_scraped: bool
@@ -25,6 +26,7 @@ class JobDetailsResponse(BaseModel):
     phone: Optional[str]
     website: Optional[str]
     created_at: datetime
+    created_at_days_ago: Optional[str]
     closing_date: Optional[str]
     category: Optional[str]
 
