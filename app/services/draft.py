@@ -9,7 +9,6 @@ from sqlalchemy import func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from fastapi import HTTPException, status
-
 from app.exceptions.formatters import format_http_exception
 from app.models import AssessmentType, UserResponse, User, UserTest
 from app.services.interest_assessment import process_interest_assessment
@@ -206,7 +205,6 @@ async def submit_assessment(
     new_responses: dict,
 ) -> dict:
     try:
-        # Fetch the draft
         stmt = select(
             UserResponse.uuid,
             UserResponse.draft_name,
@@ -239,12 +237,10 @@ async def submit_assessment(
                 message="This draft has already been submitted.",
             )
 
-        # Load saved responses
         saved_responses = (
             draft.response_data if isinstance(draft.response_data, dict) else json.loads(draft.response_data)
         )
 
-        # Ensure `new_responses` is a valid dictionary
         if not isinstance(new_responses, dict):
             raise format_http_exception(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -252,17 +248,13 @@ async def submit_assessment(
                 details="Expected a dictionary.",
             )
 
-        # Merge saved and new responses
         merged_responses = {**saved_responses, **new_responses}
-        logger.debug(f"Merged responses: {merged_responses}")
 
-        # Validate merged responses and fill missing keys
         required_keys = get_required_keys(draft.assessment_type_id)
         for key in required_keys:
             if key not in merged_responses:
                 merged_responses[key] = 0
 
-        # Validate the final structure
         submitted_keys = set(merged_responses.keys())
         missing_keys = [key for key in required_keys if key not in submitted_keys]
 
@@ -273,7 +265,6 @@ async def submit_assessment(
                 details={"missing_keys": missing_keys},
             )
 
-        # Process based on assessment type
         if draft.assessment_type_id == 1:
             response_data = await process_personality_assessment(merged_responses, db, current_user)
         elif draft.assessment_type_id == 2:
@@ -290,7 +281,6 @@ async def submit_assessment(
                 message="Unsupported assessment type.",
             )
 
-        # Update the draft
         update_stmt = (
             UserResponse.__table__.update()
             .where(UserResponse.uuid.cast(UUID) == draft_uuid)

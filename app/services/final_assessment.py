@@ -1,65 +1,96 @@
 import logging
-import uuid
-from datetime import datetime
 
-import numpy as np
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.models import UserAssessmentScore
-from app.schemas.final_assessment import FinalAssessmentResponse, FinalAssessmentInput
-from app.services.test import create_user_test
+from app.services.interest_assessment import process_interest_assessment
+from app.services.learning_style_assessment import predict_learning_style
+from app.services.personality_assessment import process_personality_assessment
+from app.services.skill_assessment import predict_skills
+from app.services.value_assessment import process_value_assessment
 from ml_models.model_loader import load_career_recommendation_model
 
 logger = logging.getLogger(__name__)
-career_model = load_career_recommendation_model()
-
-FEATURE_ORDER = career_model.features.columns.tolist()
 
 
-async def process_final_assessment(
-    user_input: FinalAssessmentInput,
-    db: AsyncSession,
-    current_user
-) -> FinalAssessmentResponse:
+async def submit_all_assessments_service(input_data, db, current_user):
     try:
-        user_input_dict = user_input.dict()
-        input_data_list = [user_input_dict.get(feature, 0) for feature in FEATURE_ORDER]
+        # Handle Learning Style Assessment
+        learning_style_result = await predict_learning_style(input_data.learning_style.responses, db, current_user)
+        # Ensure the result is a dictionary
+        learning_style_result = learning_style_result.__dict__ if not isinstance(learning_style_result,
+                                                                                 dict) else learning_style_result
 
-        if len(input_data_list) != len(FEATURE_ORDER):
-            raise ValueError(
-                f"Input data length ({len(input_data_list)}) does not match the expected feature length ({len(FEATURE_ORDER)})"
-            )
+        # Handle Skill Assessment
+        skill_result = await predict_skills(input_data.skill.responses, db, current_user)
+        skill_result = skill_result.__dict__ if not isinstance(skill_result, dict) else skill_result
 
-        input_data = np.array(input_data_list).reshape(1, -1)
+        # Handle Personality Assessment
+        personality_result = await process_personality_assessment(input_data.personality.responses, db, current_user)
+        personality_result = personality_result.__dict__ if not isinstance(personality_result,
+                                                                           dict) else personality_result
 
-        recommendations = career_model.predict(input_data)
+        # Handle Interest Assessment
+        interest_result = await process_interest_assessment(input_data.interest.responses, db, current_user)
+        interest_result = interest_result.__dict__ if not isinstance(interest_result, dict) else interest_result
 
-        user_test = await create_user_test(db, current_user.id, assessment_type_name="Final Assessment")
+        # Handle Value Assessment
+        value_result = await process_value_assessment(input_data.value.responses, db, current_user)
+        value_result = value_result.__dict__ if not isinstance(value_result, dict) else value_result
 
-        scores = {
-            "recommended_career": recommendations.iloc[0]['Career']
+        # Prepare the response data
+        response_data = {
+            "learning_style": {
+                "test_uuid": learning_style_result["test_uuid"],
+                "test_name": learning_style_result["test_name"],
+                "assessment_type_name": "Learning Style",
+                "responses": input_data.learning_style.responses if input_data.learning_style.responses else {key: 0 for
+                                                                                                              key in
+                                                                                                              learning_style_result[
+                                                                                                                  "responses"].keys()}
+            },
+            "skill": {
+                "test_uuid": skill_result["test_uuid"],
+                "test_name": skill_result["test_name"],
+                "assessment_type_name": "Skills",
+                "responses": input_data.skill.responses if input_data.skill.responses else {key: 0 for key in
+                                                                                            skill_result[
+                                                                                                "responses"].keys()}
+            },
+            "personality": {
+                "test_uuid": personality_result["test_uuid"],
+                "test_name": personality_result["test_name"],
+                "assessment_type_name": "Personality",
+                "responses": input_data.personality.responses if input_data.personality.responses else {key: 0 for key
+                                                                                                        in
+                                                                                                        personality_result[
+                                                                                                            "responses"].keys()}
+            },
+            "interest": {
+                "test_uuid": interest_result["test_uuid"],
+                "test_name": interest_result["test_name"],
+                "assessment_type_name": "Interest",
+                "responses": input_data.interest.responses if input_data.interest.responses else {key: 0 for key in
+                                                                                                  interest_result[
+                                                                                                      "responses"].keys()}
+            },
+            "value": {
+                "test_uuid": value_result["test_uuid"],
+                "test_name": value_result["test_name"],
+                "assessment_type_name": "Value",
+                "chart_data": input_data.value.responses if input_data.value.responses else {key: 0 for key in
+                                                                                             value_result[
+                                                                                                 "chart_data"].keys()}
+            }
         }
 
-        assessment_score = UserAssessmentScore(
-            uuid=str(uuid.uuid4()),
-            user_id=current_user.id,
-            user_test_id=user_test.id,
-            assessment_type_id=user_test.assessment_type_id,
-            dimension_id=None,
-            score=scores,
-            created_at=datetime.utcnow(),
-        )
-        db.add(assessment_score)
-        await db.commit()
+        # Optionally load career recommendation model for final assessment
+        career_model = load_career_recommendation_model()
 
-        response = FinalAssessmentResponse(
-            test_uuid=user_test.uuid,
-            recommended_career=recommendations.iloc[0]['Career'],
-            test_name=user_test.name,
-        )
-        return response
+        # Process career recommendation model
+        career_recommendation_result = career_model.predict(response_data)
 
-    except Exception as e:
-        logger.exception("An error occurred during the final assessment.")
-        await db.rollback()
-        raise RuntimeError(f"Failed to process final assessment: {e}")
+        response_data["career_recommendation"] = career_recommendation_result
+
+        return response_data
+
+    except Exception as exc:
+        logger.error(f"Error occurred while processing the assessments: {str(exc)}")
+        raise Exception(f"An error occurred while processing the assessments: {str(exc)}")

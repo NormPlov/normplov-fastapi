@@ -4,13 +4,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.dependencies import get_current_user_data
-from app.schemas.final_assessment import FinalAssessmentInput
+from app.schemas.final_assessment import AllAssessmentsInput
 from app.schemas.payload import BaseResponse
 from app.schemas.personality_assessment import PersonalityAssessmentInput
 from app.schemas.skill_assessment import SkillAssessmentInput
 from app.schemas.learning_style_assessment import LearningStyleInput
 from app.schemas.interest_assessment import InterestAssessmentInput
 from app.schemas.value_assessment import ValueAssessmentInput
+from app.services.final_assessment import submit_all_assessments_service
 from app.services.personality_assessment import process_personality_assessment
 from app.services.skill_assessment import predict_skills
 from app.services.learning_style_assessment import predict_learning_style, upload_technique_image
@@ -32,36 +33,34 @@ from app.utils.auth_validators import validate_authentication
 assessment_router = APIRouter()
 
 
-# API Endpoint for Final Assessment✨
 @assessment_router.post(
-    "/final-assessment",
+    "/submit-all-assessments",
     response_model=BaseResponse,
-    summary="Process Final Assessment and Predict Career",
-    tags=["Final Assessment"],
+    status_code=200,
+    summary="Submit all assessments at once",
+    description="Submit all five assessments: Learning Style, Skill, Personality, Interest, and Value.",
 )
-async def final_assessment_route(
-    input_data: FinalAssessmentInput,
+async def submit_all_assessments(
+    input_data: AllAssessmentsInput,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_data),
 ):
     try:
-        validate_authentication(current_user)
-
-        from app.services.final_assessment import process_final_assessment
-        result = await process_final_assessment(input_data, db, current_user)
+        response_data = await submit_all_assessments_service(input_data, db, current_user)
 
         return BaseResponse(
-            date=datetime.utcnow().strftime("%Y-%m-%d"),
+            date=datetime.utcnow().strftime("%d-%B-%Y"),
             status=200,
-            message="Final assessment processed successfully.",
-            payload=result.dict(),
+            message="All assessments submitted successfully.",
+            payload=response_data,
         )
 
+    except HTTPException as e:
+        raise e
     except Exception as e:
-        raise format_http_exception(
+        raise HTTPException(
             status_code=500,
-            message="An error occurred while processing the final assessment.",
-            details=str(e),
+            detail=f"An error occurred while processing the assessments: {str(e)}"
         )
 
 

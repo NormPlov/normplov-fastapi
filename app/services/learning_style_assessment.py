@@ -148,7 +148,7 @@ async def predict_learning_style(
         predicted_probs_df = predicted_probs_df.div(total_score, axis=1)
 
         row = predicted_probs_df.iloc[0]
-        learning_style = row.idxmax().replace("_Prob", "")
+        learning_style = row.idxmax().replace("_Prob", "").replace("ReadWrite", "Read/Write")
         max_prob = row.max()
 
         chart_data = {
