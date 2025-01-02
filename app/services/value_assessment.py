@@ -102,8 +102,8 @@ async def process_value_assessment(responses, db: AsyncSession, current_user, te
 
         chart_data = []
         value_details = []
-        key_improvements = []
         career_recommendations = []
+        key_improvements = []  # Initialize key_improvements here
         assessment_scores = []
 
         for category, score in normalized_feature_scores.iloc[0].items():
@@ -224,7 +224,7 @@ async def process_value_assessment(responses, db: AsyncSession, current_user, te
             test_name=user_test.name,
             chart_data=chart_data,
             value_details=value_details,
-            key_improvements=key_improvements,
+            key_improvements=key_improvements,  # Add key_improvements to response
             career_recommendations=career_recommendations,
         )
 
