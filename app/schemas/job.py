@@ -13,9 +13,13 @@ class JobDetailsResponse(BaseModel):
     logo: Optional[str]
     location: Optional[str]
     job_type: Optional[str]
+    schedule: Optional[str]
+    salary: Optional[str]
+    is_scraped: bool
     description: Optional[str]
     requirements: Optional[List[str]]
     responsibilities: Optional[List[str]]
+    benefits: Optional[List[str]]
     facebook_url: Optional[str]
     email: Optional[str]
     phone: Optional[str]

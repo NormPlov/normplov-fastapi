@@ -6,13 +6,12 @@ import logging
 from typing import Optional, Tuple, List
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import joinedload, selectinload
-from fastapi import HTTPException, status, UploadFile, Depends
+from fastapi import HTTPException, status, UploadFile
 from sqlalchemy import or_, desc, asc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from datetime import datetime, timedelta, timezone
 from app.core.config import settings
-from app.dependencies import get_current_user_data
 from app.exceptions.file_exceptions import FileExtensionError, handle_file_error, FileSizeError
 from app.exceptions.formatters import format_http_exception
 from app.models import UserRole, Role, UserTest
@@ -85,10 +84,8 @@ async def fetch_all_tests(
         return formatted_tests, metadata
 
     except SQLAlchemyError as e:
-        logger.error(f"Database error: {e}")
         raise Exception("Error retrieving all tests.")
     except Exception as e:
-        logger.error(f"Unexpected error: {e}")
         raise Exception("An unexpected error occurred.")
 
 
