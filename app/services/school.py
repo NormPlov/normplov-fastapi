@@ -8,16 +8,13 @@ from uuid import uuid4
 from sqlalchemy import func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
-from pathlib import Path
-from app.core.config import settings
 from app.exceptions.formatters import format_http_exception
 from app.models import Province, Faculty
 from app.models.school import School, SchoolType
 from app.schemas.payload import BaseResponse
 from app.schemas.school import UpdateSchoolRequest, SchoolDetailsResponse
-from fastapi import HTTPException, status, UploadFile
+from fastapi import HTTPException, status
 from sqlalchemy.future import select
-from app.utils.file import validate_file_extension, validate_file_size
 from app.utils.pagination import paginate_results
 from urllib.parse import urlparse, parse_qs
 
