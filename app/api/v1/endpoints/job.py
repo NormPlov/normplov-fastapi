@@ -4,9 +4,9 @@ import re
 
 from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, Form
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.dependencies import is_admin_user, get_current_user_data, get_current_user
+from app.dependencies import is_admin_user, get_current_user
 from app.models import User
 from app.schemas.payload import BaseResponse
 from app.schemas.job import JobDetailsResponse, JobCreateRequest, JobUpdateRequest

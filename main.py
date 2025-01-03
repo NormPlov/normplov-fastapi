@@ -83,6 +83,8 @@ app.add_middleware(
     SessionMiddleware,
     secret_key=os.getenv("SECRET_KEY", "8d5f01d7a83a4c8abf0e3cb75fbdc8d56e4e23d063c08a3f6f0e5d3d62c12345"),
     session_cookie="oauth_session",
+    same_site="lax",
+    https_only=False,
 )
 
 
