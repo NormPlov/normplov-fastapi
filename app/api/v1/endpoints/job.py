@@ -260,7 +260,6 @@ async def get_all_jobs_route(
         )
 
 
-
 @job_router.patch(
     "/{uuid}",
     response_model=BaseResponse,

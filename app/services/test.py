@@ -138,7 +138,24 @@ async def generate_shareable_link(
                 detail="Test not found or already deleted."
             )
 
-        shareable_link = f"{base_url}/shared-tests/{test_uuid}"
+        assessment_type_mapping: Dict[str, str] = {
+            "Values": "value",
+            "Personality": "personality",
+            "Learning Style": "learningStyle",
+            "Interests": "interest",
+            "Skill": "skill",
+        }
+
+        assessment_type_key = user_test.assessment_type.name.replace(" ", "")
+        specific_path = assessment_type_mapping.get(assessment_type_key)
+
+        if not specific_path:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown assessment type: {user_test.assessment_type.name}"
+            )
+
+        shareable_link = f"{base_url}/share-tests/{specific_path}/{test_uuid}"
 
         test_response = UserTestResponse(
             test_uuid=str(user_test.uuid),

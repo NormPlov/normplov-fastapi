@@ -2,7 +2,7 @@ import logging
 from typing import Optional
 
 from fastapi import Depends, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import OAuth2PasswordBearer, SecurityScopes
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload
@@ -17,7 +17,9 @@ logger = logging.getLogger(__name__)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
-async def get_optional_token(token: str = Depends(oauth2_scheme)) -> Optional[str]:
+async def get_optional_token(security_scopes: SecurityScopes, token: Optional[str] = Depends(oauth2_scheme)) -> Optional[str]:
+    if not token:
+        return None
     return token
 
 
@@ -35,19 +37,13 @@ async def get_current_user(token: Optional[str] = Depends(get_optional_token)) -
 async def get_current_user_data(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> User:
+) -> Optional[User]:
     if not current_user:
         return None
     try:
         user_uuid = current_user.get("uuid")
         if not user_uuid:
             return None
-        if not user_uuid:
-            raise format_http_exception(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                message="Authentication required.",
-                details="Invalid user data.",
-            )
 
         stmt = (
             select(User)
