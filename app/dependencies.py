@@ -1,7 +1,7 @@
 import logging
-from typing import Optional
 
-from fastapi import Depends, status
+from typing import Optional
+from fastapi import Depends, status, HTTPException
 from fastapi.security import OAuth2PasswordBearer, SecurityScopes
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -39,11 +39,25 @@ async def get_current_user_data(
     db: AsyncSession = Depends(get_db),
 ) -> Optional[User]:
     if not current_user:
-        return None
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "error": True,
+                "message": "Authentication required.",
+                "details": "User is not authenticated. Please log in.",
+            },
+        )
     try:
         user_uuid = current_user.get("uuid")
         if not user_uuid:
-            return None
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={
+                    "error": True,
+                    "message": "Authentication required.",
+                    "details": "User UUID not found in token.",
+                },
+            )
 
         stmt = (
             select(User)
@@ -71,6 +85,8 @@ async def get_current_user_data(
         validate_authentication(user)
 
         return user
+    except HTTPException as http_exc:
+        raise http_exc
     except Exception as e:
         raise format_http_exception(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -81,7 +97,6 @@ async def get_current_user_data(
 
 async def is_admin_user(current_user: User = Depends(get_current_user_data)) -> User:
     try:
-
         validate_authentication(current_user)
 
         if not any(role.role.name == "ADMIN" for role in current_user.roles):
@@ -92,6 +107,8 @@ async def is_admin_user(current_user: User = Depends(get_current_user_data)) -> 
             )
 
         return current_user
+    except HTTPException as http_exc:
+        raise http_exc
     except Exception as e:
         raise format_http_exception(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

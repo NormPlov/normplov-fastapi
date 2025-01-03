@@ -9,16 +9,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import is_admin_user, get_current_user_data
 from app.models import User
 from app.schemas.payload import BaseResponse
-from app.schemas.job import JobDetailsResponse
+from app.schemas.job import JobDetailsResponse, JobCreateRequest
 from app.core.database import get_db
 from app.utils.pagination import paginate_results
 from app.services.job import (
     load_all_jobs,
     delete_job,
     admin_load_all_jobs,
-    create_job, update_job,
+    update_job,
     get_unique_job_categories,
-    get_trending_jobs, fetch_job_details, increment_visitor_count
+    get_trending_jobs, fetch_job_details, increment_visitor_count, create_job_service
 )
 
 job_router = APIRouter()
@@ -329,6 +329,72 @@ async def update_job_route(
         )
 
 
+# @job_router.post(
+#     "",
+#     response_model=BaseResponse,
+#     status_code=201,
+#     summary="Create a new job with a logo",
+# )
+# async def create_job_route(
+#     title: str = Form(None),
+#     company: str = Form(None),
+#     location: str = Form(None),
+#     facebook_url: str = Form(None),
+#     posted_at: str = Form(None),
+#     description: str = Form(None),
+#     job_type: str = Form(None),
+#     schedule: str = Form(None),
+#     salary: str = Form(None),
+#     closing_date: str = Form(None),
+#     requirements: str = Form(None),
+#     responsibilities: str = Form(None),
+#     benefits: str = Form(None),
+#     email: str = Form(None),
+#     phone: str = Form(None),
+#     website: str = Form(None),
+#     is_active: bool = Form(True),
+#     logo: str = Form(None),
+#     category: str = Form(None),
+#     db: AsyncSession = Depends(get_db),
+#     current_user: dict = Depends(is_admin_user),
+# ):
+#     try:
+#         job_response = await create_job(
+#             title=title,
+#             company=company,
+#             location=location,
+#             facebook_url=facebook_url,
+#             posted_at=posted_at,
+#             description=description,
+#             job_type=job_type,
+#             schedule=schedule,
+#             salary=salary,
+#             closing_date=closing_date,
+#             requirements=requirements,
+#             responsibilities=responsibilities,
+#             benefits=benefits,
+#             email=email,
+#             phone=phone,
+#             website=website,
+#             is_active=is_active,
+#             logo=logo,
+#             category=category,
+#             db=db,
+#         )
+#
+#         return BaseResponse(
+#             date=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+#             status=201,
+#             message="Job created successfully.",
+#             payload=job_response,
+#         )
+#     except HTTPException as e:
+#         raise e
+#     except Exception as e:
+#         raise HTTPException(
+#             status_code=500,
+#             detail=f"An unexpected error occurred while creating the job: {str(e)}",
+#         )
 @job_router.post(
     "",
     response_model=BaseResponse,
@@ -336,49 +402,31 @@ async def update_job_route(
     summary="Create a new job with a logo",
 )
 async def create_job_route(
-    title: str = Form(None),
-    company: str = Form(None),
-    location: str = Form(None),
-    facebook_url: str = Form(None),
-    posted_at: str = Form(None),
-    description: str = Form(None),
-    job_type: str = Form(None),
-    schedule: str = Form(None),
-    salary: str = Form(None),
-    closing_date: str = Form(None),
-    requirements: str = Form(None),
-    responsibilities: str = Form(None),
-    benefits: str = Form(None),
-    email: str = Form(None),
-    phone: str = Form(None),
-    website: str = Form(None),
-    is_active: bool = Form(True),
-    logo: str = Form(None),
-    category: str = Form(None),
+    job_data: JobCreateRequest,
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(is_admin_user),
 ):
     try:
-        job_response = await create_job(
-            title=title,
-            company=company,
-            location=location,
-            facebook_url=facebook_url,
-            posted_at=posted_at,
-            description=description,
-            job_type=job_type,
-            schedule=schedule,
-            salary=salary,
-            closing_date=closing_date,
-            requirements=requirements,
-            responsibilities=responsibilities,
-            benefits=benefits,
-            email=email,
-            phone=phone,
-            website=website,
-            is_active=is_active,
-            logo=logo,
-            category=category,
+        job_response = await create_job_service(
+            title=job_data.title,
+            company=job_data.company,
+            location=job_data.location,
+            facebook_url=job_data.facebook_url,
+            posted_at=job_data.posted_at,
+            description=job_data.description,
+            job_type=job_data.job_type,
+            schedule=job_data.schedule,
+            salary=job_data.salary,
+            closing_date=job_data.closing_date,
+            requirements=",".join(job_data.requirements) if job_data.requirements else None,
+            responsibilities=",".join(job_data.responsibilities) if job_data.responsibilities else None,
+            benefits=",".join(job_data.benefits) if job_data.benefits else None,
+            email=job_data.email,
+            phone=job_data.phone,
+            website=job_data.website,
+            is_active=job_data.is_active,
+            logo=job_data.logo,
+            category=job_data.category,
             db=db,
         )
 

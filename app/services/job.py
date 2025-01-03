@@ -1,10 +1,10 @@
 import uuid
 import logging
 
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text, or_
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from app.models import Job, Bookmark
 from app.schemas.job import JobDetailsResponse, JobResponse, JobDetailsWithBookmarkResponse
 from datetime import datetime
@@ -351,7 +351,83 @@ async def update_job(
         )
 
 
-async def create_job(
+# async def create_job(
+#     title: Optional[str],
+#     company: Optional[str],
+#     location: Optional[str],
+#     facebook_url: Optional[str],
+#     posted_at: Optional[str],
+#     description: Optional[str],
+#     job_type: Optional[str],
+#     schedule: Optional[str],
+#     salary: Optional[str],
+#     closing_date: Optional[str],
+#     requirements: Optional[str],
+#     responsibilities: Optional[str],
+#     benefits: Optional[str],
+#     email: Optional[str],
+#     phone: Optional[str],
+#     website: Optional[str],
+#     is_active: bool,
+#     logo: Optional[str],
+#     category: Optional[str],
+#     db: AsyncSession,
+# ) -> dict:
+#     try:
+#         parsed_posted_at = None
+#         if posted_at:
+#             parsed_posted_at = datetime.fromisoformat(posted_at)
+#             if parsed_posted_at > datetime.utcnow():
+#                 raise HTTPException(status_code=400, detail="Posted date cannot be in the future.")
+#
+#         parsed_closing_date = None
+#         if closing_date:
+#             parsed_closing_date = datetime.fromisoformat(closing_date)
+#             if parsed_closing_date < datetime.utcnow():
+#                 is_active = False
+#
+#         requirements_list = requirements.split(",") if requirements else None
+#         responsibilities_list = responsibilities.split(",") if responsibilities else None
+#         benefits_list = benefits.split(",") if benefits else None
+#
+#         new_job = Job(
+#             uuid=uuid.uuid4(),
+#             title=title,
+#             company=company,
+#             location=location,
+#             facebook_url=facebook_url,
+#             posted_at=parsed_posted_at,
+#             description=description,
+#             job_type=job_type,
+#             schedule=schedule,
+#             salary=salary,
+#             closing_date=parsed_closing_date,
+#             requirements=requirements_list,
+#             responsibilities=responsibilities_list,
+#             benefits=benefits_list,
+#             email=email,
+#             phone=phone,
+#             website=website,
+#             is_active=is_active,
+#             logo=logo,
+#             category=category,
+#         )
+#         print("Populated Job instance:", new_job.__dict__)
+#
+#         db.add(new_job)
+#         await db.commit()
+#         await db.refresh(new_job)
+#
+#         return {
+#             "uuid": str(new_job.uuid),
+#         }
+#     except Exception as exc:
+#         await db.rollback()
+#         raise HTTPException(
+#             status_code=500,
+#             detail=f"An error occurred while creating the job: {str(exc)}",
+#         )
+async def create_job_service(
     title: Optional[str],
     company: Optional[str],
     location: Optional[str],
@@ -362,17 +438,17 @@ async def create_job(
     schedule: Optional[str],
     salary: Optional[str],
     closing_date: Optional[str],
-    requirements: Optional[str],
-    responsibilities: Optional[str],
-    benefits: Optional[str],
+    requirements: Optional[List[str]],
+    responsibilities: Optional[List[str]],
+    benefits: Optional[List[str]],
     email: Optional[str],
     phone: Optional[str],
     website: Optional[str],
     is_active: bool,
     logo: Optional[str],
     category: Optional[str],
-    db: AsyncSession,
-) -> dict:
+    db: AsyncSession
+) -> Dict[str, Any]:
     try:
         parsed_posted_at = None
         if posted_at:
@@ -386,10 +462,6 @@ async def create_job(
             if parsed_closing_date < datetime.utcnow():
                 is_active = False
 
-        requirements_list = requirements.split(",") if requirements else None
-        responsibilities_list = responsibilities.split(",") if responsibilities else None
-        benefits_list = benefits.split(",") if benefits else None
-
         new_job = Job(
             uuid=uuid.uuid4(),
             title=title,
@@ -402,9 +474,9 @@ async def create_job(
             schedule=schedule,
             salary=salary,
             closing_date=parsed_closing_date,
-            requirements=requirements_list,
-            responsibilities=responsibilities_list,
-            benefits=benefits_list,
+            requirements=requirements,
+            responsibilities=responsibilities,
+            benefits=benefits,
             email=email,
             phone=phone,
             website=website,
@@ -412,7 +484,6 @@ async def create_job(
             logo=logo,
             category=category,
         )
-        print("Populated Job instance:", new_job.__dict__)
 
         db.add(new_job)
         await db.commit()
@@ -420,10 +491,12 @@ async def create_job(
 
         return {
             "uuid": str(new_job.uuid),
+            "title": new_job.title,
+            "company": new_job.company,
         }
-    except Exception as exc:
+    except Exception as e:
         await db.rollback()
         raise HTTPException(
-            status_code=500,
-            detail=f"An error occurred while creating the job: {str(exc)}",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred while creating the job: {str(e)}",
         )

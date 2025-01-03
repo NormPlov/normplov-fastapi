@@ -125,26 +125,47 @@ class JobUpdateRequest(BaseModel):
         from_attributes = True
 
 
+# class JobCreateRequest(BaseModel):
+#     job_category_uuid: Optional[str] = Field(None, description="UUID of the job category")
+#     title: str
+#     company: str
+#     logo: Optional[str] = Field(None, description="Logo URL as a string")
+#     facebook_url: Optional[str] = Field(None, description="Facebook URL as a string")
+#     location: Optional[str]
+#     posted_at: Optional[datetime]
+#     description: Optional[str]
+#     job_type: Optional[str]
+#     schedule: Optional[str]
+#     salary: Optional[str]
+#     closing_date: Optional[datetime]
+#     requirements: Optional[List[str]]
+#     responsibilities: Optional[List[str]]
+#     benefits: Optional[List[str]]
+#     email: Optional[str]
+#     phone: Optional[str]
+#     website: Optional[str] = Field(None, description="Website URL as a string")
+#     is_active: bool = True
+
 class JobCreateRequest(BaseModel):
-    job_category_uuid: Optional[str] = Field(None, description="UUID of the job category")
-    title: str
-    company: str
-    logo: Optional[str] = Field(None, description="Logo URL as a string")
-    facebook_url: Optional[str] = Field(None, description="Facebook URL as a string")
+    title: Optional[str]
+    company: Optional[str]
     location: Optional[str]
-    posted_at: Optional[datetime]
+    facebook_url: Optional[str]
+    posted_at: Optional[str]
     description: Optional[str]
     job_type: Optional[str]
     schedule: Optional[str]
     salary: Optional[str]
-    closing_date: Optional[datetime]
+    closing_date: Optional[str]
     requirements: Optional[List[str]]
     responsibilities: Optional[List[str]]
     benefits: Optional[List[str]]
     email: Optional[str]
     phone: Optional[str]
-    website: Optional[str] = Field(None, description="Website URL as a string")
+    website: Optional[str]
     is_active: bool = True
+    logo: Optional[str]
+    category: Optional[str]
 
 
 class JobResponse(BaseModel):
