@@ -21,6 +21,41 @@ from app.utils.pagination import paginate_results
 logger = logging.getLogger(__name__)
 
 
+async def get_public_responses(
+    db: AsyncSession,
+    test_uuid: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    try:
+        query = select(UserResponse).options(
+            joinedload(UserResponse.user_test),
+            joinedload(UserResponse.assessment_type)
+        ).where(
+            UserResponse.is_deleted == False
+        )
+
+        if test_uuid:
+            query = query.where(UserResponse.user_test.has(UserTest.uuid == test_uuid))
+
+        result = await db.execute(query)
+        responses = result.scalars().all()
+
+        return [
+            {
+                "test_uuid": str(response.user_test.uuid),
+                "test_name": response.user_test.name,
+                "assessment_type_name": response.assessment_type.name,
+                "user_response_data": response.response_data,
+                "created_at": response.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                "is_deleted": response.is_deleted,
+            }
+            for response in responses
+        ]
+
+    except Exception as e:
+        logger.error(f"Error fetching public responses: {e}")
+        raise HTTPException(status_code=500, detail="An error occurred while fetching public responses.")
+
+
 async def fetch_user_tests_for_current_user(
     db: AsyncSession,
     current_user: User,

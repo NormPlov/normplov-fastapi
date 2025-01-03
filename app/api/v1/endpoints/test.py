@@ -17,11 +17,40 @@ from app.services.test import (
     delete_test,
     generate_shareable_link,
     get_user_responses,
-    fetch_user_tests_for_current_user
+    fetch_user_tests_for_current_user, get_public_responses
 )
 
 test_router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+@test_router.get(
+    "/public/{test_uuid}",
+    summary="Get public test responses",
+    response_model=BaseResponse,
+    tags=["Public Responses"],
+)
+async def get_public_responses_route(
+    test_uuid: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        responses = await get_public_responses(db, test_uuid)
+
+        return BaseResponse(
+            date=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            status=200,
+            message="Public responses retrieved successfully.",
+            payload=responses
+        )
+
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail="An error occurred while retrieving public responses."
+        )
 
 
 @test_router.get(

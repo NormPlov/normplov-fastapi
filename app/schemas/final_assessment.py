@@ -1,43 +1,36 @@
 from pydantic import BaseModel
-from typing import Dict, Optional
-from app.schemas.interest_assessment import InterestAssessmentResponse
-from app.schemas.learning_style_assessment import LearningStyleResponse
-from app.schemas.personality_assessment import PersonalityAssessmentResponse
-from app.schemas.skill_assessment import SkillAssessmentResponse
-from app.schemas.value_assessment import ValueAssessmentResponse
+from typing import Dict, Optional, List
 
 
-class LearningStyleInput(BaseModel):
-    responses: Dict[str, int]
+class InterestAssessmentResponse(BaseModel):
+    type_name: str
 
 
-class SkillAssessmentInput(BaseModel):
-    responses: Dict[str, int]
+class LearningStyleResponse(BaseModel):
+    learning_style: str
 
 
-class PersonalityAssessmentInput(BaseModel):
-    responses: Dict[str, int]
+class PersonalityTypeDetails(BaseModel):
+    name: str
+    title: str
+    description: str
 
 
-class InterestAssessmentInput(BaseModel):
-    responses: Dict[str, int]
+class PersonalityAssessmentResponse(BaseModel):
+    personality_type: PersonalityTypeDetails
 
 
-class ValueAssessmentInput(BaseModel):
-    responses: Dict[str, int]
+class SkillAssessmentResponse(BaseModel):
+    top_category: str
 
 
-class AllAssessmentsInput(BaseModel):
-    learning_style: LearningStyleInput
-    skill: SkillAssessmentInput
-    personality: PersonalityAssessmentInput
-    interest: InterestAssessmentInput
-    value: ValueAssessmentInput
+class ValueAssessmentResponse(BaseModel):
+    chart_data: Dict[str, List[int]]
 
 
 class AllAssessmentsResponse(BaseModel):
-    learning_style: Optional[LearningStyleResponse]
-    skill: Optional[SkillAssessmentResponse]
-    personality: Optional[PersonalityAssessmentResponse]
-    interest: Optional[InterestAssessmentResponse]
-    value: Optional[ValueAssessmentResponse]
+    learning_style: Optional[LearningStyleResponse] = None
+    skill: Optional[SkillAssessmentResponse] = None
+    personality: Optional[PersonalityAssessmentResponse] = None
+    interest: Optional[InterestAssessmentResponse] = None
+    value: Optional[ValueAssessmentResponse] = None

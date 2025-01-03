@@ -1,105 +1,49 @@
 from datetime import datetime
+from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.dependencies import get_current_user_data
-from app.schemas.final_assessment import AllAssessmentsInput, AllAssessmentsResponse
+from app.schemas.final_assessment import AllAssessmentsResponse
 from app.schemas.payload import BaseResponse
 from app.schemas.personality_assessment import PersonalityAssessmentInput
 from app.schemas.skill_assessment import SkillAssessmentInput
 from app.schemas.learning_style_assessment import LearningStyleInput
 from app.schemas.interest_assessment import InterestAssessmentInput
 from app.schemas.value_assessment import ValueAssessmentInput
-from app.services.final_assessment import process_final_assessment_service
+from app.services.final_assessment import get_aggregated_tests_service
 from app.services.personality_assessment import process_personality_assessment
 from app.services.skill_assessment import predict_skills
-from app.services.learning_style_assessment import predict_learning_style, upload_technique_image
+from app.services.learning_style_assessment import predict_learning_style
 from app.services.interest_assessment import process_interest_assessment
 from app.models.user import User
 from app.services.value_assessment import process_value_assessment
 from sqlalchemy.exc import IntegrityError, OperationalError
 from pydantic import ValidationError
 from app.exceptions.formatters import format_http_exception
-from app.exceptions.file_exceptions import (
-    FileError,
-    FileNotFoundError,
-    FileExtensionError,
-    FileSizeError,
-    FileUploadError,
-)
 from app.utils.auth_validators import validate_authentication
 
 assessment_router = APIRouter()
 
 
-@assessment_router.post("/final-assessment", response_model=AllAssessmentsResponse, summary="Submit final assessment")
-async def process_final_assessment(
-    input_data: AllAssessmentsInput,
+# API Endpoint to get the final test✨
+@assessment_router.post(
+    "/get-aggregated-tests",
+    response_model=AllAssessmentsResponse,
+    summary="Get aggregated details for multiple tests"
+)
+async def get_aggregated_tests(
+    test_uuids: List[str] = Body(..., embed=True, title="List of Test UUIDs"),
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user_data)
 ):
     try:
-        return await process_final_assessment_service(input_data, db, current_user)
+        return await get_aggregated_tests_service(test_uuids, db, current_user)
     except HTTPException as e:
         raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
-
-
-# API Endpoint for Uploading Learning Technique Image✨
-@assessment_router.post("/techniques/{technique_uuid}/upload-image", tags=["Techniques"])
-async def upload_technique_image_route(
-    technique_uuid: str,
-    file: UploadFile,
-    db: AsyncSession = Depends(get_db),
-) -> BaseResponse:
-    try:
-        result = await upload_technique_image(db, technique_uuid, file)
-
-        return BaseResponse(
-            date=datetime.utcnow().strftime("%Y-%m-%d"),
-            status=200,
-            message="Technique image uploaded successfully.",
-            payload=result,
-        )
-
-    except FileNotFoundError as exc:
-        raise format_http_exception(
-            status_code=404,
-            message="File not found.",
-            details=exc.message,
-        )
-    except FileExtensionError as exc:
-        raise format_http_exception(
-            status_code=400,
-            message="Invalid file extension.",
-            details=exc.message,
-        )
-    except FileSizeError as exc:
-        raise format_http_exception(
-            status_code=413,
-            message="File size exceeds limit.",
-            details=exc.message,
-        )
-    except FileUploadError as exc:
-        raise format_http_exception(
-            status_code=500,
-            message="File upload failed.",
-            details=exc.message,
-        )
-    except FileError as exc:
-        raise format_http_exception(
-            status_code=500,
-            message="An unexpected file error occurred.",
-            details=exc.message,
-        )
-    except Exception as exc:
-        raise format_http_exception(
-            status_code=500,
-            message="An unexpected error occurred while uploading the technique image.",
-            details=str(exc),
-        )
 
 
 # API Endpoint for Value Assessment✨

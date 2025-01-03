@@ -1,11 +1,5 @@
 from typing import Optional
-
 from pydantic import BaseModel
-
-
-class UploadDimensionImageResponse(BaseModel):
-    dimension_uuid: str
-    image_url: str
 
 
 class DimensionResponse(BaseModel):

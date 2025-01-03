@@ -10,72 +10,17 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload
-from app.core.config import settings
-from fastapi import HTTPException, UploadFile
-from app.exceptions.file_exceptions import FileExtensionError, FileSizeError, handle_file_error
+from fastapi import HTTPException
+from app.schemas.learning_style_assessment import LearningStyleChart, LearningStyleResponse
+from app.services.test import create_user_test
+from ml_models.model_loader import load_vark_model
 from app.models import (
     AssessmentType, Major, CareerMajor, SchoolMajor, School, UserResponse, UserAssessmentScore,
     LearningStyleStudyTechnique, Dimension, Question, DimensionCareer, UserTest
 )
-from app.schemas.learning_style_assessment import LearningStyleChart, LearningStyleResponse
-from app.services.test import create_user_test
-from ml_models.model_loader import load_vark_model
 
 logger = logging.getLogger(__name__)
 vark_model = load_vark_model()
-
-
-async def upload_technique_image(db: AsyncSession, technique_uuid: str, file: UploadFile):
-    try:
-
-        extension = file.filename.split(".")[-1].lower()
-        if extension not in settings.ALLOWED_EXTENSIONS:
-            raise FileExtensionError(settings.ALLOWED_EXTENSIONS)
-
-        file_size = file.file.seek(0, os.SEEK_END)
-        file.file.seek(0)
-        if file_size > settings.MAX_FILE_SIZE:
-            raise FileSizeError(settings.MAX_FILE_SIZE)
-
-        technique_query = select(LearningStyleStudyTechnique).where(
-            LearningStyleStudyTechnique.uuid == technique_uuid,
-            LearningStyleStudyTechnique.is_deleted == False
-        )
-        technique_result = await db.execute(technique_query)
-        technique = technique_result.scalars().first()
-
-        if not technique:
-            raise HTTPException(status_code=404, detail="Technique not found.")
-
-        upload_folder = os.path.join(settings.BASE_UPLOAD_FOLDER, "techniques")
-        os.makedirs(upload_folder, exist_ok=True)
-
-        file_name = f"{technique.uuid}_{file.filename}"
-        file_path = os.path.join(upload_folder, file_name)
-
-        try:
-            with open(file_path, "wb") as f:
-                content = await file.read()
-                f.write(content)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
-
-        technique.image_url = os.path.join("techniques", file_name)
-        await db.commit()
-        await db.refresh(technique)
-
-        return {
-            "technique_uuid": technique.uuid,
-            "image_url": f"/{settings.BASE_UPLOAD_FOLDER}/techniques/{file_name}",
-        }
-
-    except (FileExtensionError, FileSizeError) as e:
-        raise handle_file_error(e)
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        await db.rollback()
-        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
 
 
 async def get_assessment_type_id(name: str, db: AsyncSession) -> int:
