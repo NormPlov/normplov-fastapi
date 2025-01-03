@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.dependencies import is_admin_user, get_current_user
+from app.dependencies import is_admin_user, get_current_user, get_current_user_public
 from app.models import User
 from app.schemas.payload import BaseResponse
 from app.schemas.job import JobDetailsResponse, JobCreateRequest, JobUpdateRequest
@@ -229,7 +229,7 @@ async def get_all_jobs_route(
     page: int = Query(1, description="Page number"),
     page_size: int = Query(10, description="Number of jobs per page"),
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_current_user_public),
 ):
     try:
         user_id = current_user.id if current_user else None

@@ -12,15 +12,20 @@ from app.utils.auth import decode_jwt_token
 from app.core.database import get_db
 from app.models.user import User
 from app.utils.auth_validators import validate_authentication
+from fastapi.security.utils import get_authorization_scheme_param
 
 logger = logging.getLogger(__name__)
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
 
-async def get_optional_token(security_scopes: SecurityScopes, token: Optional[str] = Depends(oauth2_scheme)) -> Optional[str]:
+async def get_optional_token(
+    security_scopes: SecurityScopes, authorization: str = Depends(oauth2_scheme)
+) -> Optional[str]:
+    scheme, token = get_authorization_scheme_param(authorization)
     if not token:
         return None
     return token
+
 
 
 async def get_current_user(token: Optional[str] = Depends(get_optional_token)) -> Optional[dict]:
@@ -31,6 +36,27 @@ async def get_current_user(token: Optional[str] = Depends(get_optional_token)) -
         return decode_jwt_token(token)
     except Exception as e:
         logger.error(f"JWT decoding failed: {e}")
+        return None
+
+
+async def get_current_user_public(
+    current_user: Optional[dict] = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Optional[User]:
+    if not current_user:
+        return None
+
+    try:
+        user_uuid = current_user.get("uuid")
+        stmt = (
+            select(User)
+            .options(joinedload(User.roles).joinedload(UserRole.role))
+            .where(User.uuid == user_uuid)
+        )
+        result = await db.execute(stmt)
+        return result.scalars().first()
+    except Exception as e:
+        logger.error(f"Error retrieving public user data: {e}")
         return None
 
 
