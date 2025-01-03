@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = Field(default="development", env="ENVIRONMENT")
 
     # UI Base URL
-    UI_BASE_URL: str = os.getenv("UI_BASE_URL", "https://normplov-api.shinoshike.studio")
+    UI_BASE_URL: str = os.getenv("UI_BASE_URL", "https://dev-normplov.shinoshike.studio")
 
     # File Upload Configuration
     ALLOWED_EXTENSIONS: List[str] = Field(..., env="ALLOWED_EXTENSIONS")

@@ -123,11 +123,10 @@ async def get_user_responses_route(
 async def generate_shareable_link_route(
         test_uuid: str,
         db: AsyncSession = Depends(get_db),
-        current_user=Depends(get_current_user_data)
 ):
     try:
         base_url = settings.UI_BASE_URL
-        return await generate_shareable_link(test_uuid, current_user.id, base_url, db)
+        return await generate_shareable_link(test_uuid, base_url, db)
 
     except HTTPException as e:
         raise e
@@ -135,13 +134,13 @@ async def generate_shareable_link_route(
         logger.error(f"Database error: {str(e)}")
         raise HTTPException(
             status_code=400,
-            detail="There was a problem with the database query. Please check the data types and try again."
+            detail="Database query error. Please check the provided data."
         )
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail=f"An unexpected error occurred: {str(e)}"
+            detail="An unexpected error occurred. Please try again later."
         )
 
 

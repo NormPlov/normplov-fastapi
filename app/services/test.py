@@ -15,7 +15,7 @@ from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status
 from app.schemas.payload import BaseResponse
-from app.schemas.test import UserTestResponseSchema, PaginationMetadata
+from app.schemas.test import UserTestResponseSchema, PaginationMetadata, UserTestResponse
 from app.utils.pagination import paginate_results
 
 logger = logging.getLogger(__name__)
@@ -118,41 +118,55 @@ async def get_user_responses(
 
 
 async def generate_shareable_link(
-    test_uuid: str, user_id: int, base_url: str, db: AsyncSession
+    test_uuid: str, base_url: str, db: AsyncSession
 ) -> BaseResponse:
     try:
-
-        stmt = select(UserTest).where(
-            UserTest.uuid == test_uuid,
-            UserTest.user_id == user_id,
-            UserTest.is_deleted == False
+        stmt = (
+            select(UserTest)
+            .options(selectinload(UserTest.assessment_type))
+            .where(
+                UserTest.uuid == test_uuid,
+                UserTest.is_deleted == False
+            )
         )
         result = await db.execute(stmt)
         user_test = result.scalars().first()
 
         if not user_test:
-            raise HTTPException(status_code=404, detail="Test not found or already deleted.")
+            raise HTTPException(
+                status_code=404,
+                detail="Test not found or already deleted."
+            )
 
         shareable_link = f"{base_url}/shared-tests/{test_uuid}"
+
+        test_response = UserTestResponse(
+            test_uuid=str(user_test.uuid),
+            test_name=user_test.name,
+            assessment_type_name=user_test.assessment_type.name.replace(" ", "")
+        )
 
         return BaseResponse(
             date=date.today(),
             status=200,
-            payload={"shareable_link": shareable_link},
+            payload={
+                "shareable_link": shareable_link,
+                "test_details": test_response
+            },
             message="Shareable link generated successfully."
         )
 
     except SQLAlchemyError as e:
-        logger.error(f"Database error during test fetch: {str(e)}")
+        logger.error(f"Database error while generating shareable link: {str(e)}")
         raise HTTPException(
             status_code=400,
-            detail="There was a problem with the database query. Please check the data types or parameters."
+            detail="Database query error. Please check the parameters."
         )
     except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
+        logger.error(f"Unexpected error while generating shareable link: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail="An unexpected error occurred while generating the shareable link."
+            detail="An unexpected error occurred. Please try again later."
         )
 
 
