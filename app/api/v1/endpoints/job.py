@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import is_admin_user, get_current_user_data
 from app.models import User
 from app.schemas.payload import BaseResponse
-from app.schemas.job import JobDetailsResponse, JobCreateRequest
+from app.schemas.job import JobDetailsResponse, JobCreateRequest, JobUpdateRequest
 from app.core.database import get_db
 from app.utils.pagination import paginate_results
 from app.services.job import (
@@ -268,49 +268,11 @@ async def get_all_jobs_route(
 )
 async def update_job_route(
     uuid: str,
-    title: Optional[str] = Form(None),
-    category: Optional[str] = Form(None),
-    company: Optional[str] = Form(None),
-    location: Optional[str] = Form(None),
-    facebook_url: Optional[str] = Form(None),
-    posted_at: Optional[str] = Form(None),
-    description: Optional[str] = Form(None),
-    job_type: Optional[str] = Form(None),
-    schedule: Optional[str] = Form(None),
-    salary: Optional[str] = Form(None),
-    closing_date: Optional[str] = Form(None),
-    requirements: Optional[str] = Form(None),
-    responsibilities: Optional[str] = Form(None),
-    benefits: Optional[str] = Form(None),
-    email: Optional[str] = Form(None),
-    phone: Optional[str] = Form(None),
-    website: Optional[str] = Form(None),
-    logo: Optional[str] = Form(None),
+    job_data: JobUpdateRequest,
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        update_data = {
-            "title": title,
-            "category": category,
-            "company": company,
-            "location": location,
-            "facebook_url": facebook_url,
-            "posted_at": posted_at,
-            "description": description,
-            "job_type": job_type,
-            "schedule": schedule,
-            "salary": salary,
-            "closing_date": closing_date,
-            "requirements": requirements,
-            "responsibilities": responsibilities,
-            "benefits": benefits,
-            "email": email,
-            "phone": phone,
-            "website": website,
-            "logo": logo,
-        }
-
-        update_data = {key: value for key, value in update_data.items() if value is not None}
+        update_data = job_data.dict(exclude_unset=True)
 
         updated_job = await update_job(uuid, db, update_data)
 
@@ -329,72 +291,6 @@ async def update_job_route(
         )
 
 
-# @job_router.post(
-#     "",
-#     response_model=BaseResponse,
-#     status_code=201,
-#     summary="Create a new job with a logo",
-# )
-# async def create_job_route(
-#     title: str = Form(None),
-#     company: str = Form(None),
-#     location: str = Form(None),
-#     facebook_url: str = Form(None),
-#     posted_at: str = Form(None),
-#     description: str = Form(None),
-#     job_type: str = Form(None),
-#     schedule: str = Form(None),
-#     salary: str = Form(None),
-#     closing_date: str = Form(None),
-#     requirements: str = Form(None),
-#     responsibilities: str = Form(None),
-#     benefits: str = Form(None),
-#     email: str = Form(None),
-#     phone: str = Form(None),
-#     website: str = Form(None),
-#     is_active: bool = Form(True),
-#     logo: str = Form(None),
-#     category: str = Form(None),
-#     db: AsyncSession = Depends(get_db),
-#     current_user: dict = Depends(is_admin_user),
-# ):
-#     try:
-#         job_response = await create_job(
-#             title=title,
-#             company=company,
-#             location=location,
-#             facebook_url=facebook_url,
-#             posted_at=posted_at,
-#             description=description,
-#             job_type=job_type,
-#             schedule=schedule,
-#             salary=salary,
-#             closing_date=closing_date,
-#             requirements=requirements,
-#             responsibilities=responsibilities,
-#             benefits=benefits,
-#             email=email,
-#             phone=phone,
-#             website=website,
-#             is_active=is_active,
-#             logo=logo,
-#             category=category,
-#             db=db,
-#         )
-#
-#         return BaseResponse(
-#             date=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
-#             status=201,
-#             message="Job created successfully.",
-#             payload=job_response,
-#         )
-#     except HTTPException as e:
-#         raise e
-#     except Exception as e:
-#         raise HTTPException(
-#             status_code=500,
-#             detail=f"An unexpected error occurred while creating the job: {str(e)}",
-#         )
 @job_router.post(
     "",
     response_model=BaseResponse,

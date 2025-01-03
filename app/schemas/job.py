@@ -1,6 +1,6 @@
 import uuid
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 
@@ -102,70 +102,50 @@ class JobListingResponse(BaseModel):
 
 
 class JobUpdateRequest(BaseModel):
-    title: Optional[str] = Field(None, description="Job title")
-    company: Optional[str] = Field(None, description="Company name")
-    logo: Optional[str] = Field(None, description="Logo URL as a string")
-    facebook_url: Optional[str] = Field(None, description="Facebook URL as a string")
-    location: Optional[str] = Field(None, description="Job location")
-    posted_at: Optional[datetime] = Field(None, description="Posting date")
-    description: Optional[str] = Field(None, description="Job description")
-    job_type: Optional[str] = Field(None, description="Job type")
-    schedule: Optional[str] = Field(None, description="Work schedule")
-    salary: Optional[str] = Field(None, description="Salary range")
-    closing_date: Optional[datetime] = Field(None, description="Closing date for application")
-    requirements: Optional[List[str]] = Field(None, description="Job requirements")
-    responsibilities: Optional[List[str]] = Field(None, description="Job responsibilities")
-    benefits: Optional[List[str]] = Field(None, description="Job benefits")
-    email: Optional[str] = Field(None, description="Contact email")
-    phone: Optional[str] = Field(None, description="Contact phone")
-    website: Optional[str] = Field(None, description="Company website URL")
-    is_active: Optional[bool] = Field(None, description="Job active status")
+    title: Optional[str] = None
+    category: Optional[str] = None
+    company: Optional[str] = None
+    location: Optional[str] = None
+    facebook_url: Optional[str] = None
+    posted_at: Optional[str] = None
+    description: Optional[str] = None
+    job_type: Optional[str] = None
+    schedule: Optional[str] = None
+    salary: Optional[str] = None
+    closing_date: Optional[str] = None
+    requirements: Optional[List[str]] = None
+    responsibilities: Optional[List[str]] = None
+    benefits: Optional[List[str]] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    website: Optional[str] = None
+    logo: Optional[str] = None
 
     class Config:
-        from_attributes = True
+        orm_mode = True
+        allow_population_by_field_name = True
 
-
-# class JobCreateRequest(BaseModel):
-#     job_category_uuid: Optional[str] = Field(None, description="UUID of the job category")
-#     title: str
-#     company: str
-#     logo: Optional[str] = Field(None, description="Logo URL as a string")
-#     facebook_url: Optional[str] = Field(None, description="Facebook URL as a string")
-#     location: Optional[str]
-#     posted_at: Optional[datetime]
-#     description: Optional[str]
-#     job_type: Optional[str]
-#     schedule: Optional[str]
-#     salary: Optional[str]
-#     closing_date: Optional[datetime]
-#     requirements: Optional[List[str]]
-#     responsibilities: Optional[List[str]]
-#     benefits: Optional[List[str]]
-#     email: Optional[str]
-#     phone: Optional[str]
-#     website: Optional[str] = Field(None, description="Website URL as a string")
-#     is_active: bool = True
 
 class JobCreateRequest(BaseModel):
-    title: Optional[str]
-    company: Optional[str]
-    location: Optional[str]
-    facebook_url: Optional[str]
-    posted_at: Optional[str]
-    description: Optional[str]
-    job_type: Optional[str]
-    schedule: Optional[str]
-    salary: Optional[str]
-    closing_date: Optional[str]
-    requirements: Optional[List[str]]
-    responsibilities: Optional[List[str]]
-    benefits: Optional[List[str]]
-    email: Optional[str]
-    phone: Optional[str]
-    website: Optional[str]
+    title: Optional[str] = None
+    company: Optional[str] = None
+    location: Optional[str] = None
+    facebook_url: Optional[str] = None
+    posted_at: Optional[str] = None
+    description: Optional[str] = None
+    job_type: Optional[str] = None
+    schedule: Optional[str] = None
+    salary: Optional[str] = None
+    closing_date: Optional[str] = None
+    requirements: Optional[List[str]] = None
+    responsibilities: Optional[List[str]] = None
+    benefits: Optional[List[str]] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    website: Optional[str] = None
     is_active: bool = True
-    logo: Optional[str]
-    category: Optional[str]
+    logo: Optional[str] = None
+    category: Optional[str] = None
 
 
 class JobResponse(BaseModel):
