@@ -4,14 +4,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.dependencies import get_current_user_data
-from app.schemas.final_assessment import AllAssessmentsInput
+from app.schemas.final_assessment import AllAssessmentsInput, AllAssessmentsResponse
 from app.schemas.payload import BaseResponse
 from app.schemas.personality_assessment import PersonalityAssessmentInput
 from app.schemas.skill_assessment import SkillAssessmentInput
 from app.schemas.learning_style_assessment import LearningStyleInput
 from app.schemas.interest_assessment import InterestAssessmentInput
 from app.schemas.value_assessment import ValueAssessmentInput
-from app.services.final_assessment import submit_all_assessments_service
+from app.services.final_assessment import process_final_assessment_service
 from app.services.personality_assessment import process_personality_assessment
 from app.services.skill_assessment import predict_skills
 from app.services.learning_style_assessment import predict_learning_style, upload_technique_image
@@ -33,35 +33,18 @@ from app.utils.auth_validators import validate_authentication
 assessment_router = APIRouter()
 
 
-@assessment_router.post(
-    "/submit-all-assessments",
-    response_model=BaseResponse,
-    status_code=200,
-    summary="Submit all assessments at once",
-    description="Submit all five assessments: Learning Style, Skill, Personality, Interest, and Value.",
-)
-async def submit_all_assessments(
+@assessment_router.post("/final-assessment", response_model=AllAssessmentsResponse, summary="Submit final assessment")
+async def process_final_assessment(
     input_data: AllAssessmentsInput,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_data),
+    current_user=Depends(get_current_user_data)
 ):
     try:
-        response_data = await submit_all_assessments_service(input_data, db, current_user)
-
-        return BaseResponse(
-            date=datetime.utcnow().strftime("%d-%B-%Y"),
-            status=200,
-            message="All assessments submitted successfully.",
-            payload=response_data,
-        )
-
+        return await process_final_assessment_service(input_data, db, current_user)
     except HTTPException as e:
         raise e
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"An error occurred while processing the assessments: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
 
 
 # API Endpoint for Uploading Learning Technique Image✨

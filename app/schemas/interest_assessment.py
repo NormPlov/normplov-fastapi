@@ -51,6 +51,9 @@ class InterestAssessmentResponse(BaseModel):
     chart_data: List[ChartData]
     dimension_descriptions: List[DimensionDescription]
 
+    class Config:
+        orm_mode = True
+
 
 class InterestAssessmentResponseWithBase(BaseResponse):
     payload: InterestAssessmentResponse

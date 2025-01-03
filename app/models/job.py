@@ -39,6 +39,7 @@ class Job(Base):
     email = Column(String(255), nullable=True)
     phone = Column(String(50), nullable=True)
     website = Column(Text, nullable=True)
+    visitor_count = Column(Integer, default=0, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
     is_scraped = Column(Boolean, default=False, nullable=False)
     is_deleted = Column(Boolean, default=False, nullable=False)

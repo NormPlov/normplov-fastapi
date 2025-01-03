@@ -3,6 +3,16 @@ from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 
 
+class UserTestResponse(BaseModel):
+    test_uuid: str
+    test_name: str
+    assessment_type_name: str
+
+    class Config:
+        from_attributes = True
+
+
+
 class UserTestWithUserSchema(BaseModel):
     test_uuid: str
     test_name: str

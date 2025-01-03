@@ -5,7 +5,7 @@ from typing import List, Optional
 from datetime import datetime
 
 
-class JobDetailsResponse(BaseModel):
+class JobDetailsWithBookmarkResponse(BaseModel):
     uuid: uuid.UUID
     title: str
     company_name: str
@@ -29,7 +29,35 @@ class JobDetailsResponse(BaseModel):
     created_at_days_ago: Optional[str]
     closing_date: Optional[str]
     category: Optional[str]
+    visitor_count: int
     bookmarked: bool
+
+    class Config:
+        from_attributes = True
+
+
+class JobDetailsResponse(BaseModel):
+    uuid: uuid.UUID
+    title: str
+    company_name: str
+    logo: Optional[str]
+    location: Optional[str]
+    job_type: Optional[str]
+    posted_at: datetime
+    schedule: Optional[str]
+    salary: Optional[str]
+    is_scraped: bool
+    description: Optional[str]
+    requirements: Optional[List[str]]
+    responsibilities: Optional[List[str]]
+    benefits: Optional[List[str]]
+    facebook_url: Optional[str]
+    email: Optional[str]
+    phone: Optional[str]
+    website: Optional[str]
+    created_at: datetime
+    closing_date: Optional[str]
+    category: Optional[str]
 
     class Config:
         from_attributes = True

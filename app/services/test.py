@@ -195,12 +195,12 @@ def validate_uuid(value: str) -> str:
 async def create_user_test(
     db: AsyncSession,
     user_id: int,
-    assessment_type_id: int
+    assessment_type_id: int,
+    final_user_test: UserTest = None
 ) -> UserTest:
+    if final_user_test:
+        return final_user_test
     try:
-        logger.debug(f"Starting test creation for user_id={user_id}, assessment_type_id={assessment_type_id}")
-
-        # Validate assessment type
         assessment_type = (
             await db.execute(
                 select(AssessmentType.name).where(AssessmentType.id == assessment_type_id)
@@ -214,14 +214,10 @@ async def create_user_test(
                 message="Assessment type not found."
             )
 
-        logger.debug(f"Assessment type found: {assessment_type}")
-
-        # Generate unique test UUID
         test_name = f"{assessment_type} Test"
         while True:
             generated_uuid = str(uuid.uuid4())
             validated_uuid = validate_uuid(generated_uuid)
-            logger.debug(f"Generated UUID: {validated_uuid}")
             existing_test = await db.execute(
                 select(UserTest).where(UserTest.uuid == validated_uuid)
             )
@@ -244,14 +240,11 @@ async def create_user_test(
         await db.commit()
         await db.refresh(new_test)
 
-        logger.debug(f"New test created: {new_test.uuid}, name={new_test.name}")
         return new_test
 
     except HTTPException as e:
-        logger.error(f"HTTPException during test creation: {e.detail}")
         raise
     except Exception as e:
-        logger.error(f"Unexpected error during test creation: {e}", exc_info=True)
         await db.rollback()
         raise format_http_exception(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

@@ -4,7 +4,7 @@ import re
 
 from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, Query, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import is_admin_user, get_current_user_data
 from app.models import User
@@ -15,11 +15,10 @@ from app.utils.pagination import paginate_results
 from app.services.job import (
     load_all_jobs,
     delete_job,
-    get_job_details,
     admin_load_all_jobs,
     create_job, update_job,
     get_unique_job_categories,
-    get_trending_jobs
+    get_trending_jobs, fetch_job_details, increment_visitor_count
 )
 
 job_router = APIRouter()
@@ -140,18 +139,24 @@ async def get_job_details_route(
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid UUID format.")
 
-        job = await get_job_details(uuid, db)
+        job = await fetch_job_details(uuid, db)
+
+        await increment_visitor_count(job, db)
 
         job_details = JobDetailsResponse(
             uuid=job.uuid,
             title=job.title,
             company_name=job.company,
             logo=job.logo,
+            posted_at=job.posted_at,
+            schedule=job.schedule,
+            salary=job.salary,
             location=job.location,
             job_type=job.job_type,
             description=job.description,
             requirements=job.requirements,
             responsibilities=job.responsibilities,
+            benefits=job.benefits,
             facebook_url=job.facebook_url,
             email=job.email,
             phone=job.phone,
@@ -159,6 +164,7 @@ async def get_job_details_route(
             closing_date=job.closing_date.strftime("%d.%b.%Y") if job.closing_date else None,
             category=job.category,
             created_at=job.created_at,
+            is_scraped=job.is_scraped
         )
 
         return BaseResponse(
@@ -223,7 +229,7 @@ async def get_all_jobs_route(
     page: int = Query(1, description="Page number"),
     page_size: int = Query(10, description="Number of jobs per page"),
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_data),  # Allow unauthenticated access
+    current_user: Optional[User] = Depends(get_current_user_data),
 ):
     try:
         user_id = current_user.id if current_user else None
@@ -236,7 +242,7 @@ async def get_all_jobs_route(
             location=location,
             job_type=job_type,
             category=category,
-            user_id=user_id,  # Pass user_id or None
+            user_id=user_id,
         )
 
         paginated_result = paginate_results(jobs, page=page, page_size=page_size)

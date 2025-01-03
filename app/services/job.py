@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text, or_
 from fastapi import HTTPException
 from app.models import Job, Bookmark
-from app.schemas.job import JobDetailsResponse, JobResponse
+from app.schemas.job import JobDetailsResponse, JobResponse, JobDetailsWithBookmarkResponse
 from datetime import datetime
 from sqlalchemy import and_
 
@@ -113,7 +113,6 @@ async def admin_load_all_jobs(
                 location=job.location,
                 job_type=job.job_type,
                 posted_at=job.posted_at,
-                posted_at_days_ago=calculate_days_ago(job.posted_at),
                 schedule=job.schedule,
                 salary=job.salary,
                 is_scraped=job.is_scraped,
@@ -126,7 +125,6 @@ async def admin_load_all_jobs(
                 phone=job.phone,
                 website=job.website,
                 created_at=job.created_at,
-                created_at_days_ago=calculate_days_ago(job.created_at),
                 closing_date=job.closing_date.strftime("%d.%b.%Y") if job.closing_date else None,
                 category=job.category if job.category else None,
             )
@@ -142,9 +140,8 @@ async def admin_load_all_jobs(
         )
 
 
-async def get_job_details(uuid: str, db: AsyncSession) -> Job:
+async def fetch_job_details(uuid: str, db: AsyncSession) -> Job:
     try:
-        # Query to fetch job details
         stmt = select(Job).where(Job.uuid == uuid, Job.is_deleted == False)
         result = await db.execute(stmt)
         job = result.scalars().first()
@@ -154,14 +151,18 @@ async def get_job_details(uuid: str, db: AsyncSession) -> Job:
                 status_code=404,
                 detail=f"Job with UUID {uuid} not found or has been deleted."
             )
-
         return job
-
-    except HTTPException as exc:
-        raise exc
     except Exception as exc:
         raise Exception(f"An error occurred while fetching job details: {str(exc)}")
 
+
+async def increment_visitor_count(job: Job, db: AsyncSession) -> None:
+    try:
+        job.visitor_count += 1
+        db.add(job)
+        await db.commit()
+    except Exception as exc:
+        raise Exception(f"An error occurred while updating visitor count: {str(exc)}")
 
 async def delete_job(uuid: str, db: AsyncSession) -> dict:
     try:
@@ -241,7 +242,7 @@ async def load_all_jobs(
             return f"{delta.days} days ago" if delta.days > 0 else "Today"
 
         return [
-            JobDetailsResponse(
+            JobDetailsWithBookmarkResponse(
                 uuid=job.uuid,
                 title=job.title if job.title else "Unknown Title",
                 company_name=job.company if job.company else "Unknown Company",
@@ -265,6 +266,7 @@ async def load_all_jobs(
                 is_scraped=job.is_scraped,
                 closing_date=job.closing_date.strftime("%d.%b.%Y") if job.closing_date and job.closing_date >= datetime.utcnow() else None,
                 category=" ".join(job.category.split()[:2]) if job.category else None,
+                visitor_count=job.visitor_count,
                 bookmarked=job.uuid in bookmarked_job_ids if user_id else False,
             )
             for job in jobs

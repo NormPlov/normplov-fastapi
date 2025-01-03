@@ -1,3 +1,5 @@
+from typing import Optional
+
 import numpy as np
 import pandas as pd
 import uuid
@@ -16,6 +18,7 @@ from app.models.holland_code import HollandCode
 from app.models.holland_key_trait import HollandKeyTrait
 from app.models.career import Career
 from app.models.assessment_type import AssessmentType
+from app.schemas.test import UserTestResponse
 from app.services.test import create_user_test
 from app.schemas.interest_assessment import InterestAssessmentResponse, ChartData, DimensionDescription
 from ml_models.model_loader import load_interest_models
@@ -37,10 +40,9 @@ async def process_interest_assessment(
         responses: dict,
         db: AsyncSession,
         current_user,
-        test_uuid: str | None = None
-) -> InterestAssessmentResponse:
+        final_user_test: Optional[UserTest] = None
+) -> UserTestResponse:
     try:
-        # Validate that all required keys are present
         required_keys = [f"q{i}" for i in range(1, 13)]
         missing_keys = [key for key in required_keys if key not in responses]
 
@@ -52,17 +54,7 @@ async def process_interest_assessment(
 
         assessment_type_id = await get_assessment_type_id("Interests", db)
 
-        if test_uuid:
-            test_query = select(UserTest).where(UserTest.uuid == test_uuid, UserTest.user_id == current_user.id)
-            test_result = await db.execute(test_query)
-            user_test = test_result.scalars().first()
-
-            if not user_test:
-                raise HTTPException(status_code=404, detail="Test not found.")
-
-            logger.info(f"Updating existing test with UUID: {test_uuid}")
-        else:
-            user_test = await create_user_test(db, current_user.id, assessment_type_id)
+        user_test = final_user_test if final_user_test else await create_user_test(db, current_user.id, assessment_type_id)
 
         response_values = [responses[f"q{i}"] for i in range(1, 13)]
         input_data = np.array(response_values).reshape(1, -1)

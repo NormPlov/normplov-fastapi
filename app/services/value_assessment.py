@@ -1,3 +1,5 @@
+from typing import Optional
+
 import pandas as pd
 import uuid
 import logging
@@ -67,23 +69,18 @@ async def get_assessment_type_id(name: str, db: AsyncSession) -> int:
     return assessment_type_id
 
 
-async def process_value_assessment(responses, db: AsyncSession, current_user, test_uuid: str | None = None) -> ValueAssessmentResponse:
+async def process_value_assessment(
+        responses,
+        db: AsyncSession,
+        current_user,
+        final_user_test: Optional[UserTest] = None
+) -> ValueAssessmentResponse:
     try:
         assessment_type_id = await get_assessment_type_id("Values", db)
 
-        if test_uuid:
-            test_query = select(UserTest).where(UserTest.uuid == test_uuid, UserTest.user_id == current_user.id)
-            test_result = await db.execute(test_query)
-            user_test = test_result.scalars().first()
-
-            if not user_test:
-                raise HTTPException(status_code=404, detail="Test not found.")
-            logger.info(f"Updating existing test with UUID: {test_uuid}")
-        else:
-            user_test = await create_user_test(db, current_user.id, assessment_type_id)
+        user_test = final_user_test if final_user_test else await create_user_test(db, current_user.id, assessment_type_id)
 
         input_data = pd.DataFrame([responses])
-        logger.debug(f"User responses converted to DataFrame: {input_data}")
 
         feature_scores = {}
         for feature, model in feature_score_models.items():

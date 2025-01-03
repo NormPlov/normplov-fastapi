@@ -1,3 +1,5 @@
+from typing import Optional
+
 import pandas as pd
 import logging
 import json
@@ -90,17 +92,12 @@ async def predict_learning_style(
     data: dict,
     db: AsyncSession,
     current_user,
+    final_user_test: Optional[UserTest] = None
 ):
     try:
         assessment_type_id = await get_assessment_type_id("Learning Style", db)
 
-        try:
-            user_test = await create_user_test(db, current_user.id, assessment_type_id)
-            logger.debug(f"Created new test: uuid={user_test.uuid}, name={user_test.name}")
-        except Exception as e:
-            logger.error(f"Failed to create test for user_id={current_user.id}: {e}")
-            await db.rollback()
-            raise HTTPException(status_code=500, detail="Failed to create a new test.")
+        user_test = final_user_test if final_user_test else await create_user_test(db, current_user.id, assessment_type_id)
 
         stmt = select(Question).options(joinedload(Question.dimension))
         result = await db.execute(stmt)
@@ -116,7 +113,6 @@ async def predict_learning_style(
 
         for question in questions:
             if not question.dimension:
-                logger.error(f"Dimension missing for question ID {question.id}")
                 raise HTTPException(
                     status_code=500,
                     detail=f"Dimension missing for question ID {question.id}",

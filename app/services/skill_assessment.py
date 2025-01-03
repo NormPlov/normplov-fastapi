@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Optional
 
 import pandas as pd
 import logging
@@ -49,7 +49,8 @@ async def get_assessment_type_id(name: str, db: AsyncSession) -> int:
 async def predict_skills(
     responses: Dict[str, float],
     db: AsyncSession,
-    current_user
+    current_user,
+    final_user_test: Optional[UserTest] = None
 ) -> SkillAssessmentResponse:
 
     try:
@@ -58,13 +59,7 @@ async def predict_skills(
 
         assessment_type_id = await get_assessment_type_id("Skills", db)
 
-        try:
-            user_test = await create_user_test(db, current_user.id, assessment_type_id)
-            logger.debug(f"Created new test: uuid={user_test.uuid}, name={user_test.name}")
-        except Exception as e:
-            logger.error(f"Failed to create test for user_id={current_user.id}: {e}")
-            await db.rollback()
-            raise HTTPException(status_code=500, detail="Failed to create a new test.")
+        user_test = final_user_test if final_user_test else await create_user_test(db, current_user.id, assessment_type_id)
 
         input_df = pd.DataFrame([responses])
         input_df = input_df.reindex(columns=skill_model.feature_names_in_, fill_value=0)

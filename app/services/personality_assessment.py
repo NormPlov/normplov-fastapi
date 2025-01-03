@@ -1,10 +1,12 @@
+from typing import Optional
+
 import pandas as pd
 import uuid
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from fastapi import HTTPException
-from app.models import AssessmentType, Career, CareerMajor, SchoolMajor, School, Major, CareerPersonalityType
+from app.models import AssessmentType, Career, CareerMajor, SchoolMajor, School, Major, CareerPersonalityType, UserTest
 from app.models.user_response import UserResponse
 from app.models.user_assessment_score import UserAssessmentScore
 from app.models.dimension import Dimension
@@ -40,11 +42,12 @@ async def process_personality_assessment(
     input_data: dict,
     db: AsyncSession,
     current_user,
+    final_user_test: Optional[UserTest] = None
 ) -> PersonalityAssessmentResponse:
     try:
         assessment_type_id = await get_assessment_type_id("Personality", db)
 
-        user_test = await create_user_test(db, current_user.id, assessment_type_id)
+        user_test = final_user_test if final_user_test else await create_user_test(db, current_user.id, assessment_type_id)
 
         input_responses_df = pd.DataFrame([input_data])
         dimension_scores = {}
