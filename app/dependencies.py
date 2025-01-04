@@ -2,19 +2,17 @@ import logging
 
 from typing import Optional
 from fastapi import Depends, status, HTTPException
-from fastapi.security import OAuth2PasswordBearer, SecurityScopes
+from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy.orm import joinedload
 from app.exceptions.formatters import format_http_exception
-from app.models import UserRole
 from app.utils.auth import decode_jwt_token
 from app.core.database import get_db
 from app.models.user import User
 from app.utils.auth_validators import validate_authentication
 
 logger = logging.getLogger(__name__)
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
 
 async def get_optional_token(authorization: str = Depends(oauth2_scheme)) -> Optional[str]:
@@ -37,30 +35,36 @@ async def get_current_user(token: Optional[str] = Depends(get_optional_token)) -
 
 
 async def get_current_user_public(
-    current_user: Optional[dict] = Depends(get_current_user),
+    token: Optional[str] = Depends(oauth2_scheme),  # Optional Bearer token
     db: AsyncSession = Depends(get_db),
 ) -> Optional[User]:
-    if not current_user:
-        logger.debug("No current user found. Proceeding as public access.")
-        return None
+    """
+    Returns the current user if authenticated, or None for unauthenticated requests.
+    """
+    if not token:
+        logger.debug("No Authorization header provided. Treating as public access.")
+        return None  # No token provided, allow unauthenticated access
 
     try:
-        user_uuid = current_user.get("sub")
-        stmt = (
-            select(User)
-            .options(joinedload(User.roles).joinedload(UserRole.role))
-            .where(User.uuid == user_uuid)
-        )
+        decoded_token = decode_jwt_token(token)  # Decode the token
+        user_uuid = decoded_token.get("sub")
+        if not user_uuid:
+            logger.debug("Token missing 'sub' claim.")
+            return None
+
+        # Retrieve the user from the database
+        stmt = select(User).where(User.uuid == user_uuid)
         result = await db.execute(stmt)
         user = result.scalars().first()
+
         if user:
-            logger.debug(f"Authenticated user: {user.username} (UUID: {user_uuid})")
+            logger.debug(f"Authenticated user: {user.username}")
         else:
             logger.debug(f"No user found for UUID: {user_uuid}.")
         return user
     except Exception as e:
-        logger.error(f"Error retrieving public user data: {e}")
-        return None
+        logger.error(f"Failed to decode token: {e}")
+        return None  # Invalid token, treat as public access
 
 
 async def get_current_user_data(
