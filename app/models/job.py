@@ -37,7 +37,7 @@ class Job(Base):
     responsibilities = Column(ARRAY(Text), nullable=True)
     benefits = Column(ARRAY(Text), nullable=True)
     email = Column(String(255), nullable=True)
-    phone = Column(String(50), nullable=True)
+    phone = Column(ARRAY(String), nullable=True)
     website = Column(Text, nullable=True)
     visitor_count = Column(Integer, default=0, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)

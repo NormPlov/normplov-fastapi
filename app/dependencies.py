@@ -28,6 +28,7 @@
 #         # Use synchronous `decode_jwt_token`
 #         return decode_jwt_token(token)
 #     except Exception as e:
+
 #         logger.error(f"Error in get_current_user: {e}")
 #         raise HTTPException(
 #             status_code=401,

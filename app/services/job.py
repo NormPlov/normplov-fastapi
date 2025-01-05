@@ -314,6 +314,11 @@ async def update_job(
             except ValueError:
                 raise HTTPException(400, detail="Invalid date format for posted_at.")
 
+        if "phone" in update_data:
+            if not isinstance(update_data["phone"], list):
+                raise HTTPException(400, detail="Phone must be a list of strings.")
+            update_data["phone"] = [str(phone) for phone in update_data["phone"]]
+
         # Apply updates
         for field, value in update_data.items():
             if hasattr(job, field):
@@ -367,12 +372,12 @@ async def create_job_service(
     responsibilities: Optional[List[str]],
     benefits: Optional[List[str]],
     email: Optional[str],
-    phone: Optional[str],
+    phone: Optional[List[str]],
     website: Optional[str],
     is_active: bool,
     logo: Optional[str],
     category: Optional[str],
-    db: AsyncSession
+    db: AsyncSession,
 ) -> Dict[str, Any]:
     try:
         parsed_posted_at = None
@@ -386,6 +391,9 @@ async def create_job_service(
             parsed_closing_date = datetime.fromisoformat(closing_date)
             if parsed_closing_date < datetime.utcnow():
                 is_active = False
+
+        if phone and not isinstance(phone, list):
+            raise HTTPException(status_code=400, detail="Phone must be a list of strings.")
 
         new_job = Job(
             uuid=uuid.uuid4(),

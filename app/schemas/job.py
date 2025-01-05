@@ -23,7 +23,7 @@ class JobDetailsWithBookmarkResponse(BaseModel):
     benefits: Optional[List[str]]
     facebook_url: Optional[str]
     email: Optional[str]
-    phone: Optional[str]
+    phone: Optional[List[str]]
     website: Optional[str]
     created_at: datetime
     created_at_days_ago: Optional[str]
@@ -53,7 +53,7 @@ class JobDetailsResponse(BaseModel):
     benefits: Optional[List[str]]
     facebook_url: Optional[str]
     email: Optional[str]
-    phone: Optional[str]
+    phone: Optional[List[str]]
     website: Optional[str]
     created_at: datetime
     closing_date: Optional[str]
@@ -117,7 +117,7 @@ class JobUpdateRequest(BaseModel):
     responsibilities: Optional[List[str]] = None
     benefits: Optional[List[str]] = None
     email: Optional[str] = None
-    phone: Optional[str] = None
+    phone: Optional[List[str]] = None
     website: Optional[str] = None
     logo: Optional[str] = None
 
@@ -141,7 +141,7 @@ class JobCreateRequest(BaseModel):
     responsibilities: Optional[List[str]] = None
     benefits: Optional[List[str]] = None
     email: Optional[str] = None
-    phone: Optional[str] = None
+    phone: Optional[List[str]] = None
     website: Optional[str] = None
     is_active: bool = True
     logo: Optional[str] = None
@@ -166,7 +166,7 @@ class JobResponse(BaseModel):
     responsibilities: Optional[List[str]]
     benefits: Optional[List[str]]
     email: Optional[str]
-    phone: Optional[str]
+    phone: Optional[List[str]]
     website: Optional[str]
 
     class Config:
