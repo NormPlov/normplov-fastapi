@@ -20,7 +20,6 @@ class SkillAssessmentInput(BaseModel):
         return responses
 
 
-
 class MajorWithSchools(BaseModel):
     major_name: str
     schools: List[str]
@@ -41,7 +40,7 @@ class SkillAssessmentResponse(BaseModel):
     user_uuid: str
     test_uuid: str
     test_name: str
-    top_category: dict
+    top_category: Dict[str, str]
     category_percentages: Dict[str, float]
     skills_grouped: Dict[str, List[SkillGroupedByLevel]]
     strong_careers: List[CareerWithMajors]

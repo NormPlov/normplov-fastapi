@@ -13,13 +13,11 @@ from fastapi import HTTPException
 from app.models import (
     SkillCategory,
     DimensionCareer,
-    UserAssessmentScore,
     UserResponse,
     AssessmentType,
     UserTest,
     CareerMajor,
     Major,
-    School,
     SchoolMajor, Career
 )
 from app.models.dimension import Dimension

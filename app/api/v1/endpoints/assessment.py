@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Body
+from fastapi import APIRouter, Depends, HTTPException, Body, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.dependencies import get_current_user_data
@@ -28,15 +28,15 @@ assessment_router = APIRouter()
 
 
 # API Endpoint to get the final test✨
-@assessment_router.post(
+@assessment_router.get(
     "/get-aggregated-tests",
     response_model=AllAssessmentsResponse,
-    summary="Get aggregated details for multiple tests"
+    summary="Get aggregated details for multiple tests",
 )
 async def get_aggregated_tests(
-    test_uuids: List[str] = Body(..., embed=True, title="List of Test UUIDs"),
+    test_uuids: List[str] = Query(..., description="List of Test UUIDs"),
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user_data)
+    current_user=Depends(get_current_user_data),
 ):
     try:
         return await get_aggregated_tests_service(test_uuids, db, current_user)

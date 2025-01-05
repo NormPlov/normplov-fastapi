@@ -33,4 +33,4 @@ class AllAssessmentsResponse(BaseModel):
     skill: Optional[SkillAssessmentResponse] = None
     personality: Optional[PersonalityAssessmentResponse] = None
     interest: Optional[InterestAssessmentResponse] = None
-    value: Optional[ValueAssessmentResponse] = None
+    value: Optional[ValueAssessmentResponse]
