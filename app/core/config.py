@@ -41,10 +41,16 @@ class Settings(BaseSettings):
     # Debug and Environment Settings
     DEBUG: bool = Field(default=True, env="DEBUG")
 
-    # Google Configuration
+    # Login with Google
     GOOGLE_CLIENT_ID: str = Field(..., env="GOOGLE_CLIENT_ID")
     GOOGLE_CLIENT_SECRET: str = Field(..., env="GOOGLE_CLIENT_SECRET")
     GOOGLE_REDIRECT_URI: str = Field(default="http://127.0.0.1:8000/api/v1/auth/google/callback", env="GOOGLE_REDIRECT_URI")
+
+    # Login with Facebook
+    FACEBOOK_CLIENT_ID: str = Field(..., env="FACEBOOK_CLIENT_ID")
+    FACEBOOK_CLIENT_SECRET: str = Field(..., env="FACEBOOK_CLIENT_SECRET")
+    FACEBOOK_REDIRECT_URI: str = Field(default="https://dev-normplov.shinoshike.studio/auth/facebook/callback",
+                                       env="FACEBOOK_REDIRECT_URI")
 
     # Google Generative AI Key
     GOOGLE_GENERATIVE_AI_KEYS: List[str] = Field(default=["AIzaSyDLz0bS0Bm1z-km6XeuUX6lQKxqa9ZuJlw"],

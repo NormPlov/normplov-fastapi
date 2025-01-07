@@ -36,6 +36,54 @@ logger = logging.getLogger(__name__)
 auth_router = APIRouter()
 
 
+@auth_router.get("/facebook")
+async def facebook_login(request: Request):
+
+    request.session.clear()
+    state = str(uuid.uuid4())
+    request.session["state"] = state
+
+    redirect_uri = settings.FACEBOOK_REDIRECT_URI
+
+    try:
+        response = await oauth.facebook.authorize_redirect(request, redirect_uri, state=state)
+        return response
+    except Exception as e:
+        return {"error": "Failed to redirect to Facebook login", "details": str(e)}
+
+
+@auth_router.get("/facebook/callback", response_model=BaseResponse, status_code=status.HTTP_200_OK)
+async def facebook_callback(request: Request, db: AsyncSession = Depends(get_db)):
+    try:
+        state_in_session = request.session.get("state")
+        state_in_response = request.query_params.get("state")
+
+        if state_in_session != state_in_response:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="State mismatch. Potential CSRF detected.",
+            )
+
+        token = await oauth.facebook.authorize_access_token(request)
+        user_info = token.get("userinfo")
+
+        if not user_info:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid Facebook token.",
+            )
+
+        response = await get_or_create_user(db=db, user_info=user_info)
+        return response
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unexpected error during Facebook OAuth callback: {str(e)}",
+        )
+
+
 @auth_router.get("/google")
 async def google_login(request: Request):
 

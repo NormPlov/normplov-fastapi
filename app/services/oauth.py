@@ -9,3 +9,11 @@ oauth.register(
     server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
     client_kwargs={"scope": "openid email profile"},
 )
+
+oauth.register(
+    name="facebook",
+    client_id=settings.FACEBOOK_CLIENT_ID,
+    client_secret=settings.FACEBOOK_CLIENT_SECRET,
+    server_metadata_url="https://www.facebook.com/.well-known/openid-configuration/",
+    client_kwargs={"scope": "email public_profile"},
+)
