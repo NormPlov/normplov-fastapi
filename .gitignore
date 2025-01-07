@@ -1,2 +1,5 @@
 # Ignore docker-compose file
 #docker-compose.yml
+.env
+app/core/config.py
+

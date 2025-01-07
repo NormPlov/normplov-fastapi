@@ -1,11 +1,13 @@
+import logging
+import os
+
 from datetime import datetime
 from typing import List
-
-from fastapi import APIRouter, Depends, HTTPException, Body, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.dependencies import get_current_user_data
-from app.schemas.final_assessment import AllAssessmentsResponse
+from app.schemas.final_assessment import AllAssessmentsResponse, PredictCareersRequest
 from app.schemas.payload import BaseResponse
 from app.schemas.personality_assessment import PersonalityAssessmentInput
 from app.schemas.skill_assessment import SkillAssessmentInput
@@ -23,8 +25,44 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 from pydantic import ValidationError
 from app.exceptions.formatters import format_http_exception
 from app.utils.auth_validators import validate_authentication
+from app.utils.prepare_model_input import prepare_model_input, align_with_model_features
+from ml_models.model_loader import load_career_recommendation_model
 
+logger = logging.getLogger(__name__)
 assessment_router = APIRouter()
+
+
+@assessment_router.post("/predict-careers", summary="Predict Career Recommendations")
+async def predict_careers(
+    request: PredictCareersRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user_data),
+):
+    try:
+        aggregated_response = await get_aggregated_tests_service(request.test_uuids, db, current_user)
+
+        user_input = prepare_model_input(aggregated_response)
+
+        dataset_path = os.path.join(os.getcwd(), r"D:\CSTAD Scholarship Program\python for data analytics\NORMPLOV_PROJECT\normplov-fastapi\datasets\train_testing.csv")
+        career_model = load_career_recommendation_model(dataset_path=dataset_path)
+
+        model_features = career_model.get_feature_columns()
+
+        top_recommendations = career_model.predict(user_input, top_n=request.top_n)
+
+        return {
+            "date": datetime.utcnow().strftime("%Y-%m-%d"),
+            "status": 200,
+            "message": "Career recommendations predicted successfully.",
+            "payload": top_recommendations.to_dict(orient="records"),
+        }
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"An unexpected error occurred while predicting career recommendations: {str(e)}",
+        )
 
 
 # API Endpoint to get the final test✨

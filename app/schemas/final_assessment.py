@@ -44,3 +44,9 @@ class AllAssessmentsResponse(BaseModel):
     learning_style: Optional[LearningStyleResponse] = None
     value: Optional[ValueAssessmentResponse]
     personality: Optional[PersonalityAssessmentResponse] = None
+
+
+# Request Body for Final Assessment
+class PredictCareersRequest(BaseModel):
+    test_uuids: List[str]
+    top_n: int = 5

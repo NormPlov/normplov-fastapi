@@ -13,20 +13,25 @@ TARGET_VALUE_MODEL_PATH = os.path.join(MODEL_DIR, "value_assessment_model", "mul
 CAREER_RECOMMENDATION_MODEL_PATH = os.path.join(MODEL_DIR, "final_assessment_model", "career_recommendation_model.pkl")
 
 
-def load_career_recommendation_model():
-    """
-    Load the Career Recommendation Model from the specified path.
-    """
+def load_career_recommendation_model(dataset_path=None):
     try:
-        logger.info("Loading career recommendation model.")
         career_model = joblib.load(CAREER_RECOMMENDATION_MODEL_PATH)
-        logger.info("Successfully loaded career recommendation model.")
+
+        # Reinitialize columns if not present
+        if not hasattr(career_model, "columns") or not career_model.columns:
+            if dataset_path:
+                logger.warning("Feature columns missing. Reinitializing using the dataset.")
+                career_model.__init__(dataset_path)
+            else:
+                raise RuntimeError(
+                    "Feature columns are missing, and no dataset path was provided for reinitialization. "
+                    "Provide a dataset path when loading the model."
+                )
+
         return career_model
     except FileNotFoundError:
-        logger.error(f"Career recommendation model not found at: {CAREER_RECOMMENDATION_MODEL_PATH}")
         raise RuntimeError(f"Model file not found at: {CAREER_RECOMMENDATION_MODEL_PATH}")
     except Exception as e:
-        logger.exception("Failed to load career recommendation model.")
         raise RuntimeError(f"Failed to load career recommendation model: {e}")
 
 
@@ -59,13 +64,9 @@ def load_personality_models():
     label_encoder_path = os.path.join(MODEL_DIR, "personality_assessment_model", "trained_label_encoder.pkl")
 
     try:
-        # Load the dimension models
-        logger.info("Loading dimension models from all_trained_models.pkl.")
         with open(dimension_models_path, "rb") as models_file:
             dimension_models = joblib.load(models_file)
 
-        # Load the personality predictor
-        logger.info("Loading personality predictor model.")
         personality_predictor = joblib.load(personality_model_path)
 
         label_encoder = joblib.load(label_encoder_path)
