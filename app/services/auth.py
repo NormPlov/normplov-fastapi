@@ -1,3 +1,5 @@
+import uuid
+import logging
 from fastapi import HTTPException, status
 from datetime import datetime
 from sqlalchemy.future import select
@@ -6,9 +8,7 @@ from jose import jwt, JWTError
 from fastapi.responses import JSONResponse
 from datetime import timedelta
 from passlib.context import CryptContext
-import uuid
-import logging
-
+from sqlalchemy.orm import selectinload
 from sqlalchemy.orm import joinedload
 from app.core.config import settings
 from app.exceptions.formatters import format_http_exception
@@ -34,12 +34,11 @@ async def get_or_create_user(db: AsyncSession, user_info: dict) -> dict:
     if not email:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email is required.")
 
-    stmt = select(User).where(User.email == email)
+    stmt = select(User).options(selectinload(User.roles)).where(User.email == email)
     result = await db.execute(stmt)
     user = result.scalars().first()
 
     if not user:
-        logger.info(f"Creating a new user for email: {email}")
         user = User(
             uuid=str(uuid.uuid4()),
             username=name,
@@ -53,6 +52,7 @@ async def get_or_create_user(db: AsyncSession, user_info: dict) -> dict:
         await db.refresh(user)
 
     user_roles = [role.name for role in user.roles] if user.roles else []
+
     access_token = create_access_token(data={"sub": user.uuid})
     refresh_token = create_refresh_token(data={"sub": user.uuid})
 

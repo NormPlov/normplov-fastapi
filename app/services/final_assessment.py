@@ -117,53 +117,53 @@ async def get_aggregated_tests_service(
                     dimension_descriptions=response_data.get("dimension_descriptions", [])
                 ).dict()
 
-            # elif user_test.assessment_type.name.lower().replace(" ", "") == "skills" and response_data:
-            #     logger.debug("Parsing skills assessment response")
-            #     # Inside the skills assessment section
-            #     try:
-            #         logger.debug("Parsing skills assessment response")
-            #
-            #         strong_careers = []
-            #         for career in response_data.get("strong_careers", []):
-            #             try:
-            #                 majors = [
-            #                     MajorWithSchools(**major) if isinstance(major, dict) else major
-            #                     for major in career.get("majors", [])
-            #                 ]
-            #                 strong_careers.append(
-            #                     CareerWithMajors(
-            #                         career_name=career.get("career_name", "Unknown"),
-            #                         description=career.get("description", ""),
-            #                         majors=majors
-            #                     )
-            #                 )
-            #             except Exception as e:
-            #                 logger.error(f"Error parsing career: {career}. Error: {e}")
-            #                 continue
-            #
-            #         top_category = response_data.get("top_category", {})
-            #         if isinstance(top_category, str):
-            #             top_category = json.loads(top_category)
-            #
-            #         skill_data = SkillAssessmentResponse(
-            #             user_uuid=str(current_user.uuid),
-            #             test_uuid=str(user_test.uuid),
-            #             test_name=user_test.name,
-            #             top_category=top_category,
-            #             category_percentages=response_data.get("category_percentages", {}),
-            #             skills_grouped={
-            #                 level: [SkillGroupedByLevel(**skill) for skill in skills]
-            #                 for level, skills in response_data.get("skills_grouped", {}).items()
-            #             },
-            #             strong_careers=strong_careers
-            #         )
-            #
-            #     except Exception as e:
-            #         logger.exception(f"Error parsing skill assessment for test {user_test.uuid}: {e}")
-            #         raise HTTPException(
-            #             status_code=500,
-            #             detail="An error occurred while processing skill assessment."
-            #         )
+            elif user_test.assessment_type.name.lower().replace(" ", "") == "skills" and response_data:
+                logger.debug("Parsing skills assessment response")
+                # Inside the skills assessment section
+                try:
+                    logger.debug("Parsing skills assessment response")
+
+                    strong_careers = []
+                    for career in response_data.get("strong_careers", []):
+                        try:
+                            majors = [
+                                MajorWithSchools(**major) if isinstance(major, dict) else major
+                                for major in career.get("majors", [])
+                            ]
+                            strong_careers.append(
+                                CareerWithMajors(
+                                    career_name=career.get("career_name", "Unknown"),
+                                    description=career.get("description", ""),
+                                    majors=majors
+                                )
+                            )
+                        except Exception as e:
+                            logger.error(f"Error parsing career: {career}. Error: {e}")
+                            continue
+
+                    top_category = response_data.get("top_category", {})
+                    if isinstance(top_category, str):
+                        top_category = json.loads(top_category)
+
+                    skill_data = SkillAssessmentResponse(
+                        user_uuid=str(current_user.uuid),
+                        test_uuid=str(user_test.uuid),
+                        test_name=user_test.name,
+                        top_category=top_category,
+                        category_percentages=response_data.get("category_percentages", {}),
+                        skills_grouped={
+                            level: [SkillGroupedByLevel(**skill) for skill in skills]
+                            for level, skills in response_data.get("skills_grouped", {}).items()
+                        },
+                        strong_careers=strong_careers
+                    )
+
+                except Exception as e:
+                    logger.exception(f"Error parsing skill assessment for test {user_test.uuid}: {e}")
+                    raise HTTPException(
+                        status_code=500,
+                        detail="An error occurred while processing skill assessment."
+                    )
 
             if user_test.assessment_type.name.lower() == "values" and response_data:
                 # Convert chart_data from a list of dictionaries to a list of ChartData objects
@@ -176,7 +176,7 @@ async def get_aggregated_tests_service(
                     user_uuid=str(current_user.uuid),
                     test_uuid=str(user_test.uuid),
                     test_name=user_test.name,
-                    chart_data=chart_data,  # Use the transformed list here
+                    chart_data=chart_data,
                     value_details=[
                         ValueCategoryDetails(
                             name=detail["name"],
@@ -210,10 +210,10 @@ async def get_aggregated_tests_service(
                 ).dict()
 
         return AllAssessmentsResponse(
-            learning_style=learning_style,
-            # skill=skill,
-            personality=personality,
+            skill=skill_data.dict() if skill_data else None,
             interest=interest,
+            learning_style=learning_style,
+            personality=personality,
             value=value
         )
 

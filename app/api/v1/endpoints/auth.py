@@ -38,20 +38,24 @@ auth_router = APIRouter()
 
 @auth_router.get("/google")
 async def google_login(request: Request):
-    request.session.clear()  # Clear any existing session data
-    redirect_uri = settings.GOOGLE_REDIRECT_URI
 
+    request.session.clear()
     state = str(uuid.uuid4())
     request.session["state"] = state
 
-    return await oauth.google.authorize_redirect(request, redirect_uri, state=state)
+    redirect_uri = settings.GOOGLE_REDIRECT_URI
+
+    try:
+        response = await oauth.google.authorize_redirect(request, redirect_uri, state=state)
+        return response
+    except Exception as e:
+        return {"error": "Failed to redirect to Google login"}
 
 
 @auth_router.get("/google/callback", response_model=BaseResponse, status_code=status.HTTP_200_OK)
 async def google_callback(request: Request, db: AsyncSession = Depends(get_db)):
     try:
         state_in_session = request.session.get("state")
-
         state_in_response = request.query_params.get("state")
 
         if state_in_session != state_in_response:
@@ -70,6 +74,8 @@ async def google_callback(request: Request, db: AsyncSession = Depends(get_db)):
 
         response = await get_or_create_user(db=db, user_info=user_info)
         return response
+    except HTTPException as http_exc:
+        raise http_exc
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

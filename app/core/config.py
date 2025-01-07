@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     # Google Configuration
     GOOGLE_CLIENT_ID: str = Field(..., env="GOOGLE_CLIENT_ID")
     GOOGLE_CLIENT_SECRET: str = Field(..., env="GOOGLE_CLIENT_SECRET")
-    GOOGLE_REDIRECT_URI: str = Field(default="https://normplov-api.shinoshike.studio/api/v1/auth/google/callback", env="GOOGLE_REDIRECT_URI")
+    GOOGLE_REDIRECT_URI: str = Field(default="http://127.0.0.1:8000/api/v1/auth/google/callback", env="GOOGLE_REDIRECT_URI")
 
     # Google Generative AI Key
     GOOGLE_GENERATIVE_AI_KEYS: List[str] = Field(default=["AIzaSyDLz0bS0Bm1z-km6XeuUX6lQKxqa9ZuJlw"],

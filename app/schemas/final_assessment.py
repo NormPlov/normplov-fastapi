@@ -20,17 +20,27 @@ class PersonalityAssessmentResponse(BaseModel):
     personality_type: PersonalityTypeDetails
 
 
+class SkillGroupedByLevel(BaseModel):
+    skill: str
+    description: str
+
+
 class SkillAssessmentResponse(BaseModel):
-    top_category: str
+    skills_grouped: Dict[str, List[SkillGroupedByLevel]]
+
+
+class ChartData(BaseModel):
+    label: str
+    score: float
 
 
 class ValueAssessmentResponse(BaseModel):
-    chart_data: Dict[str, List[int]]
+    chart_data: List[ChartData]
 
 
 class AllAssessmentsResponse(BaseModel):
-    learning_style: Optional[LearningStyleResponse] = None
     skill: Optional[SkillAssessmentResponse] = None
-    personality: Optional[PersonalityAssessmentResponse] = None
     interest: Optional[InterestAssessmentResponse] = None
+    learning_style: Optional[LearningStyleResponse] = None
     value: Optional[ValueAssessmentResponse]
+    personality: Optional[PersonalityAssessmentResponse] = None
