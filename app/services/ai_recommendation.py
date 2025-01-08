@@ -220,7 +220,6 @@ async def rename_ai_recommendation(
         stmt = (
             select(AIRecommendation)
             .where(AIRecommendation.uuid == recommendation_uuid)
-            .options(joinedload(AIRecommendation.user))
         )
         result = await db.execute(stmt)
         recommendation = result.scalars().first()
@@ -237,10 +236,12 @@ async def rename_ai_recommendation(
         await db.commit()
         await db.refresh(recommendation)
 
+        query = recommendation.query if recommendation.query is not None else ""
+
         recommendation_response = AIRecommendationResponse(
             uuid=recommendation.uuid,
             user_uuid=current_user.uuid,
-            query=recommendation.query,
+            query=query,
             recommendation=recommendation.recommendation,
             chat_title=recommendation.chat_title,
             created_at=recommendation.created_at.strftime("%Y-%m-%d %H:%M:%S"),
@@ -260,9 +261,6 @@ async def rename_ai_recommendation(
             status_code=500,
             detail=f"Error while renaming AI recommendation: {str(exc)}"
         )
-    except Exception as e:
-        logger.error("Error while renaming AI recommendation: %s", str(e))
-        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
 async def delete_ai_recommendation(
