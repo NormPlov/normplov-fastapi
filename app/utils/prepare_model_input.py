@@ -1,11 +1,6 @@
 from app.schemas.final_assessment import AllAssessmentsResponse
 
 
-def align_with_model_features(user_input: dict, expected_features: list) -> dict:
-    aligned_input = {feature: user_input.get(feature, 0) for feature in expected_features}
-    return aligned_input
-
-
 def prepare_model_input(response: AllAssessmentsResponse) -> dict:
 
     user_input_skills = {

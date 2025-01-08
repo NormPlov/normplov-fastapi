@@ -7,6 +7,8 @@ import google.generativeai as genai
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy.orm import joinedload
+
 from app.models import UserResponse
 from app.models.ai_recommendation import AIRecommendation
 from app.models.user import User
@@ -215,7 +217,11 @@ async def rename_ai_recommendation(
     recommendation_uuid: str, new_title: str, db: AsyncSession, current_user: User
 ) -> BaseResponse:
     try:
-        stmt = select(AIRecommendation).where(AIRecommendation.uuid == recommendation_uuid)
+        stmt = (
+            select(AIRecommendation)
+            .where(AIRecommendation.uuid == recommendation_uuid)
+            .options(joinedload(AIRecommendation.user))
+        )
         result = await db.execute(stmt)
         recommendation = result.scalars().first()
 
@@ -226,8 +232,10 @@ async def rename_ai_recommendation(
             raise HTTPException(status_code=403, detail="Unauthorized action.")
 
         recommendation.chat_title = new_title
+        recommendation.updated_at = datetime.utcnow()
         db.add(recommendation)
         await db.commit()
+        await db.refresh(recommendation)
 
         recommendation_response = AIRecommendationResponse(
             uuid=recommendation.uuid,
@@ -245,7 +253,13 @@ async def rename_ai_recommendation(
             payload=[recommendation_response],
             message="Recommendation renamed successfully."
         )
-
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error while renaming AI recommendation: {str(exc)}"
+        )
     except Exception as e:
         logger.error("Error while renaming AI recommendation: %s", str(e))
         raise HTTPException(status_code=500, detail="Internal Server Error")

@@ -25,7 +25,7 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 from pydantic import ValidationError
 from app.exceptions.formatters import format_http_exception
 from app.utils.auth_validators import validate_authentication
-from app.utils.prepare_model_input import prepare_model_input, align_with_model_features
+from app.utils.prepare_model_input import prepare_model_input
 from ml_models.model_loader import load_career_recommendation_model
 
 logger = logging.getLogger(__name__)

@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     # Login with Facebook
     FACEBOOK_CLIENT_ID: str = Field(..., env="FACEBOOK_CLIENT_ID")
     FACEBOOK_CLIENT_SECRET: str = Field(..., env="FACEBOOK_CLIENT_SECRET")
-    FACEBOOK_REDIRECT_URI: str = Field(default="https://dev-normplov.shinoshike.studio/auth/facebook/callback",
+    FACEBOOK_REDIRECT_URI: str = Field(default="https://normplov-api.shinoshike.studio/api/v1/auth/facebook/callback",
                                        env="FACEBOOK_REDIRECT_URI")
 
     # Google Generative AI Key
@@ -82,7 +82,6 @@ class Settings(BaseSettings):
     def database_url(self) -> str:
         db_host = "136.228.158.126" if self.ENVIRONMENT == "development" else self.DB_HOST
         return f"postgresql+asyncpg://{quote_plus(self.DB_USER)}:{quote_plus(self.DB_PASSWORD)}@{db_host}:{self.DB_PORT}/{self.DB_NAME}"
-
 
     class Config:
         env_file = ".env"
