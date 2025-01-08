@@ -1,9 +1,10 @@
 import json
 import logging
 import uuid
+import json
 
 from uuid import UUID
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Union
 from pydantic import UUID4
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import joinedload, selectinload
@@ -56,6 +57,26 @@ async def get_public_responses(
         raise HTTPException(status_code=500, detail="An error occurred while fetching public responses.")
 
 
+def format_response_data(response_data: Any) -> List[Dict[str, Any]]:
+    try:
+        if isinstance(response_data, str):
+            response_data = json.loads(response_data)
+
+        if isinstance(response_data, list) and all(isinstance(item, dict) for item in response_data):
+            return response_data
+
+        if isinstance(response_data, dict):
+            return [response_data]
+
+        if isinstance(response_data, list):
+            return [{"data": item} for item in response_data]
+
+        return [{"data": response_data}]
+    except Exception as e:
+        logger.error(f"Error formatting response_data: {e}")
+        return [{"data": str(response_data)}]
+
+
 async def fetch_user_tests_for_current_user(
     db: AsyncSession,
     current_user: User,
@@ -81,22 +102,28 @@ async def fetch_user_tests_for_current_user(
 
         paginated_data = paginate_results(user_tests, page, page_size)
 
-        formatted_tests = [
-            UserTestResponseSchema(
-                test_uuid=str(test.uuid),
-                test_name=test.name,
-                assessment_type_name=(
-                    test.assessment_type.name if test.assessment_type else None
-                ),
-                response_data=[
-                    json.loads(response.response_data) if isinstance(response.response_data, str) else response.response_data
-                    for response in test.user_responses
-                    if not response.is_deleted and response.response_data
-                ],
-                created_at=test.created_at
+        formatted_tests = []
+        for test in paginated_data["items"]:
+            formatted_responses = [
+                format_response_data(response.response_data)
+                for response in test.user_responses
+                if not response.is_deleted and response.response_data
+            ]
+            flattened_responses = [item for sublist in formatted_responses for item in sublist]
+
+            formatted_tests.append(
+                UserTestResponseSchema(
+                    test_uuid=str(test.uuid),
+                    test_name=test.name,
+                    assessment_type_name=(
+                        test.assessment_type.name if test.assessment_type else None
+                    ),
+                    response_data=flattened_responses,
+                    created_at=test.created_at
+                )
             )
-            for test in paginated_data["items"]
-        ]
+
+        formatted_tests.sort(key=lambda x: x.created_at, reverse=True)
 
         metadata = PaginationMetadata(
             page=paginated_data["metadata"]["page"],
@@ -277,7 +304,11 @@ async def create_user_test(
                 message="Assessment type not found."
             )
 
-        test_name = f"{assessment_type} Test"
+        if assessment_type == "All Tests":
+            test_name = assessment_type
+        else:
+            test_name = f"{assessment_type} Test"
+
         while True:
             generated_uuid = str(uuid.uuid4())
             validated_uuid = validate_uuid(generated_uuid)
@@ -287,7 +318,6 @@ async def create_user_test(
             if not existing_test.scalars().first():
                 break
 
-        # Create new test
         new_test = UserTest(
             uuid=validated_uuid,
             user_id=user_id,

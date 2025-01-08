@@ -41,7 +41,6 @@ async def predict_careers_service(
     aggregated_response = await get_aggregated_tests_service(request.test_uuids, db, current_user)
 
     user_input = prepare_model_input(aggregated_response)
-    logger.info(f"User input keys: {user_input.keys()}")
 
     dataset_path = os.path.join(
         os.getcwd(),
@@ -77,19 +76,29 @@ async def predict_careers_service(
     await db.commit()
     await db.refresh(new_response)
 
+    payload = [
+        {
+            "assessment_type": "All Tests",
+            "test_name": user_test.name,
+            "test_uuid": str(user_test.uuid),
+            "details": recommendation,
+        }
+        for recommendation in top_recommendations.to_dict(orient="records")
+    ]
+
     return {
         "date": datetime.utcnow().strftime("%Y-%m-%d"),
         "status": 200,
         "message": "Career recommendations predicted and recorded successfully.",
-        "payload": top_recommendations.to_dict(orient="records"),
+        "payload": payload,
     }
 
 
 # Validate each major in the majors list
 def validate_major(major):
-    if isinstance(major, dict):  # Convert dictionary to MajorWithSchools
+    if isinstance(major, dict):
         return MajorWithSchools(**major)
-    elif isinstance(major, MajorWithSchools):  # Already valid
+    elif isinstance(major, MajorWithSchools):
         return major
     else:
         raise ValueError(f"Invalid major data: {major}")
@@ -188,8 +197,6 @@ async def get_aggregated_tests_service(
                 logger.debug("Parsing skills assessment response")
                 # Inside the skills assessment section
                 try:
-                    logger.debug("Parsing skills assessment response")
-
                     strong_careers = []
                     for career in response_data.get("strong_careers", []):
                         try:

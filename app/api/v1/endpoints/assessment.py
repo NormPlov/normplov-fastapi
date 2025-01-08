@@ -25,11 +25,19 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 from pydantic import ValidationError
 from app.exceptions.formatters import format_http_exception
 from app.utils.auth_validators import validate_authentication
-from app.utils.prepare_model_input import prepare_model_input
-from ml_models.model_loader import load_career_recommendation_model
+from fastapi.responses import FileResponse
+from app.utils.render_and_export import render_assessment_to_image
 
 logger = logging.getLogger(__name__)
 assessment_router = APIRouter()
+
+
+@assessment_router.get("/assessment-image/{test_uuid}", summary="Get Assessment Image")
+async def get_assessment_image(test_uuid: str):
+    image_path = os.path.join(os.getcwd(), "exports", f"{test_uuid}.png")
+    if not os.path.exists(image_path):
+        raise HTTPException(status_code=404, detail="Image not found.")
+    return FileResponse(image_path)
 
 
 @assessment_router.post("/predict-careers", summary="Predict Career Recommendations")
@@ -44,6 +52,26 @@ async def predict_careers(
             db=db,
             current_user=current_user,
         )
+
+        payload = response["payload"]
+        for item in payload:
+            assessment_data = {
+                "assessment_type": item["assessment_type"],
+                "test_name": item["test_name"],
+                "test_uuid": item["test_uuid"],
+                "details": item.get("details", {})
+            }
+
+            output_path = os.path.join(
+                os.getcwd(),
+                "exports",
+                f"{item['test_uuid']}.png"
+            )
+
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+            render_assessment_to_image(assessment_data, output_path)
+
         return response
     except HTTPException as e:
         raise e
