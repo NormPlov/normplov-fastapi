@@ -26,8 +26,11 @@
         <h4>UUID: {{ test_uuid }}</h4>
         <h4>Details:</h4>
         <ul>
-            {% for key, value in details.items() %}
-            <li><strong>{{ key }}:</strong> {{ value }}</li>
+            {% for detail in details %}
+            <li>
+                <strong>Career:</strong> {{ detail.Career }}<br>
+                <strong>Similarity:</strong> {{ detail.Similarity }}
+            </li>
             {% endfor %}
         </ul>
     </div>

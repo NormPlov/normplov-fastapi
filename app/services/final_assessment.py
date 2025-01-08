@@ -47,7 +47,6 @@ async def predict_careers_service(
         r"D:\CSTAD Scholarship Program\python for data analytics\NORMPLOV_PROJECT\normplov-fastapi\datasets\train_testing.csv",
     )
     career_model = load_career_recommendation_model(dataset_path=dataset_path)
-
     model_features = career_model.get_feature_columns()
 
     user_input_aligned = {feature: user_input.get(feature, 0) for feature in model_features}
@@ -55,7 +54,6 @@ async def predict_careers_service(
     top_recommendations = career_model.predict(user_input_aligned, top_n=request.top_n)
 
     assessment_type_id = await get_assessment_type_id("All Tests", db)
-
     user_test = await create_user_test(
         db=db,
         user_id=current_user.id,
@@ -76,15 +74,13 @@ async def predict_careers_service(
     await db.commit()
     await db.refresh(new_response)
 
-    payload = [
-        {
-            "assessment_type": "All Tests",
-            "test_name": user_test.name,
-            "test_uuid": str(user_test.uuid),
-            "details": recommendation,
-        }
-        for recommendation in top_recommendations.to_dict(orient="records")
-    ]
+    # Build payload
+    payload = {
+        "assessment_type": "All Tests",
+        "test_name": user_test.name,
+        "test_uuid": str(user_test.uuid),
+        "details": top_recommendations.to_dict(orient="records"),
+    }
 
     return {
         "date": datetime.utcnow().strftime("%Y-%m-%d"),
