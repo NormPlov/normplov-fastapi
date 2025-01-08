@@ -1,11 +1,13 @@
 import logging
 import json
+import os
+from datetime import datetime
 from typing import List
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException
-from app.models import UserTest
-from app.schemas.final_assessment import AllAssessmentsResponse
+from app.models import UserTest, AssessmentType, UserResponse, User
+from app.schemas.final_assessment import AllAssessmentsResponse, PredictCareersRequest
 from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload
 from app.schemas.interest_assessment import InterestAssessmentResponse
@@ -14,8 +16,73 @@ from app.schemas.personality_assessment import PersonalityTypeDetails, Personali
 from app.schemas.skill_assessment import SkillAssessmentResponse, MajorWithSchools, SkillGroupedByLevel
 from app.schemas.value_assessment import ValueAssessmentResponse, CareerData, KeyImprovement, MajorData, \
     ValueCategoryDetails, ChartData
+from app.services.test import create_user_test
+from app.utils.prepare_model_input import prepare_model_input
+from ml_models.model_loader import load_career_recommendation_model
 
 logger = logging.getLogger(__name__)
+
+
+async def get_assessment_type_id(name: str, db: AsyncSession) -> int:
+    stmt = select(AssessmentType.id).where(AssessmentType.name == name)
+    result = await db.execute(stmt)
+    assessment_type_id = result.scalars().first()
+    if not assessment_type_id:
+        raise HTTPException(status_code=404, detail=f"Assessment type '{name}' not found.")
+    return assessment_type_id
+
+
+# Get Career Prediction
+async def predict_careers_service(
+    request: PredictCareersRequest,
+    db: AsyncSession,
+    current_user: User,
+):
+    aggregated_response = await get_aggregated_tests_service(request.test_uuids, db, current_user)
+
+    user_input = prepare_model_input(aggregated_response)
+    logger.info(f"User input keys: {user_input.keys()}")
+
+    dataset_path = os.path.join(
+        os.getcwd(),
+        r"D:\CSTAD Scholarship Program\python for data analytics\NORMPLOV_PROJECT\normplov-fastapi\datasets\train_testing.csv",
+    )
+    career_model = load_career_recommendation_model(dataset_path=dataset_path)
+
+    model_features = career_model.get_feature_columns()
+
+    user_input_aligned = {feature: user_input.get(feature, 0) for feature in model_features}
+
+    top_recommendations = career_model.predict(user_input_aligned, top_n=request.top_n)
+
+    assessment_type_id = await get_assessment_type_id("All Tests", db)
+
+    user_test = await create_user_test(
+        db=db,
+        user_id=current_user.id,
+        assessment_type_id=assessment_type_id,
+    )
+
+    new_response = UserResponse(
+        user_id=current_user.id,
+        assessment_type_id=assessment_type_id,
+        user_test_id=user_test.id,
+        response_data=top_recommendations.to_dict(orient="records"),
+        is_completed=True,
+        is_deleted=False,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    db.add(new_response)
+    await db.commit()
+    await db.refresh(new_response)
+
+    return {
+        "date": datetime.utcnow().strftime("%Y-%m-%d"),
+        "status": 200,
+        "message": "Career recommendations predicted and recorded successfully.",
+        "payload": top_recommendations.to_dict(orient="records"),
+    }
 
 
 # Validate each major in the majors list

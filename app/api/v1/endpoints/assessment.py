@@ -14,7 +14,7 @@ from app.schemas.skill_assessment import SkillAssessmentInput
 from app.schemas.learning_style_assessment import LearningStyleInput
 from app.schemas.interest_assessment import InterestAssessmentInput
 from app.schemas.value_assessment import ValueAssessmentInput
-from app.services.final_assessment import get_aggregated_tests_service
+from app.services.final_assessment import get_aggregated_tests_service, predict_careers_service
 from app.services.personality_assessment import process_personality_assessment
 from app.services.skill_assessment import predict_skills
 from app.services.learning_style_assessment import predict_learning_style
@@ -39,29 +39,18 @@ async def predict_careers(
     current_user=Depends(get_current_user_data),
 ):
     try:
-        aggregated_response = await get_aggregated_tests_service(request.test_uuids, db, current_user)
-
-        user_input = prepare_model_input(aggregated_response)
-
-        dataset_path = os.path.join(os.getcwd(), r"D:\CSTAD Scholarship Program\python for data analytics\NORMPLOV_PROJECT\normplov-fastapi\datasets\train_testing.csv")
-        career_model = load_career_recommendation_model(dataset_path=dataset_path)
-
-        model_features = career_model.get_feature_columns()
-
-        top_recommendations = career_model.predict(user_input, top_n=request.top_n)
-
-        return {
-            "date": datetime.utcnow().strftime("%Y-%m-%d"),
-            "status": 200,
-            "message": "Career recommendations predicted successfully.",
-            "payload": top_recommendations.to_dict(orient="records"),
-        }
+        response = await predict_careers_service(
+            request=request,
+            db=db,
+            current_user=current_user,
+        )
+        return response
     except HTTPException as e:
         raise e
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"An unexpected error occurred while predicting career recommendations: {str(e)}",
+            detail=f"An unexpected error occurred: {str(e)}",
         )
 
 

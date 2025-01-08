@@ -262,10 +262,7 @@ async def create_user_test(
     db: AsyncSession,
     user_id: int,
     assessment_type_id: int,
-    final_user_test: UserTest = None
 ) -> UserTest:
-    if final_user_test:
-        return final_user_test
     try:
         assessment_type = (
             await db.execute(
