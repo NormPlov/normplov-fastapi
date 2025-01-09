@@ -1,37 +1,44 @@
 import os
+import traceback
+
 import joblib
 import logging
-
-# Import the CareerRecommendationModel for deserialization
-from ml_models.final_assessment_model.career_recommendation_model import CareerRecommendationModel
 
 logger = logging.getLogger(__name__)
 
 MODEL_DIR = os.path.join(os.getcwd(), "ml_models")
 FEATURE_SCORE_MODEL_PATH = os.path.join(MODEL_DIR, "value_assessment_model", "all_models.pkl")
 TARGET_VALUE_MODEL_PATH = os.path.join(MODEL_DIR, "value_assessment_model", "multi_label_model_rf.pkl")
-CAREER_RECOMMENDATION_MODEL_PATH = os.path.join(MODEL_DIR, "final_assessment_model", "career_recommendation_model.pkl")
+CAREER_RECOMMENDATION_MODEL_PATH = os.path.join(MODEL_DIR, "final_assessment_model", "final_career_recommendation_model.pkl")
 
 
-def load_career_recommendation_model(dataset_path=None):
+def load_career_recommendation_model():
+    """Load the serialized career recommendation model."""
     try:
+        logger.info(f"Attempting to load career recommendation model from: {CAREER_RECOMMENDATION_MODEL_PATH}")
+
+        # Ensure the model file exists
+        if not os.path.exists(CAREER_RECOMMENDATION_MODEL_PATH):
+            logger.error(f"Model file not found at: {CAREER_RECOMMENDATION_MODEL_PATH}")
+            raise FileNotFoundError(f"Model file not found at: {CAREER_RECOMMENDATION_MODEL_PATH}")
+
+        # Log environment details for debugging
+        logger.debug(f"Current working directory: {os.getcwd()}")
+        logger.debug(f"Available files in model directory: {os.listdir(os.path.dirname(CAREER_RECOMMENDATION_MODEL_PATH))}")
+
+        # Load the serialized model
         career_model = joblib.load(CAREER_RECOMMENDATION_MODEL_PATH)
-
-        # Reinitialize columns if not present
-        if not hasattr(career_model, "columns") or not career_model.columns:
-            if dataset_path:
-                logger.warning("Feature columns missing. Reinitializing using the dataset.")
-                career_model.__init__(dataset_path)
-            else:
-                raise RuntimeError(
-                    "Feature columns are missing, and no dataset path was provided for reinitialization. "
-                    "Provide a dataset path when loading the model."
-                )
-
+        logger.info(f"Career recommendation model loaded successfully.")
         return career_model
-    except FileNotFoundError:
+
+    except FileNotFoundError as e:
+        logger.error(f"FileNotFoundError: {e}")
         raise RuntimeError(f"Model file not found at: {CAREER_RECOMMENDATION_MODEL_PATH}")
+
     except Exception as e:
+        logger.error(f"Exception occurred while loading the career recommendation model: {e}")
+        logger.error("Traceback:")
+        logger.error(traceback.format_exc())
         raise RuntimeError(f"Failed to load career recommendation model: {e}")
 
 

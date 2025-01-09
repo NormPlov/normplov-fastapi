@@ -42,16 +42,12 @@ async def predict_careers_service(
 
     user_input = prepare_model_input(aggregated_response)
 
-    dataset_path = os.path.join(
-        os.getcwd(),
-        r"D:\CSTAD Scholarship Program\python for data analytics\NORMPLOV_PROJECT\normplov-fastapi\datasets\train_testing.csv",
-    )
-    career_model = load_career_recommendation_model(dataset_path=dataset_path)
+    career_model = load_career_recommendation_model()
     model_features = career_model.get_feature_columns()
 
     user_input_aligned = {feature: user_input.get(feature, 0) for feature in model_features}
 
-    top_recommendations = career_model.predict(user_input_aligned, top_n=request.top_n)
+    top_recommendations = career_model.predict(user_input_aligned)
 
     assessment_type_id = await get_assessment_type_id("All Tests", db)
     user_test = await create_user_test(

@@ -26,7 +26,6 @@ from app.models.user import User
 from app.services.value_assessment import process_value_assessment
 from app.exceptions.formatters import format_http_exception
 from app.utils.auth_validators import validate_authentication
-from app.utils.render_and_export import render_assessment_to_image
 
 logger = logging.getLogger(__name__)
 assessment_router = APIRouter()
@@ -59,16 +58,7 @@ async def predict_careers(
             "assessment_type": payload["assessment_type"],
             "test_name": payload["test_name"],
             "test_uuid": payload["test_uuid"],
-            "details": payload["details"],
         }
-
-        output_path = os.path.join(
-            os.getcwd(),
-            "exports",
-            f"{payload['test_uuid']}.png"
-        )
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        render_assessment_to_image(assessment_data, output_path)
 
         return response
     except HTTPException as e:

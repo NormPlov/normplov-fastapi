@@ -230,11 +230,15 @@ async def load_all_jobs(
         result = await db.execute(stmt)
         jobs = result.scalars().all()
 
+        # Fetch bookmarks if user is logged in
         bookmarked_job_ids = set()
         if user_id:
+            logger.debug(f"Fetching bookmarks for user_id={user_id}")
             bookmark_stmt = select(Bookmark.job_id).where(Bookmark.user_id == user_id, Bookmark.is_deleted == False)
+            logger.debug(f"Bookmark Query: {bookmark_stmt}")
             bookmarks_result = await db.execute(bookmark_stmt)
             bookmarked_job_ids = {row[0] for row in bookmarks_result.fetchall()}
+            logger.debug(f"Bookmarked Job IDs: {bookmarked_job_ids}")
 
         def calculate_days_ago(date):
             if not date:

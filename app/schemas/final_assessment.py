@@ -49,4 +49,3 @@ class AllAssessmentsResponse(BaseModel):
 # Request Body for Final Assessment
 class PredictCareersRequest(BaseModel):
     test_uuids: List[str]
-    top_n: int = 5
