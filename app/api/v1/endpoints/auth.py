@@ -59,7 +59,7 @@ async def facebook_login(request: Request):
 @auth_router.get("/facebook/callback", response_model=BaseResponse, status_code=status.HTTP_200_OK)
 async def facebook_callback(request: Request, db: AsyncSession = Depends(get_db)):
     try:
-        # Validate state
+        # Validate state parameter
         state_in_session = request.session.get("state")
         state_in_response = request.query_params.get("state")
         if state_in_session != state_in_response:
@@ -70,9 +70,13 @@ async def facebook_callback(request: Request, db: AsyncSession = Depends(get_db)
 
         # Retrieve the token
         token = await oauth.facebook.authorize_access_token(request)
-        print(f"Token Response: {token}")
+        print(f"Token Type: {type(token)}")
+        print(f"Token Content: {token}")
 
-        # Extract user info
+        # Handle token as a dictionary
+        if isinstance(token, str):
+            token = {"access_token": token}
+
         access_token = token.get("access_token")
         if not access_token:
             raise HTTPException(
@@ -80,6 +84,7 @@ async def facebook_callback(request: Request, db: AsyncSession = Depends(get_db)
                 detail="Invalid Facebook token. Access token missing.",
             )
 
+        # Fetch user information using the access token
         user_info_response = await oauth.facebook.get(
             "me?fields=id,name,email,picture",
             token=access_token,
