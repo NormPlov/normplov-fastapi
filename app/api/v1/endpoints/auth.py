@@ -38,26 +38,30 @@ auth_router = APIRouter()
 
 @auth_router.get("/facebook")
 async def facebook_login(request: Request):
-
-    request.session.clear()
-    state = str(uuid.uuid4())
-    request.session["state"] = state
-
-    redirect_uri = settings.FACEBOOK_REDIRECT_URI
-
     try:
+        # Clear and set session state
+        request.session.clear()
+        state = str(uuid.uuid4())
+        request.session["state"] = state
+
+        redirect_uri = settings.FACEBOOK_REDIRECT_URI
+        print(f"Redirect URI: {redirect_uri}")
+        print(f"Session State: {state}")
+
+        # Redirect to Facebook for authorization
         response = await oauth.facebook.authorize_redirect(request, redirect_uri, state=state)
         return response
     except Exception as e:
+        print(f"Error during Facebook login: {e}")
         return {"error": "Failed to redirect to Facebook login", "details": str(e)}
 
 
 @auth_router.get("/facebook/callback", response_model=BaseResponse, status_code=status.HTTP_200_OK)
 async def facebook_callback(request: Request, db: AsyncSession = Depends(get_db)):
     try:
+        # Validate state parameter
         state_in_session = request.session.get("state")
         state_in_response = request.query_params.get("state")
-
         print(f"State in Session: {state_in_session}")
         print(f"State in Response: {state_in_response}")
 
@@ -67,12 +71,11 @@ async def facebook_callback(request: Request, db: AsyncSession = Depends(get_db)
                 detail="State mismatch. Potential CSRF detected.",
             )
 
-        print(f"Request Query Params: {request.query_params}")
-        print(f"Request Headers: {request.headers}")
-
+        # Retrieve the access token
         token = await oauth.facebook.authorize_access_token(request)
         print(f"Token Response: {token}")
 
+        # Extract user info from token
         user_info = token.get("userinfo")
         if not user_info:
             raise HTTPException(
@@ -80,6 +83,7 @@ async def facebook_callback(request: Request, db: AsyncSession = Depends(get_db)
                 detail="Invalid Facebook token.",
             )
 
+        # Get or create user in the database
         response = await get_or_create_user(db=db, user_info=user_info)
         return response
     except HTTPException as http_exc:
