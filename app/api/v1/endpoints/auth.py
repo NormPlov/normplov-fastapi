@@ -59,7 +59,7 @@ async def facebook_login(request: Request):
 @auth_router.get("/facebook/callback", response_model=BaseResponse, status_code=status.HTTP_200_OK)
 async def facebook_callback(request: Request, db: AsyncSession = Depends(get_db)):
     try:
-        # Validate state parameter
+        # Validate state
         state_in_session = request.session.get("state")
         state_in_response = request.query_params.get("state")
         if state_in_session != state_in_response:
@@ -70,13 +70,6 @@ async def facebook_callback(request: Request, db: AsyncSession = Depends(get_db)
 
         # Retrieve the token
         token = await oauth.facebook.authorize_access_token(request)
-        print(f"Token Type: {type(token)}")
-        print(f"Token Content: {token}")
-
-        # Handle token as a dictionary
-        if isinstance(token, str):
-            token = {"access_token": token}
-
         access_token = token.get("access_token")
         if not access_token:
             raise HTTPException(
@@ -84,18 +77,18 @@ async def facebook_callback(request: Request, db: AsyncSession = Depends(get_db)
                 detail="Invalid Facebook token. Access token missing.",
             )
 
-        # Fetch user information using the access token
+        # Fetch user info
         user_info_response = await oauth.facebook.get(
             "me?fields=id,name,email,picture",
-            token=access_token,
+            token={"access_token": access_token},
         )
         user_info = user_info_response.json()
         print(f"Fetched User Info: {user_info}")
 
-        if not user_info:
+        if "email" not in user_info:
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid Facebook token. User info not found.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email permission not granted. Unable to retrieve email address.",
             )
 
         # Get or create user
