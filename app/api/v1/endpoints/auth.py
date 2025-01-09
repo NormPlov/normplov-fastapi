@@ -83,7 +83,6 @@ async def facebook_callback(request: Request, db: AsyncSession = Depends(get_db)
             token={"access_token": access_token},
         )
         user_info = user_info_response.json()
-        print(f"Fetched User Info: {user_info}")
 
         if "email" not in user_info:
             raise HTTPException(

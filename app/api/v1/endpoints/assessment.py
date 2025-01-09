@@ -267,66 +267,11 @@ async def predict_skills_endpoint(
 
 
 # API Endpoint for Learning Style Assessment✨
-# @assessment_router.post(
-#     "/predict-learning-style",
-#     response_model=BaseResponse,
-#     summary="Predict user's learning style",
-#     description="Analyze learning style based on user responses."
-# )
-# async def predict_learning_style_route(
-#     data: LearningStyleInput,
-#     db: AsyncSession = Depends(get_db),
-#     current_user: User = Depends(get_current_user_data),
-# ):
-#     try:
-#         data = LearningStyleInput(**data.dict())
-#
-#         learning_style_result = await predict_learning_style(data, db, current_user)
-#
-#         response_data = {
-#             "test_uuid": learning_style_result["test_uuid"],
-#             "test_name": learning_style_result["test_name"],
-#             "assessment_type_name": "Learning Style",
-#         }
-#
-#         return BaseResponse(
-#             date=datetime.utcnow().strftime("%d-%B-%Y"),
-#             status=200,
-#             payload=response_data,
-#             message="Learning style predicted successfully.",
-#         )
-#
-#     except ValidationError as exc:
-#         raise format_http_exception(
-#             status_code=422,
-#             message="Validation error in the request body.",
-#             details=exc.errors(),
-#         )
-#     except IntegrityError as exc:
-#         raise format_http_exception(
-#             status_code=400,
-#             message="Database integrity issue occurred.",
-#             details="Check for duplicate or invalid data violating constraints.",
-#         )
-#     except OperationalError as exc:
-#         raise format_http_exception(
-#             status_code=500,
-#             message="Database operational error occurred.",
-#             details="There may be connectivity issues or a misconfigured database.",
-#         )
-#     except HTTPException as exc:
-#         raise exc
-#     except Exception as exc:
-#         raise format_http_exception(
-#             status_code=500,
-#             message="An unexpected error occurred while predicting the learning style.",
-#             details=str(exc),
-#         )
 @assessment_router.post(
     "/predict-learning-style",
     response_model=BaseResponse,
     summary="Predict user's learning style",
-    description="Analyze learning style based on user responses.",
+    description="Analyze learning style based on user responses."
 )
 async def predict_learning_style_route(
     data: LearningStyleInput,
@@ -334,6 +279,8 @@ async def predict_learning_style_route(
     current_user: User = Depends(get_current_user_data),
 ):
     try:
+        data = LearningStyleInput(**data.dict())
+
         learning_style_result = await predict_learning_style(data, db, current_user)
 
         response_data = {
@@ -341,22 +288,6 @@ async def predict_learning_style_route(
             "test_name": learning_style_result["test_name"],
             "assessment_type_name": "Learning Style",
         }
-
-        assessment_data = {
-            "assessment_type": "Learning Style",
-            "test_name": learning_style_result["test_name"],
-            "test_uuid": learning_style_result["test_uuid"],
-            "details": learning_style_result.get("recommended_techniques", []),
-        }
-
-        output_path = os.path.join(
-            os.getcwd(),
-            "exports",
-            f"{learning_style_result['test_uuid']}.png"
-        )
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-
-        render_assessment_to_image(assessment_data, output_path)
 
         return BaseResponse(
             date=datetime.utcnow().strftime("%d-%B-%Y"),
@@ -386,7 +317,78 @@ async def predict_learning_style_route(
     except HTTPException as exc:
         raise exc
     except Exception as exc:
-        logger.e
+        raise format_http_exception(
+            status_code=500,
+            message="An unexpected error occurred while predicting the learning style.",
+            details=str(exc),
+        )
+
+
+# @assessment_router.post(
+#     "/predict-learning-style",
+#     response_model=BaseResponse,
+#     summary="Predict user's learning style",
+#     description="Analyze learning style based on user responses.",
+# )
+# async def predict_learning_style_route(
+#     data: LearningStyleInput,
+#     db: AsyncSession = Depends(get_db),
+#     current_user: User = Depends(get_current_user_data),
+# ):
+#     try:
+#         learning_style_result = await predict_learning_style(data, db, current_user)
+#
+#         response_data = {
+#             "test_uuid": learning_style_result["test_uuid"],
+#             "test_name": learning_style_result["test_name"],
+#             "assessment_type_name": "Learning Style",
+#         }
+#
+#         assessment_data = {
+#             "assessment_type": "Learning Style",
+#             "test_name": learning_style_result["test_name"],
+#             "test_uuid": learning_style_result["test_uuid"],
+#             "details": learning_style_result.get("recommended_techniques", []),
+#         }
+#
+#         output_path = os.path.join(
+#             os.getcwd(),
+#             "exports",
+#             f"{learning_style_result['test_uuid']}.png"
+#         )
+#         os.makedirs(os.path.dirname(output_path), exist_ok=True)
+#
+#         render_assessment_to_image(assessment_data, output_path)
+#
+#         return BaseResponse(
+#             date=datetime.utcnow().strftime("%d-%B-%Y"),
+#             status=200,
+#             payload=response_data,
+#             message="Learning style predicted successfully.",
+#         )
+#
+#     except ValidationError as exc:
+#         raise format_http_exception(
+#             status_code=422,
+#             message="Validation error in the request body.",
+#             details=exc.errors(),
+#         )
+#     except IntegrityError as exc:
+#         raise format_http_exception(
+#             status_code=400,
+#             message="Database integrity issue occurred.",
+#             details="Check for duplicate or invalid data violating constraints.",
+#         )
+#     except OperationalError as exc:
+#         raise format_http_exception(
+#             status_code=500,
+#             message="Database operational error occurred.",
+#             details="There may be connectivity issues or a misconfigured database.",
+#         )
+#     except HTTPException as exc:
+#         raise exc
+#     except Exception as exc:
+#         logger.e
 
 
 # API Endpoint for Interest Assessment✨
