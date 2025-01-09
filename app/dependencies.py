@@ -44,16 +44,28 @@ async def get_current_user_public(
             logger.debug("No token provided.")
             return None
 
-        decoded_token = decode_jwt_token_for_public(token)
+        logger.debug(f"Received token: {token}")
 
-        user_uuid = decoded_token.get("uuid")
+        # Decode the token
+        decoded_token = decode_jwt_token_for_public(token)
+        logger.debug(f"Decoded token: {decoded_token}")
+
+        user_uuid = decoded_token.get("uuid")  # Use 'uuid' instead of 'sub'
         if not user_uuid:
             logger.debug("Decoded token does not contain 'uuid'.")
             return None
 
+        logger.debug(f"Decoded user UUID from token: {user_uuid}")
+
+        # Query the user in the database
         stmt = select(User).where(User.uuid == user_uuid)
         result = await db.execute(stmt)
         user = result.scalars().first()
+
+        if user:
+            logger.debug(f"Authenticated user found: {user.username}")
+        else:
+            logger.debug(f"No user found for UUID: {user_uuid}.")
 
         return user
     except Exception as e:
