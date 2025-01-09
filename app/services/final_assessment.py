@@ -38,52 +38,71 @@ async def predict_careers_service(
     db: AsyncSession,
     current_user: User,
 ):
-    aggregated_response = await get_aggregated_tests_service(request.test_uuids, db, current_user)
+    try:
+        # Fetch aggregated test data
+        aggregated_response = await get_aggregated_tests_service(request.test_uuids, db, current_user)
+        logger.debug(f"Aggregated response: {aggregated_response}")
 
-    user_input = prepare_model_input(aggregated_response)
+        # Prepare input for the model
+        user_input = prepare_model_input(aggregated_response)
+        logger.debug(f"Prepared user input: {user_input}")
 
-    career_model = load_career_recommendation_model()
-    model_features = career_model.get_feature_columns()
+        # Load career recommendation model
+        career_model = load_career_recommendation_model()
+        model_features = career_model.get_feature_columns()
+        logger.debug(f"Model expects features: {model_features}")
 
-    user_input_aligned = {feature: user_input.get(feature, 0) for feature in model_features}
+        # Align user input with model features
+        user_input_aligned = {feature: user_input.get(feature, 0) for feature in model_features}
+        logger.debug(f"Aligned user input: {user_input_aligned}")
 
-    top_recommendations = career_model.predict(user_input_aligned)
+        # Predict careers
+        top_recommendations = career_model.predict(user_input_aligned)
+        logger.debug(f"Top recommendations: {top_recommendations}")
 
-    assessment_type_id = await get_assessment_type_id("All Tests", db)
-    user_test = await create_user_test(
-        db=db,
-        user_id=current_user.id,
-        assessment_type_id=assessment_type_id,
-    )
+        # Create a user test
+        assessment_type_id = await get_assessment_type_id("All Tests", db)
+        user_test = await create_user_test(
+            db=db,
+            user_id=current_user.id,
+            assessment_type_id=assessment_type_id,
+        )
 
-    new_response = UserResponse(
-        user_id=current_user.id,
-        assessment_type_id=assessment_type_id,
-        user_test_id=user_test.id,
-        response_data=top_recommendations.to_dict(orient="records"),
-        is_completed=True,
-        is_deleted=False,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
-    )
-    db.add(new_response)
-    await db.commit()
-    await db.refresh(new_response)
+        # Save user response
+        response_data = json.dumps(top_recommendations.tolist())  # Serialize recommendations
+        new_response = UserResponse(
+            user_id=current_user.id,
+            assessment_type_id=assessment_type_id,
+            user_test_id=user_test.id,
+            response_data=response_data,
+            is_completed=True,
+            is_deleted=False,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+        db.add(new_response)
+        await db.commit()
+        await db.refresh(new_response)
 
-    # Build payload
-    payload = {
-        "assessment_type": "All Tests",
-        "test_name": user_test.name,
-        "test_uuid": str(user_test.uuid),
-        "details": top_recommendations.to_dict(orient="records"),
-    }
+        # Build payload
+        payload = {
+            "assessment_type": "All Tests",
+            "test_name": user_test.name,
+            "test_uuid": str(user_test.uuid),
+            "details": json.loads(response_data),
+        }
 
-    return {
-        "date": datetime.utcnow().strftime("%Y-%m-%d"),
-        "status": 200,
-        "message": "Career recommendations predicted and recorded successfully.",
-        "payload": payload,
-    }
+        return {
+            "date": datetime.utcnow().strftime("%Y-%m-%d"),
+            "status": 200,
+            "message": "Career recommendations predicted and recorded successfully.",
+            "payload": payload,
+        }
+
+    except Exception as e:
+        logger.error(f"Error during career prediction service: {e}")
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {e}")
+
 
 
 # Validate each major in the majors list

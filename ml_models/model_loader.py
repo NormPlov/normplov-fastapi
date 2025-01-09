@@ -1,4 +1,5 @@
 import os
+import pickle
 import traceback
 import cloudpickle
 import joblib
@@ -20,20 +21,18 @@ def load_career_recommendation_model():
 
         logger.info(f"Loading career recommendation model from {CAREER_RECOMMENDATION_MODEL_PATH}")
 
-        # Attempt to load the model
-        with open(CAREER_RECOMMENDATION_MODEL_PATH, "rb") as model_file:
+        with open(CAREER_RECOMMENDATION_MODEL_PATH, 'rb') as model_file:
             career_model = cloudpickle.load(model_file)
-
-        logger.info("Career recommendation model loaded successfully.")
         return career_model
 
-    except AttributeError as e:
-        logger.error(f"AttributeError during model loading: {e}")
-        logger.debug("Ensure that all dependencies for the serialized model are available.")
-        raise RuntimeError("Failed to load career recommendation model. Ensure all dependencies are available.")
+    except TypeError as e:
+        logger.error(f"TypeError during model loading: {e}")
+        logger.debug(traceback.format_exc())
+        raise RuntimeError("Failed to load career recommendation model: Type mismatch during deserialization.")
 
     except Exception as e:
         logger.error(f"Error while loading model: {e}")
+        logger.debug(traceback.format_exc())
         raise RuntimeError(f"Failed to load career recommendation model: {e}")
 
 
