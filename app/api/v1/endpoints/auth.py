@@ -58,15 +58,22 @@ async def facebook_callback(request: Request, db: AsyncSession = Depends(get_db)
         state_in_session = request.session.get("state")
         state_in_response = request.query_params.get("state")
 
+        print(f"State in Session: {state_in_session}")
+        print(f"State in Response: {state_in_response}")
+
         if state_in_session != state_in_response:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="State mismatch. Potential CSRF detected.",
             )
 
-        token = await oauth.facebook.authorize_access_token(request)
-        user_info = token.get("userinfo")
+        print(f"Request Query Params: {request.query_params}")
+        print(f"Request Headers: {request.headers}")
 
+        token = await oauth.facebook.authorize_access_token(request)
+        print(f"Token Response: {token}")
+
+        user_info = token.get("userinfo")
         if not user_info:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -78,6 +85,7 @@ async def facebook_callback(request: Request, db: AsyncSession = Depends(get_db)
     except HTTPException as http_exc:
         raise http_exc
     except Exception as e:
+        print(f"Unexpected Error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Unexpected error during Facebook OAuth callback: {str(e)}",

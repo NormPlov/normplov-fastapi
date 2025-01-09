@@ -184,7 +184,7 @@ async def predict_learning_style(
                     "technique_name": t.technique_name,
                     "category": t.category,
                     "description": t.description,
-                    "image_url": f"uploads/{t.image_url}",
+                    "image_url": f"{t.image_url}",
                 }
                 for t in techniques.scalars().all()
             ]
