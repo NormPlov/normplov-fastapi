@@ -30,6 +30,8 @@ async def get_or_create_user(db: AsyncSession, user_info: dict) -> dict:
     email = user_info.get("email")
     name = user_info.get("name") or "Google User"
     picture = user_info.get("picture", "")
+    if isinstance(picture, dict):
+        picture = picture.get("data", {}).get("url", "")
 
     if not email:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email is required.")
