@@ -53,6 +53,24 @@ async def get_or_create_user(db: AsyncSession, user_info: dict) -> dict:
         await db.commit()
         await db.refresh(user)
 
+        stmt = select(Role).where(Role.name == "USER")
+        result = await db.execute(stmt)
+        default_role = result.scalars().first()
+
+        if not default_role:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Default role 'USER' not found in the database."
+            )
+
+        user_role = UserRole(user_id=user.id, role_id=default_role.id)
+        db.add(user_role)
+        await db.commit()
+
+        stmt = select(User).options(selectinload(User.roles)).where(User.id == user.id)
+        result = await db.execute(stmt)
+        user = result.scalars().first()
+
     user_roles = [role.name for role in user.roles] if user.roles else []
 
     access_token = create_access_token(data={"sub": user.uuid})
