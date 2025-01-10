@@ -223,12 +223,26 @@ async def generate_new_access_token(refresh_token: str, db: AsyncSession) -> Bas
                 detail="User not found or inactive."
             )
 
+        user_roles = [role.role.name for role in user.roles] if user.roles else []
+
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = create_access_token(
-            data={"sub": str(user.uuid)},
-            expires_delta=access_token_expires
+            data={
+                "sub": str(user.uuid),
+                "name": user.username,
+                "email": user.email,
+                "roles": user_roles,
+            },
+            expires_delta=access_token_expires,
         )
-        refresh_token = create_refresh_token(data={"sub": str(user.uuid)})
+        refresh_token = create_refresh_token(
+            data={
+                "sub": str(user.uuid),
+                "name": user.username,
+                "email": user.email,
+                "roles": user_roles,
+            }
+        )
 
         return BaseResponse(
             date=datetime.utcnow().strftime("%d-%B-%Y"),

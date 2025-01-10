@@ -72,15 +72,15 @@ async def get_current_user_data(
     try:
         if not token:
             logger.debug("No token provided. Returning as anonymous user.")
-            return await get_current_user_public(token=None, db=db)
+            return None  # Allow the endpoint to handle anonymous users
 
         # Decode the token and extract user_uuid
         decoded_token = decode_jwt_token_for_data(token)
         user_uuid = decoded_token.get("uuid")
 
         if not user_uuid:
-            logger.warning("Token is invalid or missing 'uuid'. Falling back to public user.")
-            return await get_current_user_public(token=None, db=db)
+            logger.warning("Token is invalid or missing 'uuid'. Returning None for anonymous user.")
+            return None
 
         # Query the user along with their roles
         stmt = (
@@ -92,27 +92,19 @@ async def get_current_user_data(
         user = result.scalars().first()
 
         if not user:
-            logger.warning(f"No user found for UUID {user_uuid}. Falling back to public user.")
-            return await get_current_user_public(token=None, db=db)
+            logger.warning(f"No user found for UUID {user_uuid}. Returning None for anonymous user.")
+            return None
 
         if not user.roles:
-            logger.warning(f"User {user.username} has no roles assigned.")
-            raise format_http_exception(
-                status_code=status.HTTP_403_FORBIDDEN,
-                message="Permission denied.",
-                details="User has no roles assigned.",
-            )
+            logger.warning(f"User {user.username} has no roles assigned. Returning None for anonymous user.")
+            return None
 
-        logger.debug(f"Authenticated user found: {user.username} with roles: {[role.role.name for role in user.roles]}")
+        logger.debug(f"Authenticated user: {user.username} with roles: {[role.role.name for role in user.roles]}")
         return user
 
     except Exception as e:
         logger.error(f"Error in get_current_user_data: {e}")
-        raise format_http_exception(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            message="Could not validate user credentials.",
-            details=str(e),
-        )
+        return None
 
 
 async def is_admin_user(current_user: User = Depends(get_current_user_data)) -> User:
