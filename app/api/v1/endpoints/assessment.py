@@ -53,13 +53,6 @@ async def predict_careers(
             current_user=current_user,
         )
 
-        payload = response["payload"]
-        assessment_data = {
-            "assessment_type": payload["assessment_type"],
-            "test_name": payload["test_name"],
-            "test_uuid": payload["test_uuid"],
-        }
-
         return response
     except HTTPException as e:
         raise e

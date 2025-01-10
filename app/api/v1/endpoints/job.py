@@ -232,10 +232,7 @@ async def get_all_jobs_route(
     current_user: Optional[User] = Depends(get_current_user_data),
 ):
     try:
-
-        logger.debug(f"Current user: {current_user}")
         user_id = current_user.id if current_user else None
-        logger.debug(f"User ID: {user_id}")
 
         jobs = await load_all_jobs(
             db=db,
