@@ -1,12 +1,11 @@
 import logging
-from typing import Optional
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from app.exceptions.formatters import format_http_exception
-from app.utils.auth import decode_jwt_token_for_public, decode_jwt_token
+from app.utils.auth import decode_jwt_token
 from app.core.database import get_db
 from app.utils.auth_validators import validate_authentication
 from sqlalchemy.orm import joinedload
@@ -16,52 +15,16 @@ logger = logging.getLogger(__name__)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
 
-async def get_optional_token(authorization: str = Depends(oauth2_scheme)) -> Optional[str]:
-    if not authorization:
-        return None
-    return authorization
-
-
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     try:
         return decode_jwt_token(token)
     except Exception as e:
         logger.error(f"Error in get_current_user: {e}")
-        raise HTTPException(
+        raise format_http_exception(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials.",
+            message="🚫 Oops! No credentials found. Are you even allowed here? 😅",
+            details={"icon": "🔒", "hint": "Check your login details and try again."}
         )
-
-
-async def get_current_user_public(
-    token: Optional[str] = Depends(oauth2_scheme),
-    db: AsyncSession = Depends(get_db),
-) -> Optional[User]:
-    try:
-        if not token:
-            logger.debug("No token provided.")
-            return None
-
-        # Decode the token
-        decoded_token = decode_jwt_token_for_public(token)
-
-        user_uuid = decoded_token.get("uuid")
-        if not user_uuid:
-            return None
-
-        # Query the user in the database
-        stmt = select(User).where(User.uuid == user_uuid)
-        result = await db.execute(stmt)
-        user = result.scalars().first()
-
-        if user:
-            logger.debug(f"Authenticated user found: {user.username}")
-        else:
-            logger.debug(f"No user found for UUID: {user_uuid}.")
-
-        return user
-    except Exception as e:
-        return None
 
 
 async def get_current_user_data(

@@ -201,7 +201,6 @@ async def load_all_jobs(
     location: Optional[str] = None,
     job_type: Optional[str] = None,
     category: Optional[str] = None,
-    user_id: Optional[int] = None,
 ) -> list[JobDetailsResponse]:
     try:
         stmt = select(Job).where(Job.is_deleted == False)
@@ -230,16 +229,6 @@ async def load_all_jobs(
         result = await db.execute(stmt)
         jobs = result.scalars().all()
 
-        # Fetch bookmarks if user is logged in
-        bookmarked_job_ids = set()
-        if user_id:
-            logger.debug(f"Fetching bookmarks for user_id={user_id}")
-            bookmark_stmt = select(Bookmark.job_id).where(Bookmark.user_id == user_id, Bookmark.is_deleted == False)
-            logger.debug(f"Bookmark Query: {bookmark_stmt}")
-            bookmarks_result = await db.execute(bookmark_stmt)
-            bookmarked_job_ids = {row[0] for row in bookmarks_result.fetchall()}
-            logger.debug(f"Bookmarked Job IDs: {bookmarked_job_ids}")
-
         def calculate_days_ago(date):
             if not date:
                 return "Unknown"
@@ -247,7 +236,7 @@ async def load_all_jobs(
             return f"{delta.days} days ago" if delta.days > 0 else "Today"
 
         return [
-            JobDetailsWithBookmarkResponse(
+            JobDetailsResponse(
                 uuid=job.uuid,
                 title=job.title if job.title else "Unknown Title",
                 company_name=job.company if job.company else "Unknown Company",
@@ -272,7 +261,6 @@ async def load_all_jobs(
                 closing_date=job.closing_date.strftime("%d.%b.%Y") if job.closing_date and job.closing_date >= datetime.utcnow() else None,
                 category=" ".join(job.category.split()[:2]) if job.category else None,
                 visitor_count=job.visitor_count,
-                bookmarked=job.uuid in bookmarked_job_ids if user_id else False,
             )
             for job in jobs
             if job.closing_date is None or job.closing_date >= datetime.utcnow()

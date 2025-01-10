@@ -1,16 +1,21 @@
 import logging
 import uuid
-
+from fastapi.responses import RedirectResponse
 from fastapi import APIRouter, BackgroundTasks, status, Request, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordBearer
 from datetime import datetime
+
+from httpx import Response
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.responses import HTMLResponse
+
 from app.core.config import settings
 from app.core.database import get_db
 from app.schemas.payload import BaseResponse
 from app.schemas.token import RefreshTokenRequest
 from app.services.oauth import oauth
+from app.services.token import create_refresh_token
 from app.utils.email import send_verification_email, send_reset_email
 from app.services.auth import (
     get_or_create_user,
@@ -132,7 +137,8 @@ async def google_callback(request: Request, db: AsyncSession = Depends(get_db)):
             )
 
         token = await oauth.google.authorize_access_token(request)
-        user_info = token.get("userinfo")
+        user_info = token.get("userinfo.payload.refresh")
+
         if not user_info:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
