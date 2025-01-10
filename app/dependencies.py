@@ -64,70 +64,19 @@ async def get_current_user_public(
         return None
 
 
-# async def get_current_user_data(
-#     current_user: dict = Depends(get_current_user),
-#     db: AsyncSession = Depends(get_db),
-# ) -> User:
-#     try:
-#         user_uuid = current_user.get("uuid")
-#         if not user_uuid:
-#             raise format_http_exception(
-#                 status_code=status.HTTP_401_UNAUTHORIZED,
-#                 message="Authentication required.",
-#                 details="Invalid user data.",
-#             )
-#
-#         stmt = (
-#             select(User)
-#             .options(joinedload(User.roles).joinedload(UserRole.role))
-#             .where(User.uuid == user_uuid)
-#         )
-#         result = await db.execute(stmt)
-#         user = result.scalars().first()
-#
-#         if not user:
-#             logger.warning(f"User with UUID {user_uuid} not found.")
-#             raise format_http_exception(
-#                 status_code=status.HTTP_401_UNAUTHORIZED,
-#                 message="Authentication required.",
-#                 details="User not found.",
-#             )
-#
-#         if user.is_blocked:
-#             raise format_http_exception(
-#                 status_code=status.HTTP_403_FORBIDDEN,
-#                 message="Permission denied.",
-#                 details="User is blocked. Contact support.",
-#             )
-#
-#         validate_authentication(user)
-#
-#         return user
-#     except Exception as e:
-#         raise format_http_exception(
-#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-#             message="An error occurred while retrieving user data.",
-#             details=str(e),
-#         )
-
 async def get_current_user_data(
-    token: Optional[str] = Depends(oauth2_scheme),  # Token can be None
+    current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> Optional[User]:
+) -> User:
     try:
-        if not token:  # No token provided
-            logger.debug("No token provided. Returning as anonymous user.")
-            return await get_current_user_public(token=None, db=db)
-
-        # Decode the token and extract user_uuid
-        decoded_token = decode_jwt_token(token)
-        user_uuid = decoded_token.get("uuid")
-
+        user_uuid = current_user.get("uuid")
         if not user_uuid:
-            logger.warning("Token is invalid or missing 'uuid'. Returning as anonymous user.")
-            return await get_current_user_public(token=None, db=db)
+            raise format_http_exception(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                message="Authentication required.",
+                details="Invalid user data.",
+            )
 
-        # Query the user from the database
         stmt = (
             select(User)
             .options(joinedload(User.roles).joinedload(UserRole.role))
@@ -137,27 +86,33 @@ async def get_current_user_data(
         user = result.scalars().first()
 
         if not user:
-            logger.warning(f"No user found for UUID {user_uuid}. Returning as anonymous user.")
-            return await get_current_user_public(token=None, db=db)
-
-        if user.is_blocked:
-            logger.warning(f"User {user.username} is blocked.")
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Permission denied. User is blocked.",
+            logger.warning(f"User with UUID {user_uuid} not found.")
+            raise format_http_exception(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                message="Authentication required.",
+                details="User not found.",
             )
 
-        logger.debug(f"Authenticated user found: {user.username}")
-        return user
+        if user.is_blocked:
+            raise format_http_exception(
+                status_code=status.HTTP_403_FORBIDDEN,
+                message="Permission denied.",
+                details="User is blocked. Contact support.",
+            )
 
+        validate_authentication(user)
+
+        return user
     except Exception as e:
-        logger.error(f"Error in get_current_user_data: {e}")
-        return None
+        raise format_http_exception(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            message="An error occurred while retrieving user data.",
+            details=str(e),
+        )
 
 
 async def is_admin_user(current_user: User = Depends(get_current_user_data)) -> User:
     try:
-        # Validate that the current user exists
         if not current_user:
             raise format_http_exception(
                 status_code=status.HTTP_401_UNAUTHORIZED,
