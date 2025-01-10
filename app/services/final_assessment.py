@@ -18,7 +18,6 @@ from app.schemas.personality_assessment import PersonalityTypeDetails, Personali
 from app.schemas.skill_assessment import SkillAssessmentResponse, MajorWithSchools, SkillGroupedByLevel
 from app.schemas.value_assessment import ValueAssessmentResponse, CareerData, KeyImprovement, MajorData, \
     ValueCategoryDetails, ChartData
-from app.services.test import create_user_test
 from app.utils.prepare_model_input import prepare_model_input
 from ml_models.model_loader import load_career_recommendation_model
 
@@ -45,7 +44,10 @@ async def predict_careers_service(
 
         user_input = prepare_model_input(aggregated_response)
 
-        dataset_path = "/app/datasets/train_testing.csv"
+        dataset_path = os.path.join(
+            os.getcwd(),
+            r"D:\CSTAD Scholarship Program\python for data analytics\NORMPLOV_PROJECT\normplov-fastapi\datasets\train_testing.csv",
+        )
 
         career_model = load_career_recommendation_model(dataset_path=dataset_path)
         model_features = career_model.get_feature_columns()
@@ -53,7 +55,6 @@ async def predict_careers_service(
         user_input_aligned = {feature: user_input.get(feature, 0) for feature in model_features}
 
         top_recommendations = career_model.predict(user_input_aligned, top_n=request.top_n)
-        logger.debug(f"Raw predictions from the model: {top_recommendations}")
 
         if isinstance(top_recommendations, pd.DataFrame):
             top_recommendations = top_recommendations.to_dict(orient="records")
@@ -65,7 +66,7 @@ async def predict_careers_service(
                 status_code=500,
                 detail="Invalid model prediction response format. Expected a list of dictionaries."
             )
-
+        test_uuid = request.test_uuids[0]
         career_responses = []
         for recommendation in top_recommendations:
             career_name = recommendation["Career"]
@@ -112,6 +113,7 @@ async def predict_careers_service(
             "date": datetime.utcnow().strftime("%Y-%m-%d"),
             "status": 200,
             "message": "Career recommendations predicted and processed successfully.",
+            "test_uuid": test_uuid,
             "payload": career_responses,
         }
 
