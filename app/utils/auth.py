@@ -44,7 +44,7 @@ def decode_jwt_token_for_public(token: str) -> dict:
         return {"uuid": user_uuid}
     except JWTError as e:
         logger.warning(f"JWT decoding failed for public: {e}")
-        return {}  # Return an empty dict for public endpoints
+        return {}
     except Exception as e:
         logger.error(f"Unexpected error decoding token for public: {e}")
         return {}

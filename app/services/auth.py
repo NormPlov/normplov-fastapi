@@ -214,14 +214,13 @@ async def generate_new_access_token(refresh_token: str, db: AsyncSession) -> Bas
                 detail="Invalid refresh token payload: missing user identifier."
             )
 
-        # Query the user and load roles using joinedload
         stmt = (
             select(User)
             .options(joinedload(User.roles).joinedload(UserRole.role))  # Eagerly load roles
             .where(User.uuid == user_uuid)
         )
 
-        async with db.begin():  # Ensure async context
+        async with db.begin():
             result = await db.execute(stmt)
             user = result.scalars().first()
 
@@ -231,10 +230,8 @@ async def generate_new_access_token(refresh_token: str, db: AsyncSession) -> Bas
                 detail="User not found or inactive."
             )
 
-        # Extract user roles
         user_roles = [role.role.name for role in user.roles] if user.roles else []
 
-        # Create new tokens
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = create_access_token(
             data={
