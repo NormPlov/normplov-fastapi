@@ -87,19 +87,8 @@ async def get_user_details_by_email(
 # Get user profile
 @user_router.get("/me", status_code=status.HTTP_200_OK)
 async def get_current_user_route(
-    current_user: Optional[User] = Depends(get_current_user_data)
+    current_user: User = Depends(get_current_user_data)
 ):
-    if not current_user:
-        return BaseResponse(
-            date=datetime.utcnow().strftime("%Y-%m-%d"),
-            status=status.HTTP_200_OK,
-            payload={
-                "message": "Anonymous user.",
-                "roles": []
-            },
-            message="No authenticated user found."
-        )
-
     user_data = {
         "uuid": current_user.uuid,
         "username": current_user.username,
