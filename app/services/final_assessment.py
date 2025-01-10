@@ -4,9 +4,11 @@ import os
 from datetime import datetime
 from typing import List
 
+import numpy as np
+import pandas as pd
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException
-from app.models import UserTest, AssessmentType, UserResponse, User
+from app.models import UserTest, AssessmentType, UserResponse, User, Career, School, Major, CareerMajor, SchoolMajor
 from app.schemas.final_assessment import AllAssessmentsResponse, PredictCareersRequest
 from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload
@@ -38,56 +40,84 @@ async def predict_careers_service(
     db: AsyncSession,
     current_user: User,
 ):
-    aggregated_response = await get_aggregated_tests_service(request.test_uuids, db, current_user)
+    try:
+        aggregated_response = await get_aggregated_tests_service(request.test_uuids, db, current_user)
 
-    user_input = prepare_model_input(aggregated_response)
+        user_input = prepare_model_input(aggregated_response)
 
-    dataset_path = os.path.join(
-        os.getcwd(),
-        r"D:\CSTAD Scholarship Program\python for data analytics\NORMPLOV_PROJECT\normplov-fastapi\datasets\train_testing.csv",
-    )
-    career_model = load_career_recommendation_model(dataset_path=dataset_path)
-    model_features = career_model.get_feature_columns()
+        dataset_path = "/app/datasets/train_testing.csv"
 
-    user_input_aligned = {feature: user_input.get(feature, 0) for feature in model_features}
+        career_model = load_career_recommendation_model(dataset_path=dataset_path)
+        model_features = career_model.get_feature_columns()
 
-    top_recommendations = career_model.predict(user_input_aligned, top_n=request.top_n)
+        user_input_aligned = {feature: user_input.get(feature, 0) for feature in model_features}
 
-    assessment_type_id = await get_assessment_type_id("All Tests", db)
-    user_test = await create_user_test(
-        db=db,
-        user_id=current_user.id,
-        assessment_type_id=assessment_type_id,
-    )
+        top_recommendations = career_model.predict(user_input_aligned, top_n=request.top_n)
+        logger.debug(f"Raw predictions from the model: {top_recommendations}")
 
-    new_response = UserResponse(
-        user_id=current_user.id,
-        assessment_type_id=assessment_type_id,
-        user_test_id=user_test.id,
-        response_data=top_recommendations.to_dict(orient="records"),
-        is_completed=True,
-        is_deleted=False,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
-    )
-    db.add(new_response)
-    await db.commit()
-    await db.refresh(new_response)
+        if isinstance(top_recommendations, pd.DataFrame):
+            top_recommendations = top_recommendations.to_dict(orient="records")
+        elif isinstance(top_recommendations, np.ndarray):
+            top_recommendations = [{"Career": row[0], "Similarity": row[1]} for row in top_recommendations]
 
-    # Build payload
-    payload = {
-        "assessment_type": "All Tests",
-        "test_name": user_test.name,
-        "test_uuid": str(user_test.uuid),
-        "details": top_recommendations.to_dict(orient="records"),
-    }
+        if not isinstance(top_recommendations, list) or not all(isinstance(item, dict) for item in top_recommendations):
+            raise HTTPException(
+                status_code=500,
+                detail="Invalid model prediction response format. Expected a list of dictionaries."
+            )
 
-    return {
-        "date": datetime.utcnow().strftime("%Y-%m-%d"),
-        "status": 200,
-        "message": "Career recommendations predicted and recorded successfully.",
-        "payload": payload,
-    }
+        career_responses = []
+        for recommendation in top_recommendations:
+            career_name = recommendation["Career"]
+            similarity = recommendation["Similarity"]
+
+            stmt_career = select(Career).where(Career.name == career_name)
+            result_career = await db.execute(stmt_career)
+            career = result_career.scalars().first()
+
+            if not career:
+                logger.warning(f"Career not found: {career_name}")
+                continue
+
+            stmt_majors = (
+                select(Major)
+                .join(CareerMajor, CareerMajor.major_id == Major.id)
+                .where(CareerMajor.career_id == career.id, CareerMajor.is_deleted == False)
+            )
+            result_majors = await db.execute(stmt_majors)
+            majors = result_majors.scalars().all()
+
+            majors_with_schools = []
+            for major in majors:
+                stmt_schools = (
+                    select(School.en_name)
+                    .join(SchoolMajor, SchoolMajor.school_id == School.id)
+                    .where(SchoolMajor.major_id == major.id, SchoolMajor.is_deleted == False)
+                )
+                result_schools = await db.execute(stmt_schools)
+                schools = [school for school in result_schools.scalars().all()]  # Use the strings directly
+
+                majors_with_schools.append({
+                    "major_name": major.name,
+                    "schools": schools,
+                })
+
+            career_responses.append({
+                "career_name": career_name,
+                "similarity": similarity,
+                "majors": majors_with_schools,
+            })
+
+        return {
+            "date": datetime.utcnow().strftime("%Y-%m-%d"),
+            "status": 200,
+            "message": "Career recommendations predicted and processed successfully.",
+            "payload": career_responses,
+        }
+
+    except Exception as e:
+        logger.error(f"Error during career prediction service: {e}")
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {e}")
 
 
 # Validate each major in the majors list
