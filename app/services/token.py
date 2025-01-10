@@ -10,21 +10,39 @@ REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 
 def create_access_token(data: dict, expires_delta: timedelta = None) -> str:
-
     to_encode = data.copy()
     now = datetime.utcnow()
     expire = now + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+
     to_encode.update({"exp": expire, "iat": now})
+
+    user_details = {
+        "name": data.get("name"),
+        "email": data.get("email"),
+        "roles": data.get("roles"),
+    }
+    to_encode.update(user_details)
+
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
 
 def create_refresh_token(data: dict) -> str:
-
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
-    to_encode.update({"exp": expire, "iat": datetime.utcnow()})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    now = datetime.utcnow()
+    expire = now + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+
+    to_encode.update({"exp": expire, "iat": now})
+
+    user_details = {
+        "name": data.get("name"),
+        "email": data.get("email"),
+        "roles": data.get("roles"),
+    }
+    to_encode.update(user_details)
+
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
 
 
 def decode_token(token: str) -> dict:

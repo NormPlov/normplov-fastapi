@@ -104,7 +104,6 @@ async def predict_careers_service(
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {e}")
 
 
-
 # Validate each major in the majors list
 def validate_major(major):
     if isinstance(major, dict):

@@ -168,8 +168,23 @@ async def perform_login(db: AsyncSession, email: str, password: str) -> BaseResp
     user_roles = [row.name for row in result.all()]
 
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token({"sub": str(user.uuid)}, expires_delta=access_token_expires)
-    refresh_token = create_refresh_token({"sub": str(user.uuid)})
+    access_token = create_access_token(
+        data={
+            "sub": str(user.uuid),
+            "name": user.username,
+            "email": user.email,
+            "roles": user_roles,
+        },
+        expires_delta=access_token_expires
+    )
+    refresh_token = create_refresh_token(
+        data={
+            "sub": str(user.uuid),
+            "name": user.username,
+            "email": user.email,
+            "roles": user_roles,
+        }
+    )
 
     return BaseResponse(
         date=datetime.utcnow().strftime("%d-%B-%Y"),
