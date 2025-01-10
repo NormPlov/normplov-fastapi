@@ -28,7 +28,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 async def get_or_create_user(db: AsyncSession, user_info: dict) -> dict:
     email = user_info.get("email")
-    name = user_info.get("name") or "Google User"
+    name = user_info.get("name") or ""
     picture = user_info.get("picture", "")
     if isinstance(picture, dict):
         picture = picture.get("data", {}).get("url", "")
@@ -36,11 +36,13 @@ async def get_or_create_user(db: AsyncSession, user_info: dict) -> dict:
     if not email:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email is required.")
 
-    stmt = select(User).options(selectinload(User.roles)).where(User.email == email)
+    # Fetch the user along with roles
+    stmt = select(User).options(selectinload(User.roles).joinedload(UserRole.role)).where(User.email == email)
     result = await db.execute(stmt)
     user = result.scalars().first()
 
     if not user:
+        # Create a new user
         user = User(
             uuid=str(uuid.uuid4()),
             username=name,
@@ -53,6 +55,7 @@ async def get_or_create_user(db: AsyncSession, user_info: dict) -> dict:
         await db.commit()
         await db.refresh(user)
 
+        # Fetch the default role
         stmt = select(Role).where(Role.name == "USER")
         result = await db.execute(stmt)
         default_role = result.scalars().first()
@@ -63,16 +66,20 @@ async def get_or_create_user(db: AsyncSession, user_info: dict) -> dict:
                 detail="Default role 'USER' not found in the database."
             )
 
+        # Assign the default role to the new user
         user_role = UserRole(user_id=user.id, role_id=default_role.id)
         db.add(user_role)
         await db.commit()
 
-        stmt = select(User).options(selectinload(User.roles)).where(User.id == user.id)
+        # Refresh user with roles
+        stmt = select(User).options(selectinload(User.roles).joinedload(UserRole.role)).where(User.id == user.id)
         result = await db.execute(stmt)
         user = result.scalars().first()
 
-    user_roles = [role.name for role in user.roles] if user.roles else []
+    # Extract role names from the user's roles
+    user_roles = [user_role.role.name for user_role in user.roles if user_role.role] if user.roles else []
 
+    # Generate tokens
     access_token = create_access_token(data={"sub": user.uuid})
     refresh_token = create_refresh_token(data={"sub": user.uuid})
 
