@@ -1,19 +1,19 @@
 import logging
 import uuid
+
+import httpx
 from fastapi.responses import RedirectResponse
 from fastapi import APIRouter, BackgroundTasks, status, Request, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordBearer
-from datetime import datetime
-
-from httpx import Response
+from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
-from starlette.responses import HTMLResponse
-
+from sqlalchemy.future import select
 from app.core.config import settings
 from app.core.database import get_db
+from app.models import User, RefreshToken
 from app.schemas.payload import BaseResponse
-from app.schemas.token import RefreshTokenRequest
+from app.schemas.token import RefreshTokenRequest, OAuthCallbackRequest
 from app.services.oauth import oauth
 from app.services.token import create_refresh_token
 from app.utils.email import send_verification_email, send_reset_email
@@ -108,27 +108,63 @@ async def facebook_callback(request: Request, db: AsyncSession = Depends(get_db)
         )
 
 
-@auth_router.get("/google")
-async def google_login(request: Request):
+# @auth_router.get("/google")
+# async def google_login(request: Request):
+#
+#     request.session.clear()
+#     state = str(uuid.uuid4())
+#     request.session["state"] = state
+#
+#     redirect_uri = settings.GOOGLE_REDIRECT_URI
+#
+#     try:
+#         response = await oauth.google.authorize_redirect(request, redirect_uri, state=state)
+#         return response
+#     except Exception as e:
+#         return {"error": "Failed to redirect to Google login"}
+#
+#
+# @auth_router.get("/google/callback", response_model=BaseResponse, status_code=status.HTTP_200_OK)
+# async def google_callback(request: Request, db: AsyncSession = Depends(get_db)):
+#     try:
+#         state_in_session = request.session.get("state")
+#         state_in_response = request.query_params.get("state")
+#
+#         if state_in_session != state_in_response:
+#             raise HTTPException(
+#                 status_code=status.HTTP_400_BAD_REQUEST,
+#                 detail="State mismatch. Potential CSRF detected.",
+#             )
+#
+#         token = await oauth.google.authorize_access_token(request)
+#         user_info = token.get("userinfo.payload.refresh")
+#
+#         if not user_info:
+#             raise HTTPException(
+#                 status_code=status.HTTP_401_UNAUTHORIZED,
+#                 detail="Invalid Google token.",
+#             )
+#
+#         response = await get_or_create_user(db=db, user_info=user_info)
+#         return response
+#     except HTTPException as http_exc:
+#         raise http_exc
+#     except Exception as e:
+#         raise HTTPException(
+#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+#             detail=f"Unexpected error during Google OAuth callback: {str(e)}",
+#         )
 
-    request.session.clear()
-    state = str(uuid.uuid4())
-    request.session["state"] = state
 
-    redirect_uri = settings.GOOGLE_REDIRECT_URI
-
+@auth_router.post("/google", response_model=BaseResponse, status_code=status.HTTP_200_OK)
+async def google_callback(
+    request: OAuthCallbackRequest,
+    session: Request,
+    db: AsyncSession = Depends(get_db)
+):
     try:
-        response = await oauth.google.authorize_redirect(request, redirect_uri, state=state)
-        return response
-    except Exception as e:
-        return {"error": "Failed to redirect to Google login"}
-
-
-@auth_router.get("/google/callback", response_model=BaseResponse, status_code=status.HTTP_200_OK)
-async def google_callback(request: Request, db: AsyncSession = Depends(get_db)):
-    try:
-        state_in_session = request.session.get("state")
-        state_in_response = request.query_params.get("state")
+        state_in_session = session.session.get("state")
+        state_in_response = request.state
 
         if state_in_session != state_in_response:
             raise HTTPException(
@@ -136,8 +172,21 @@ async def google_callback(request: Request, db: AsyncSession = Depends(get_db)):
                 detail="State mismatch. Potential CSRF detected.",
             )
 
-        token = await oauth.google.authorize_access_token(request)
-        user_info = token.get("userinfo.payload.refresh")
+        token_url = "https://oauth2.googleapis.com/token"
+        data = {
+            "code": request.code,
+            "client_id": settings.GOOGLE_CLIENT_ID,
+            "client_secret": settings.GOOGLE_CLIENT_SECRET,
+            "redirect_uri": f"{settings.FRONTEND_URL}/auth/google/callback",
+            "grant_type": "authorization_code",
+        }
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(token_url, data=data)
+            response.raise_for_status()
+            token_data = response.json()
+
+        user_info = token_data.get("id_token")
 
         if not user_info:
             raise HTTPException(
@@ -146,13 +195,37 @@ async def google_callback(request: Request, db: AsyncSession = Depends(get_db)):
             )
 
         response = await get_or_create_user(db=db, user_info=user_info)
-        return response
+
+        refresh_token = create_refresh_token(data={"sub": response['payload']['uuid']})
+
+        stmt = select(User).where(User.uuid == response['payload']['uuid'])
+        result = await db.execute(stmt)
+        user = result.scalars().first()
+        db_refresh_token = RefreshToken(
+            user_id=user.id,
+            token=refresh_token,
+            expires_at=datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+        )
+        db.add(db_refresh_token)
+        await db.commit()
+
+        frontend_redirect_url = f"{settings.FRONTEND_URL}/auth/google/callback?status=success&uuid={response['payload']['uuid']}&username={response['payload']['username']}&email={response['payload']['email']}&access_token={response['payload']['access_token']}"
+
+        redirect_response = RedirectResponse(url=frontend_redirect_url)
+        redirect_response.set_cookie(
+            key="refresh_token",
+            value=refresh_token,
+            httponly=True,
+            secure=True,
+            samesite="Strict"
+        )
+        return redirect_response
     except HTTPException as http_exc:
         raise http_exc
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error during Google OAuth callback: {str(e)}",
+            detail=f"Unexpected error during Google OAuth: {str(e)}",
         )
 
 

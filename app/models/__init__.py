@@ -1,6 +1,7 @@
 from app.models.role import Role
 from app.models.user_role import UserRole
 from app.models.user import User
+from app.models.refresh_token import RefreshToken
 from app.models.assessment_type import AssessmentType
 from app.models.user_response import UserResponse
 from app.models.dimension import Dimension
@@ -57,6 +58,7 @@ __all__ = ["Role",
            "CareerValueCategory",
            "CareerCategoryLink",
            "Bookmark",
-           "ValueCategoryKeyImprovement"
+           "ValueCategoryKeyImprovement",
+           "RefreshToken"
            ]
 

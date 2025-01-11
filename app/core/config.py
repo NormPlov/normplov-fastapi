@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     # Login with Google
     GOOGLE_CLIENT_ID: str = Field(..., env="GOOGLE_CLIENT_ID")
     GOOGLE_CLIENT_SECRET: str = Field(..., env="GOOGLE_CLIENT_SECRET")
-    GOOGLE_REDIRECT_URI: str = Field(default="http://127.0.0.1:8000/api/v1/auth/google/callback", env="GOOGLE_REDIRECT_URI")
+    FRONTEND_URL: str = Field(default="http://localhost:3000", env="FRONTEND_URL")
 
     # Login with Facebook
     FACEBOOK_CLIENT_ID: str = Field(..., env="FACEBOOK_CLIENT_ID")

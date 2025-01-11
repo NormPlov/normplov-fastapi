@@ -38,7 +38,6 @@ class User(Base):
     updated_at = Column(DateTime, nullable=True, onupdate=func.now())
     created_at = Column(DateTime, nullable=False, server_default=func.now())
 
-    # Relationship with UserRole
     roles = relationship("UserRole", back_populates="user", cascade="all, delete-orphan")
     responses = relationship("UserResponse", back_populates="user", cascade="all, delete-orphan")
     scores = relationship("UserAssessmentScore", back_populates="user", cascade="all, delete-orphan")
@@ -46,3 +45,4 @@ class User(Base):
     tests = relationship("UserTest", back_populates="user", cascade="all, delete-orphan")
     feedbacks = relationship("UserFeedback", back_populates="user", cascade="all, delete-orphan")
     bookmarks = relationship("Bookmark", back_populates="user", cascade="all, delete-orphan")
+    refresh_tokens = relationship("RefreshToken", back_populates="user")
