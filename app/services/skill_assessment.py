@@ -1,10 +1,9 @@
-from typing import Dict, Optional
-
 import pandas as pd
 import logging
 import uuid
 import json
 
+from typing import Dict, Optional
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -133,10 +132,16 @@ async def predict_skills(
                 top_category is None
                 or overall_category_percentages[category] > overall_category_percentages.get(top_category["name"], 0)
             ):
-                top_category = {
-                    "name": category,
-                    "description": skill_category.category_description,
-                }
+                # Fetch the description for the current category
+                skill_category_query = select(SkillCategory).where(SkillCategory.category_name == category)
+                result = await db.execute(skill_category_query)
+                skill_category = result.scalars().first()
+
+                if skill_category:
+                    top_category = {
+                        "name": category,
+                        "description": skill_category.category_description,
+                    }
 
         if top_category:
 

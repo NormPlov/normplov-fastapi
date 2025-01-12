@@ -1,9 +1,8 @@
 import logging
-import uuid
 import jwt
 import httpx
 
-from fastapi import APIRouter, BackgroundTasks, status, Request, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, status, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordBearer
 from datetime import datetime, timedelta
@@ -13,7 +12,6 @@ from app.core.database import get_db
 from app.models import RefreshToken
 from app.schemas.payload import BaseResponse
 from app.schemas.token import RefreshTokenRequest, OAuthCallbackRequest
-from app.services.oauth import oauth
 from app.services.token import create_refresh_token, create_access_token
 from app.utils.email import send_verification_email, send_reset_email
 from app.services.auth import (
@@ -163,16 +161,34 @@ async def google_callback(
         db.add(refresh_token_entry)
         await db.commit()
 
-        return BaseResponse(
-            status=200,
-            message="Google authentication successful",
-            date=datetime.utcnow(),
-            payload={
+        response_payload = {
+            "status": 200,
+            "message": "Google authentication successful",
+            "date": datetime.utcnow().isoformat(),
+            "payload": {
                 "user": user_response["payload"],
-                "access_token": access_token,
-                "refresh_token": refresh_token,
             },
+        }
+
+        response = JSONResponse(content=response_payload)
+        response.set_cookie(
+            key="access_token",
+            value=access_token,
+            httponly=True,
+            secure=True,
+            samesite="Lax",
+            max_age=60 * 15  # 15 minutes
         )
+        response.set_cookie(
+            key="refresh_token",
+            value=refresh_token,
+            httponly=True,
+            secure=True,
+            samesite="Lax",
+            max_age=60 * 60 * 24 * 7  # 7 days
+        )
+
+        return response
 
     except HTTPException as http_exc:
         raise http_exc
