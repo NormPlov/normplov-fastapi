@@ -1,21 +1,20 @@
 import logging
 import uuid
-
+import jwt
 import httpx
-from fastapi.responses import RedirectResponse
+
 from fastapi import APIRouter, BackgroundTasks, status, Request, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordBearer
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
 from app.core.config import settings
 from app.core.database import get_db
-from app.models import User, RefreshToken
+from app.models import RefreshToken
 from app.schemas.payload import BaseResponse
 from app.schemas.token import RefreshTokenRequest, OAuthCallbackRequest
 from app.services.oauth import oauth
-from app.services.token import create_refresh_token
+from app.services.token import create_refresh_token, create_access_token
 from app.utils.email import send_verification_email, send_reset_email
 from app.services.auth import (
     get_or_create_user,
@@ -108,147 +107,161 @@ async def facebook_callback(request: Request, db: AsyncSession = Depends(get_db)
         )
 
 
-# @auth_router.get("/google")
-# async def google_login(request: Request):
-#
-#     request.session.clear()
-#     state = str(uuid.uuid4())
-#     request.session["state"] = state
-#
-#     redirect_uri = settings.GOOGLE_REDIRECT_URI
+# @auth_router.post("/google", response_model=BaseResponse, status_code=200)
+# async def google_callback(
+#         request: OAuthCallbackRequest,
+#         db: AsyncSession = Depends(get_db)
+# ):
+#     logger.info("Received Google auth request")
 #
 #     try:
-#         response = await oauth.google.authorize_redirect(request, redirect_uri, state=state)
-#         return response
-#     except Exception as e:
-#         return {"error": "Failed to redirect to Google login"}
+#         async with httpx.AsyncClient() as client:
+#             token_url = "https://oauth2.googleapis.com/token"
+#             data = {
+#                 "code": request.code,
+#                 "client_id": settings.GOOGLE_CLIENT_ID,
+#                 "client_secret": settings.GOOGLE_CLIENT_SECRET,
+#                 "redirect_uri": "http://localhost:5173/auth/google/callback",
+#                 "grant_type": "authorization_code",
+#             }
 #
+#             response = await client.post(token_url, data=data)
 #
-# @auth_router.get("/google/callback", response_model=BaseResponse, status_code=status.HTTP_200_OK)
-# async def google_callback(request: Request, db: AsyncSession = Depends(get_db)):
-#     try:
-#         state_in_session = request.session.get("state")
-#         state_in_response = request.query_params.get("state")
+#             try:
+#                 token_data = response.json()
+#             except ValueError:
+#                 raise HTTPException(
+#                     status_code=500,
+#                     detail=f"Invalid response from Google: {response.text}",
+#                 )
 #
-#         if state_in_session != state_in_response:
-#             raise HTTPException(
-#                 status_code=status.HTTP_400_BAD_REQUEST,
-#                 detail="State mismatch. Potential CSRF detected.",
-#             )
+#             if "id_token" not in token_data:
+#                 raise HTTPException(
+#                     status_code=401,
+#                     detail=f"Invalid token response from Google: {token_data}",
+#                 )
 #
-#         token = await oauth.google.authorize_access_token(request)
-#         user_info = token.get("userinfo.payload.refresh")
+#         id_token = token_data["id_token"]
+#         user_info = jwt.decode(id_token, algorithms=["RS256"], options={"verify_signature": False})
 #
-#         if not user_info:
-#             raise HTTPException(
-#                 status_code=status.HTTP_401_UNAUTHORIZED,
-#                 detail="Invalid Google token.",
-#             )
+#         user_data = {
+#             "name": user_info.get("name"),
+#             "email": user_info.get("email"),
+#             "avatar": user_info.get("picture"),
+#             "roles": ["user"],
+#         }
 #
-#         response = await get_or_create_user(db=db, user_info=user_info)
-#         return response
+#         access_token = create_access_token(user_data)
+#         refresh_token = create_refresh_token(user_data)
+#
+#         return BaseResponse(
+#             status=200,
+#             message="Google authentication successful",
+#             date=datetime.utcnow(),
+#             payload={
+#                 "user": user_data,
+#                 "access_token": access_token,
+#                 "refresh_token": refresh_token,
+#             },
+#         )
+#
 #     except HTTPException as http_exc:
 #         raise http_exc
+#
 #     except Exception as e:
+#         logger.error(f"Error during Google authentication: {str(e)}")
 #         raise HTTPException(
-#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-#             detail=f"Unexpected error during Google OAuth callback: {str(e)}",
+#             status_code=500,
+#             detail=f"Unexpected error during Google OAuth: {str(e)}",
 #         )
 
-
-@auth_router.post("/google", response_model=BaseResponse, status_code=status.HTTP_200_OK)
+@auth_router.post("/google", response_model=BaseResponse, status_code=200)
 async def google_callback(
-    request: OAuthCallbackRequest,
-    session: Request,
-    db: AsyncSession = Depends(get_db)
+        request: OAuthCallbackRequest,
+        db: AsyncSession = Depends(get_db)
 ):
+    logger.info("Received Google auth request")
+
     try:
-        state_in_session = session.session.get("state")
-        state_in_response = request.state
-
-        if state_in_session != state_in_response:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="State mismatch. Potential CSRF detected.",
-            )
-
-        token_url = "https://oauth2.googleapis.com/token"
-        data = {
-            "code": request.code,
-            "client_id": settings.GOOGLE_CLIENT_ID,
-            "client_secret": settings.GOOGLE_CLIENT_SECRET,
-            "redirect_uri": f"{settings.FRONTEND_URL}/auth/google/callback",
-            "grant_type": "authorization_code",
-        }
-
         async with httpx.AsyncClient() as client:
+            token_url = "https://oauth2.googleapis.com/token"
+            data = {
+                "code": request.code,
+                "client_id": settings.GOOGLE_CLIENT_ID,
+                "client_secret": settings.GOOGLE_CLIENT_SECRET,
+                "redirect_uri": "http://localhost:5173/auth/google/callback",
+                "grant_type": "authorization_code",
+            }
+
             response = await client.post(token_url, data=data)
-            response.raise_for_status()
             token_data = response.json()
 
-        user_info = token_data.get("id_token")
+            if "id_token" not in token_data:
+                raise HTTPException(
+                    status_code=401,
+                    detail=f"Invalid token response from Google: {token_data}",
+                )
 
-        if not user_info:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid Google token.",
-            )
+        id_token = token_data["id_token"]
+        user_info = jwt.decode(id_token, algorithms=["RS256"], options={"verify_signature": False})
+        logger.info(f"Decoded user info: {user_info}")
 
-        response = await get_or_create_user(db=db, user_info=user_info)
+        user_response = await get_or_create_user(db, user_info)
+        user = user_response["user"]
 
-        refresh_token = create_refresh_token(data={"sub": response['payload']['uuid']})
+        access_token = create_access_token({"sub": user.uuid})
+        refresh_token = create_refresh_token({"sub": user.uuid})
 
-        stmt = select(User).where(User.uuid == response['payload']['uuid'])
-        result = await db.execute(stmt)
-        user = result.scalars().first()
-        db_refresh_token = RefreshToken(
+        refresh_token_entry = RefreshToken(
             user_id=user.id,
             token=refresh_token,
-            expires_at=datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+            expires_at=datetime.utcnow() + timedelta(days=7)
         )
-        db.add(db_refresh_token)
+        db.add(refresh_token_entry)
         await db.commit()
 
-        frontend_redirect_url = f"{settings.FRONTEND_URL}/auth/google/callback?status=success&uuid={response['payload']['uuid']}&username={response['payload']['username']}&email={response['payload']['email']}&access_token={response['payload']['access_token']}"
-
-        redirect_response = RedirectResponse(url=frontend_redirect_url)
-        redirect_response.set_cookie(
-            key="refresh_token",
-            value=refresh_token,
-            httponly=True,
-            secure=True,
-            samesite="Strict"
+        return BaseResponse(
+            status=200,
+            message="Google authentication successful",
+            date=datetime.utcnow(),
+            payload={
+                "user": user_response["payload"],
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+            },
         )
-        return redirect_response
+
     except HTTPException as http_exc:
         raise http_exc
+
     except Exception as e:
+        logger.error(f"Error during Google authentication: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500,
             detail=f"Unexpected error during Google OAuth: {str(e)}",
         )
 
 
 @auth_router.post("/login", response_model=BaseResponse)
 async def login_user(
-    form_data: LoginUser,
-    db: AsyncSession = Depends(get_db)
+        form_data: LoginUser,
+        db: AsyncSession = Depends(get_db)
 ):
     return await perform_login(db, form_data.email, form_data.password)
 
 
 @auth_router.post("/refresh", response_model=BaseResponse)
 async def refresh_access_token(
-    data: RefreshTokenRequest,
-    db: AsyncSession = Depends(get_db)
+        data: RefreshTokenRequest,
+        db: AsyncSession = Depends(get_db)
 ):
     return await generate_new_access_token(data.refresh_token, db)
 
 
 @auth_router.post("/reset-password", response_model=BaseResponse)
 async def reset_password(
-    data: PasswordResetComplete,
-    db: AsyncSession = Depends(get_db)
+        data: PasswordResetComplete,
+        db: AsyncSession = Depends(get_db)
 ):
     response = await reset_user_password(
         email=data.email,
@@ -265,16 +278,16 @@ async def reset_password(
     status_code=status.HTTP_200_OK
 )
 async def verify_reset_password_route(
-    request: VerifyResetPasswordRequest,
-    db: AsyncSession = Depends(get_db)
+        request: VerifyResetPasswordRequest,
+        db: AsyncSession = Depends(get_db)
 ):
     return await verify_reset_password(request, db)
 
 
 @auth_router.post("/resend-reset-password", response_model=BaseResponse)
 async def resend_reset_password_code_endpoint(
-    request: ResendResetPasswordRequest,
-    db: AsyncSession = Depends(get_db)
+        request: ResendResetPasswordRequest,
+        db: AsyncSession = Depends(get_db)
 ):
     try:
         response = await resend_reset_password_code(request.email, db)
@@ -290,9 +303,9 @@ async def resend_reset_password_code_endpoint(
 
 @auth_router.post("/password-reset-request", response_model=BaseResponse)
 async def request_password_reset_handler(
-    data: PasswordResetRequest,
-    background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_db)
+        data: PasswordResetRequest,
+        background_tasks: BackgroundTasks,
+        db: AsyncSession = Depends(get_db)
 ):
     response = await generate_password_reset_code(data.email, db)
     username = response.payload.get("username")
@@ -303,8 +316,8 @@ async def request_password_reset_handler(
 
 @auth_router.post("/verify", response_model=BaseResponse)
 async def verify_email(
-    payload: VerifyRequest,
-    db: AsyncSession = Depends(get_db)
+        payload: VerifyRequest,
+        db: AsyncSession = Depends(get_db)
 ):
     return await verify_user(payload.email, payload.verification_code, db)
 
@@ -331,9 +344,9 @@ async def logout_user():
 
 @auth_router.post("/resend-verification-code", response_model=BaseResponse)
 async def resend_code(
-    payload: ResendVerificationRequest,
-    background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_db)
+        payload: ResendVerificationRequest,
+        background_tasks: BackgroundTasks,
+        db: AsyncSession = Depends(get_db)
 ):
     try:
         response = await resend_verification_code(payload.email, db)
@@ -358,9 +371,7 @@ async def resend_code(
 
 @auth_router.post("/register", response_model=BaseResponse)
 async def register_user(
-    create_user: UserCreateRequest,
-    db: AsyncSession = Depends(get_db)
+        create_user: UserCreateRequest,
+        db: AsyncSession = Depends(get_db)
 ):
     return await register_new_user(create_user, db)
-
-

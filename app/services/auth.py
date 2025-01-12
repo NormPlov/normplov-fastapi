@@ -1,5 +1,8 @@
 import uuid
 import logging
+import secrets
+import string
+
 from fastapi import HTTPException, status
 from datetime import datetime
 from sqlalchemy.future import select
@@ -26,6 +29,14 @@ logger = logging.getLogger(__name__)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
+def generate_random_password(length: int = 12) -> str:
+
+    characters = string.ascii_letters + string.digits + string.punctuation
+    password = ''.join(secrets.choice(characters) for _ in range(length))
+
+    return password
+
+
 async def get_or_create_user(db: AsyncSession, user_info: dict) -> dict:
     email = user_info.get("email")
     name = user_info.get("name") or ""
@@ -36,18 +47,19 @@ async def get_or_create_user(db: AsyncSession, user_info: dict) -> dict:
     if not email:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email is required.")
 
-    # Fetch the user along with roles
     stmt = select(User).options(selectinload(User.roles).joinedload(UserRole.role)).where(User.email == email)
     result = await db.execute(stmt)
     user = result.scalars().first()
 
     if not user:
-        # Create a new user
+        raw_password = generate_random_password()
+        hashed_password = hash_password(raw_password)
         user = User(
             uuid=str(uuid.uuid4()),
             username=name,
             email=email,
             avatar=picture,
+            password=hashed_password,
             is_verified=True,
             is_active=True,
         )
@@ -55,7 +67,6 @@ async def get_or_create_user(db: AsyncSession, user_info: dict) -> dict:
         await db.commit()
         await db.refresh(user)
 
-        # Fetch the default role
         stmt = select(Role).where(Role.name == "USER")
         result = await db.execute(stmt)
         default_role = result.scalars().first()
@@ -66,27 +77,21 @@ async def get_or_create_user(db: AsyncSession, user_info: dict) -> dict:
                 detail="Default role 'USER' not found in the database."
             )
 
-        # Assign the default role to the new user
         user_role = UserRole(user_id=user.id, role_id=default_role.id)
         db.add(user_role)
         await db.commit()
 
-        # Refresh user with roles
         stmt = select(User).options(selectinload(User.roles).joinedload(UserRole.role)).where(User.id == user.id)
         result = await db.execute(stmt)
         user = result.scalars().first()
 
-    # Extract role names from the user's roles
     user_roles = [user_role.role.name for user_role in user.roles if user_role.role] if user.roles else []
 
-    # Generate tokens
     access_token = create_access_token(data={"sub": user.uuid})
     refresh_token = create_refresh_token(data={"sub": user.uuid})
 
     return {
-        "date": datetime.utcnow().strftime("%Y-%m-%d"),
-        "status": 200,
-        "message": "User authenticated successfully.",
+        "user": user,
         "payload": {
             "uuid": user.uuid,
             "username": user.username,

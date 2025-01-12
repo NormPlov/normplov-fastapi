@@ -1,9 +1,16 @@
+from datetime import datetime
 from pydantic import BaseModel
 
 
 class OAuthCallbackRequest(BaseModel):
     code: str
-    state: str
+
+
+class BaseResponse(BaseModel):
+    status: int
+    message: str
+    date: datetime
+    payload: dict
 
 
 class Token(BaseModel):

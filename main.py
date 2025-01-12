@@ -65,6 +65,7 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        "http://localhost:5173",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "https://normplov-api.shinoshike.studio",
@@ -76,7 +77,6 @@ app.add_middleware(
     allow_headers=["authorization", "content-type"],
     max_age=600,
 )
-
 
 # Add SessionMiddleware for OAuth
 app.add_middleware(
