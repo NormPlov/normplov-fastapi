@@ -15,13 +15,19 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload
 from app.schemas.interest_assessment import InterestAssessmentResponse
 from app.schemas.learning_style_assessment import LearningStyleResponse, CareerWithMajors
-from app.schemas.personality_assessment import PersonalityTypeDetails, PersonalityAssessmentResponse, PersonalityTraits
-from app.schemas.skill_assessment import SkillAssessmentResponse, MajorWithSchools, SkillGroupedByLevel
-from app.schemas.value_assessment import ValueAssessmentResponse, CareerData, KeyImprovement, MajorData, \
-    ValueCategoryDetails, ChartData
 from app.services.test import create_user_test
 from app.utils.prepare_model_input import prepare_model_input
 from ml_models.model_loader import load_career_recommendation_model
+from app.schemas.personality_assessment import PersonalityTypeDetails, PersonalityAssessmentResponse, PersonalityTraits
+from app.schemas.skill_assessment import SkillAssessmentResponse, MajorWithSchools, SkillGroupedByLevel
+from app.schemas.value_assessment import (
+    ValueAssessmentResponse,
+    CareerData,
+    KeyImprovement,
+    MajorData,
+    ValueCategoryDetails,
+    ChartData
+)
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +110,7 @@ async def predict_careers_service(
 
             career_responses.append({
                 "career_name": career_name,
+                "career_description": career.description,
                 "similarity": similarity,
                 "majors": majors_with_schools,
             })

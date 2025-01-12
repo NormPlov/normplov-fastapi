@@ -40,140 +40,83 @@ logger = logging.getLogger(__name__)
 auth_router = APIRouter()
 
 
-@auth_router.get("/facebook")
-async def facebook_login(request: Request):
+@auth_router.post("/facebook", response_model=BaseResponse, status_code=200)
+async def facebook_callback(
+        request: OAuthCallbackRequest,
+        db: AsyncSession = Depends(get_db)
+):
+    logger.info("Received Facebook auth request")
+
     try:
-        # Clear and set session state
-        request.session.clear()
-        state = str(uuid.uuid4())
-        request.session["state"] = state
+        async with httpx.AsyncClient() as client:
+            token_url = "https://graph.facebook.com/v12.0/oauth/access_token"
+            data = {
+                "code": request.code,
+                "client_id": settings.FACEBOOK_CLIENT_ID,
+                "client_secret": settings.FACEBOOK_CLIENT_SECRET,
+                "redirect_uri": "http://localhost:5173/auth/facebook/callback",
+            }
 
-        redirect_uri = settings.FACEBOOK_REDIRECT_URI
-        print(f"Redirect URI: {redirect_uri}")
-        print(f"Session State: {state}")
+            response = await client.post(token_url, params=data)
+            token_data = response.json()
 
-        # Redirect to Facebook for authorization
-        response = await oauth.facebook.authorize_redirect(request, redirect_uri, state=state)
-        return response
-    except Exception as e:
-        print(f"Error during Facebook login: {e}")
-        return {"error": "Failed to redirect to Facebook login", "details": str(e)}
+            if "access_token" not in token_data:
+                raise HTTPException(
+                    status_code=401,
+                    detail=f"Invalid token response from Facebook: {token_data}",
+                )
 
+        access_token = token_data["access_token"]
 
-@auth_router.get("/facebook/callback", response_model=BaseResponse, status_code=status.HTTP_200_OK)
-async def facebook_callback(request: Request, db: AsyncSession = Depends(get_db)):
-    try:
-        # Validate state
-        state_in_session = request.session.get("state")
-        state_in_response = request.query_params.get("state")
-        if state_in_session != state_in_response:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="State mismatch. Potential CSRF detected.",
-            )
-
-        # Retrieve the token
-        token = await oauth.facebook.authorize_access_token(request)
-        access_token = token.get("access_token")
-        if not access_token:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid Facebook token. Access token missing.",
-            )
-
-        # Fetch user info
-        user_info_response = await oauth.facebook.get(
-            "me?fields=id,name,email,picture",
-            token={"access_token": access_token},
-        )
+        user_info_url = "https://graph.facebook.com/me"
+        params = {
+            "fields": "id,name,email,picture",
+            "access_token": access_token,
+        }
+        user_info_response = await client.get(user_info_url, params=params)
         user_info = user_info_response.json()
 
         if "email" not in user_info:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=400,
                 detail="Email permission not granted. Unable to retrieve email address.",
             )
 
-        # Get or create user
-        response = await get_or_create_user(db=db, user_info=user_info)
-        return response
-    except HTTPException as http_exc:
-        raise http_exc
-    except Exception as e:
-        print(f"Unexpected Error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error during Facebook OAuth callback: {str(e)}",
+        user_response = await get_or_create_user(db, user_info)
+        user = user_response["user"]
+
+        app_access_token = create_access_token({"sub": user.uuid})
+        app_refresh_token = create_refresh_token({"sub": user.uuid})
+
+        refresh_token_entry = RefreshToken(
+            user_id=user.id,
+            token=app_refresh_token,
+            expires_at=datetime.utcnow() + timedelta(days=7)
+        )
+        db.add(refresh_token_entry)
+        await db.commit()
+
+        return BaseResponse(
+            status=200,
+            message="Facebook authentication successful",
+            date=datetime.utcnow(),
+            payload={
+                "user": user_response["payload"],
+                "access_token": app_access_token,
+                "refresh_token": app_refresh_token,
+            },
         )
 
+    except HTTPException as http_exc:
+        raise http_exc
 
-# @auth_router.post("/google", response_model=BaseResponse, status_code=200)
-# async def google_callback(
-#         request: OAuthCallbackRequest,
-#         db: AsyncSession = Depends(get_db)
-# ):
-#     logger.info("Received Google auth request")
-#
-#     try:
-#         async with httpx.AsyncClient() as client:
-#             token_url = "https://oauth2.googleapis.com/token"
-#             data = {
-#                 "code": request.code,
-#                 "client_id": settings.GOOGLE_CLIENT_ID,
-#                 "client_secret": settings.GOOGLE_CLIENT_SECRET,
-#                 "redirect_uri": "http://localhost:5173/auth/google/callback",
-#                 "grant_type": "authorization_code",
-#             }
-#
-#             response = await client.post(token_url, data=data)
-#
-#             try:
-#                 token_data = response.json()
-#             except ValueError:
-#                 raise HTTPException(
-#                     status_code=500,
-#                     detail=f"Invalid response from Google: {response.text}",
-#                 )
-#
-#             if "id_token" not in token_data:
-#                 raise HTTPException(
-#                     status_code=401,
-#                     detail=f"Invalid token response from Google: {token_data}",
-#                 )
-#
-#         id_token = token_data["id_token"]
-#         user_info = jwt.decode(id_token, algorithms=["RS256"], options={"verify_signature": False})
-#
-#         user_data = {
-#             "name": user_info.get("name"),
-#             "email": user_info.get("email"),
-#             "avatar": user_info.get("picture"),
-#             "roles": ["user"],
-#         }
-#
-#         access_token = create_access_token(user_data)
-#         refresh_token = create_refresh_token(user_data)
-#
-#         return BaseResponse(
-#             status=200,
-#             message="Google authentication successful",
-#             date=datetime.utcnow(),
-#             payload={
-#                 "user": user_data,
-#                 "access_token": access_token,
-#                 "refresh_token": refresh_token,
-#             },
-#         )
-#
-#     except HTTPException as http_exc:
-#         raise http_exc
-#
-#     except Exception as e:
-#         logger.error(f"Error during Google authentication: {str(e)}")
-#         raise HTTPException(
-#             status_code=500,
-#             detail=f"Unexpected error during Google OAuth: {str(e)}",
-#         )
+    except Exception as e:
+        logger.error(f"Error during Facebook authentication: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error during Facebook OAuth: {str(e)}",
+        )
+
 
 @auth_router.post("/google", response_model=BaseResponse, status_code=200)
 async def google_callback(
