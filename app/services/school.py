@@ -364,8 +364,6 @@ async def create_school_service(
     phone: str,
     lowest_price: float,
     highest_price: float,
-    latitude: float,
-    longitude: float,
     map_url: str,
     email: str,
     website: str,
@@ -379,12 +377,6 @@ async def create_school_service(
 ):
     try:
         try:
-            if map_url:
-                extracted_lat, extracted_long = extract_lat_long_from_map_url(map_url)
-                if extracted_lat and extracted_long:
-                    latitude = latitude or extracted_lat
-                    longitude = longitude or extracted_long
-
             validated_school_type = SchoolType(school_type.upper())
         except ValueError:
             raise format_http_exception(
@@ -393,6 +385,7 @@ async def create_school_service(
                 details=f"Must be one of: {', '.join([t.value for t in SchoolType])}",
             )
 
+        # The way I check duplicate school names
         existing_school_stmt = select(School).where(
             (School.kh_name == kh_name) | (School.en_name == en_name),
             School.is_deleted == False
@@ -417,6 +410,8 @@ async def create_school_service(
                 message="Province not found.",
                 details="The specified province does not exist or has been deleted.",
             )
+
+        latitude, longitude = extract_lat_long_from_map_url(map_url)
 
         reference_url = "https://edurank.org/geo/kh/" if is_popular else None
 

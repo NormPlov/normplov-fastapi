@@ -201,7 +201,7 @@ async def load_all_jobs(
     location: Optional[str] = None,
     job_type: Optional[str] = None,
     category: Optional[str] = None,
-) -> list[JobDetailsResponse]:
+) -> List[JobDetailsWithBookmarkResponse]:
     try:
         stmt = select(Job).where(Job.is_deleted == False)
 
@@ -211,7 +211,6 @@ async def load_all_jobs(
             stmt = stmt.where(Job.job_type.ilike(f"%{job_type}%"))
         if category:
             stmt = stmt.where(Job.category.ilike(f"%{category}%"))
-
         if search:
             stmt = stmt.where(
                 Job.title.ilike(f"%{search}%")
@@ -221,10 +220,7 @@ async def load_all_jobs(
             )
 
         sort_column = getattr(Job, sort_by, Job.created_at)
-        if order.lower() == "desc":
-            stmt = stmt.order_by(sort_column.desc())
-        else:
-            stmt = stmt.order_by(sort_column.asc())
+        stmt = stmt.order_by(sort_column.desc() if order.lower() == "desc" else sort_column.asc())
 
         result = await db.execute(stmt)
         jobs = result.scalars().all()
@@ -236,7 +232,7 @@ async def load_all_jobs(
             return f"{delta.days} days ago" if delta.days > 0 else "Today"
 
         return [
-            JobDetailsResponse(
+            JobDetailsWithBookmarkResponse(
                 uuid=job.uuid,
                 title=job.title if job.title else "Unknown Title",
                 company_name=job.company if job.company else "Unknown Company",
@@ -247,6 +243,7 @@ async def load_all_jobs(
                 posted_at_days_ago=calculate_days_ago(job.posted_at),
                 schedule=job.schedule,
                 salary=job.salary,
+                is_scraped=job.is_scraped,
                 description=job.description,
                 requirements=job.requirements,
                 responsibilities=job.responsibilities,
@@ -257,9 +254,10 @@ async def load_all_jobs(
                 website=job.website,
                 created_at=job.created_at,
                 created_at_days_ago=calculate_days_ago(job.created_at),
-                is_scraped=job.is_scraped,
-                closing_date=job.closing_date.strftime("%d.%b.%Y") if job.closing_date and job.closing_date >= datetime.utcnow() else None,
-                category=" ".join(job.category.split()[:2]) if job.category else None,
+                closing_date=job.closing_date.strftime("%d.%b.%Y")
+                if job.closing_date and job.closing_date >= datetime.utcnow()
+                else None,
+                category=job.category,
                 visitor_count=job.visitor_count,
             )
             for job in jobs

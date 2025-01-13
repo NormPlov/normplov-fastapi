@@ -1,6 +1,5 @@
 from typing import Optional
-
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Form
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Form, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.dependencies import is_admin_user
@@ -15,7 +14,7 @@ from app.services.school import (
     get_school_with_paginated_majors, get_popular_schools
 )
 from app.schemas.school import (
-    UpdateSchoolRequest
+    UpdateSchoolRequest, CreateSchoolRequest
 )
 
 
@@ -131,50 +130,29 @@ async def delete_school_endpoint(
 
 @school_router.post("", response_model=BaseResponse, status_code=status.HTTP_201_CREATED)
 async def create_school_endpoint(
-    province_uuid: str = Form(...),
-    kh_name: str = Form(...),
-    en_name: str = Form(...),
-    school_type: str = Form(...),
-    popular_major: str = Form(...),
-    location: str = Form(None),
-    phone: str = Form(None),
-    lowest_price: float = Form(None),
-    highest_price: float = Form(None),
-    latitude: float = Form(None),
-    longitude: float = Form(None),
-    map_url: str = Form(None),
-    email: str = Form(None),
-    website: str = Form(None),
-    description: str = Form(None),
-    mission: str = Form(None),
-    vision: str = Form(None),
-    logo: str = Form(None),
-    cover_image: str = Form(None),
-    is_popular: bool = Form(False),
+    request: CreateSchoolRequest = Body(...),
     db: AsyncSession = Depends(get_db),
 ):
     try:
         school = await create_school_service(
-            province_uuid=province_uuid,
-            kh_name=kh_name,
-            en_name=en_name,
-            school_type=school_type,
-            popular_major=popular_major,
-            location=location,
-            phone=phone,
-            lowest_price=lowest_price,
-            highest_price=highest_price,
-            latitude=latitude,
-            longitude=longitude,
-            map_url=map_url,
-            email=email,
-            website=website,
-            description=description,
-            mission=mission,
-            vision=vision,
-            logo=logo,
-            cover_image=cover_image,
-            is_popular=is_popular,
+            province_uuid=request.province_uuid,
+            kh_name=request.kh_name,
+            en_name=request.en_name,
+            school_type=request.school_type,
+            popular_major=request.popular_major,
+            location=request.location,
+            phone=request.phone,
+            lowest_price=request.lowest_price,
+            highest_price=request.highest_price,
+            map_url=request.map_url,
+            email=request.email,
+            website=request.website,
+            description=request.description,
+            mission=request.mission,
+            vision=request.vision,
+            logo=request.logo,
+            cover_image=request.cover_image,
+            is_popular=request.is_popular,
             db=db,
         )
 

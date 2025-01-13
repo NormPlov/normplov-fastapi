@@ -30,7 +30,6 @@ class JobDetailsWithBookmarkResponse(BaseModel):
     closing_date: Optional[str]
     category: Optional[str]
     visitor_count: int
-    bookmarked: bool
 
     class Config:
         from_attributes = True

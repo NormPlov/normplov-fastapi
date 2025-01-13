@@ -4,7 +4,6 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, status, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import get_current_user_data
-from app.schemas.job import JobListingResponse
 from app.schemas.payload import BaseResponse
 from app.services.bookmark import add_job_to_bookmark_service, get_user_bookmarked_jobs_service, unbookmark_job_service
 from app.models.user import User

@@ -62,24 +62,24 @@ class SchoolMajorsResponse(BaseModel):
 
 
 class CreateSchoolRequest(BaseModel):
-    province_uuid: str = Field(...)
-    kh_name: str = Field(..., max_length=255)
-    en_name: str = Field(..., max_length=255)
-    type: Union[str, SchoolType] = Field(...)
-    popular_major: str = Field(..., max_length=255)
-    logo_url: Optional[str] = Field(None)
-    cover_image: Optional[str] = Field(None)
-    location: Optional[str] = Field(None, max_length=500)
-    phone: Optional[str] = Field(None, max_length=15)
-    lowest_price: Optional[float] = Field(None, ge=0)
-    highest_price: Optional[float] = Field(None, ge=0)
-    latitude: Optional[float] = Field(None, ge=-90, le=90)
-    longitude: Optional[float] = Field(None, ge=-180, le=180)
-    email: Optional[EmailStr] = Field(None)
-    website: Optional[str] = Field(None)
-    description: Optional[str] = Field(None, max_length=2000)
-    mission: Optional[str] = Field(None, max_length=2000)
-    vision: Optional[str] = Field(None, max_length=2000)
+    province_uuid: str
+    kh_name: str
+    en_name: str
+    school_type: str
+    popular_major: str
+    location: Optional[str]
+    phone: Optional[str]
+    lowest_price: Optional[float]
+    highest_price: Optional[float]
+    map_url: Optional[str]
+    email: Optional[str]
+    website: Optional[str]
+    description: Optional[str]
+    mission: Optional[str]
+    vision: Optional[str]
+    logo: Optional[str]
+    cover_image: Optional[str]
+    is_popular: Optional[bool] = False
 
 
 class UpdateSchoolRequest(BaseModel):
