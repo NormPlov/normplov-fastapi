@@ -71,7 +71,6 @@ async def fetch_all_schools_route(
             page_size=page_size,
             search=search,
             type=type,
-            province_uuid=province_uuid,
             sort_by=sort_by,
             sort_order=sort_order,
         )

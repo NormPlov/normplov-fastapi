@@ -155,15 +155,11 @@ async def load_all_schools(
     page_size: int = 10,
     search: str = None,
     type: str = None,
-    province_uuid: str = None,
     sort_by: str = "created_at",
     sort_order: str = "desc",
 ) -> tuple:
     try:
-        query = select(School).options(joinedload(School.province)).where(School.is_deleted == False)
-
-        if province_uuid:
-            query = query.where(School.province.has(uuid=province_uuid))
+        query = select(School).where(School.is_deleted == False)
 
         if search:
             search_filter = or_(
@@ -187,8 +183,6 @@ async def load_all_schools(
         paginated_schools = paginate_results(schools, page, page_size)
 
         total_query = select(func.count(School.id)).where(School.is_deleted == False)
-        if province_uuid:
-            total_query = total_query.where(School.province.has(uuid=province_uuid))
         if search:
             total_query = total_query.where(search_filter)
         if type:
@@ -197,6 +191,7 @@ async def load_all_schools(
         total_result = await db.execute(total_query)
         total_schools = total_result.scalar()
 
+        # Metadata for pagination
         metadata = {
             "page": page,
             "page_size": page_size,
@@ -204,11 +199,10 @@ async def load_all_schools(
             "total_pages": (total_schools + page_size - 1) // page_size,
         }
 
+        # Format schools for response
         formatted_schools = [
             {
                 "uuid": str(school.uuid),
-                "province_uuid": str(school.province.uuid) if school.province else None,
-                "province_name": school.province.name if school.province else None,
                 "kh_name": school.kh_name,
                 "en_name": school.en_name,
                 "type": school.type.value if school.type else None,
