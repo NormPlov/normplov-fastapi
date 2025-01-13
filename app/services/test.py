@@ -203,9 +203,10 @@ async def generate_shareable_link(
         assessment_type_mapping: Dict[str, str] = {
             "Values": "value",
             "Personality": "personality",
-            "Learning Style": "learningStyle",
+            "LearningStyle": "learningStyle",
             "Interests": "interest",
             "Skill": "skill",
+            "AllTests": "all"
         }
 
         assessment_type_key = user_test.assessment_type.name.replace(" ", "")
