@@ -25,4 +25,6 @@ class UserTest(Base):
     user_scores = relationship("UserAssessmentScore", back_populates="user_test", cascade="all, delete-orphan")
     assessment_type = relationship("AssessmentType", back_populates="user_tests")
     feedbacks = relationship("UserFeedback", back_populates="user_test", cascade="all, delete-orphan")
-
+    test_references = relationship(
+        "UserTestReference", back_populates="user_test", cascade="all, delete-orphan"
+    )

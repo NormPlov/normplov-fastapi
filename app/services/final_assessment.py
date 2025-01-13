@@ -6,13 +6,14 @@ import numpy as np
 import pandas as pd
 
 from datetime import datetime
+from sqlalchemy.orm import joinedload
 from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException
 from app.models import UserTest, AssessmentType, UserResponse, User, Career, School, Major, CareerMajor, SchoolMajor
+from app.models.user_test_reference import UserTestReference
 from app.schemas.final_assessment import AllAssessmentsResponse, PredictCareersRequest
 from sqlalchemy.future import select
-from sqlalchemy.orm import joinedload
 from app.schemas.interest_assessment import InterestAssessmentResponse
 from app.schemas.learning_style_assessment import LearningStyleResponse, CareerWithMajors
 from app.services.test import create_user_test
@@ -32,6 +33,50 @@ from app.schemas.value_assessment import (
 logger = logging.getLogger(__name__)
 
 
+async def get_user_test_details_service(test_uuid: str, db: AsyncSession):
+    try:
+        # Fetch the user test with eager-loaded relationships
+        stmt_user_test = (
+            select(UserTest)
+            .options(
+                joinedload(UserTest.assessment_type),  # Eager-load assessment type
+                joinedload(UserTest.test_references)  # Eager-load test references
+            )
+            .where(UserTest.uuid == test_uuid)
+        )
+        result_user_test = await db.execute(stmt_user_test)
+        user_test = result_user_test.scalar()
+
+        if not user_test:
+            raise HTTPException(
+                status_code=404,
+                detail=f"User test with UUID '{test_uuid}' not found."
+            )
+
+        # Extract the referenced test UUIDs
+        referenced_test_uuids = [
+            str(reference.test_uuid) for reference in user_test.test_references
+        ]
+
+        # Construct the response
+        return {
+            "test_uuid": str(user_test.uuid),
+            "test_name": user_test.name,
+            "assessment_type": user_test.assessment_type.name,  # Eagerly loaded, safe to access
+            "is_completed": user_test.is_completed,
+            "is_deleted": user_test.is_deleted,
+            "created_at": user_test.created_at,
+            "referenced_test_uuids": referenced_test_uuids,
+        }
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"An unexpected error occurred: {str(e)}"
+        )
+
+
 async def get_assessment_type_id(name: str, db: AsyncSession) -> int:
     stmt = select(AssessmentType.id).where(AssessmentType.name == name)
     result = await db.execute(stmt)
@@ -49,28 +94,22 @@ async def predict_careers_service(
 ):
     try:
         aggregated_response = await get_aggregated_tests_service(request.test_uuids, db, current_user)
-
         user_input = prepare_model_input(aggregated_response)
 
-        dataset_path = "/app/datasets/train_testing.csv"
+        dataset_path = os.path.join(
+            os.getcwd(),
+            r"D:\CSTAD Scholarship Program\python for data analytics\NORMPLOV_PROJECT\normplov-fastapi\datasets\train_testing.csv",
+        )
 
         career_model = load_career_recommendation_model(dataset_path=dataset_path)
         model_features = career_model.get_feature_columns()
-
         user_input_aligned = {feature: user_input.get(feature, 0) for feature in model_features}
 
         top_recommendations = career_model.predict(user_input_aligned, top_n=request.top_n)
-
         if isinstance(top_recommendations, pd.DataFrame):
             top_recommendations = top_recommendations.to_dict(orient="records")
         elif isinstance(top_recommendations, np.ndarray):
             top_recommendations = [{"Career": row[0], "Similarity": row[1]} for row in top_recommendations]
-
-        if not isinstance(top_recommendations, list) or not all(isinstance(item, dict) for item in top_recommendations):
-            raise HTTPException(
-                status_code=500,
-                detail="Invalid model prediction response format. Expected a list of dictionaries."
-            )
 
         career_responses = []
         for recommendation in top_recommendations:
@@ -118,11 +157,17 @@ async def predict_careers_service(
         assessment_type_id = await get_assessment_type_id("All Tests", db)
         user_test = await create_user_test(db, current_user.id, assessment_type_id)
 
+        for test_uuid in request.test_uuids:
+            user_test_reference = UserTestReference(
+                user_test_id=user_test.id,
+                test_uuid=test_uuid,
+            )
+            db.add(user_test_reference)
+
         response_data = {
             "date": datetime.utcnow().strftime("%Y-%m-%d"),
             "recommendations": career_responses,
         }
-
         new_user_response = UserResponse(
             uuid=uuid.uuid4(),
             user_id=current_user.id,

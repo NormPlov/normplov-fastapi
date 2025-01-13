@@ -4,7 +4,6 @@ import os
 from datetime import datetime
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import FileResponse
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError, OperationalError
@@ -17,7 +16,8 @@ from app.schemas.skill_assessment import SkillAssessmentInput
 from app.schemas.learning_style_assessment import LearningStyleInput
 from app.schemas.interest_assessment import InterestAssessmentInput
 from app.schemas.value_assessment import ValueAssessmentInput
-from app.services.final_assessment import get_aggregated_tests_service, predict_careers_service
+from app.services.final_assessment import get_aggregated_tests_service, predict_careers_service, \
+    get_user_test_details_service
 from app.services.personality_assessment import process_personality_assessment
 from app.services.skill_assessment import predict_skills
 from app.services.learning_style_assessment import predict_learning_style
@@ -31,13 +31,26 @@ logger = logging.getLogger(__name__)
 assessment_router = APIRouter()
 
 
-@assessment_router.get("/assessment-image/{test_uuid}", summary="Get Assessment Image")
-async def get_assessment_image(test_uuid: str):
-    image_path = os.path.join(os.getcwd(), "exports", f"{test_uuid}.png")
-
-    if not os.path.exists(image_path):
-        raise HTTPException(status_code=404, detail="Image not found.")
-    return FileResponse(image_path)
+@assessment_router.get("/final-test/{test_uuid}", summary="Get User Test Details by UUID")
+async def get_user_test_details(
+    test_uuid: str,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        user_test_details = await get_user_test_details_service(test_uuid, db)
+        return BaseResponse(
+            date=datetime.utcnow(),
+            status=200,
+            payload=user_test_details,
+            message="User test details fetched successfully."
+        )
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"An unexpected error occurred: {str(e)}"
+        )
 
 
 @assessment_router.post("/predict-careers", summary="Predict Career Recommendations")

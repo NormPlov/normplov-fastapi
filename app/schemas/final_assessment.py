@@ -1,5 +1,16 @@
+from datetime import datetime
 from pydantic import BaseModel
 from typing import Dict, Optional, List
+
+
+class UserTestDetailsResponse(BaseModel):
+    test_uuid: str
+    test_name: str
+    assessment_type: str
+    is_completed: bool
+    is_deleted: bool
+    created_at: datetime
+    referenced_test_uuids: List[str]
 
 
 class InterestAssessmentResponse(BaseModel):
