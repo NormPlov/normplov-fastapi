@@ -1,5 +1,4 @@
 import logging
-import shutil
 import re
 
 from datetime import datetime
@@ -9,7 +8,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 from app.exceptions.formatters import format_http_exception
-from app.models import Province, Faculty
+from app.models import Faculty
 from app.models.school import School, SchoolType
 from app.schemas.payload import BaseResponse
 from app.schemas.school import UpdateSchoolRequest, SchoolDetailsResponse
@@ -355,7 +354,6 @@ async def delete_school(school_uuid: str, db: AsyncSession):
 
 
 async def create_school_service(
-    province_uuid: str,
     kh_name: str,
     en_name: str,
     school_type: str,
@@ -400,17 +398,6 @@ async def create_school_service(
                 details="A school with the same Khmer or English name already exists.",
             )
 
-        province_stmt = select(Province).where(Province.uuid == province_uuid, Province.is_deleted == False)
-        province_result = await db.execute(province_stmt)
-        province = province_result.scalars().first()
-
-        if not province:
-            raise format_http_exception(
-                status_code=404,
-                message="Province not found.",
-                details="The specified province does not exist or has been deleted.",
-            )
-
         latitude, longitude = extract_lat_long_from_map_url(map_url)
 
         reference_url = "https://edurank.org/geo/kh/" if is_popular else None
@@ -433,7 +420,6 @@ async def create_school_service(
             description=description,
             mission=mission,
             vision=vision,
-            province_id=province.id,
             logo_url=logo,
             cover_image=cover_image,
             is_popular=is_popular,

@@ -1,6 +1,6 @@
 from datetime import datetime
 from uuid import UUID
-from pydantic import BaseModel, Field, EmailStr, HttpUrl, validator
+from pydantic import BaseModel, Field, validator
 from typing import Optional, List, Union, Dict, Any
 from enum import Enum as PyEnum
 from app.schemas.major import MajorResponse
@@ -62,7 +62,6 @@ class SchoolMajorsResponse(BaseModel):
 
 
 class CreateSchoolRequest(BaseModel):
-    province_uuid: str
     kh_name: str
     en_name: str
     school_type: str
@@ -115,7 +114,6 @@ class UpdateSchoolRequest(BaseModel):
 
 class SchoolResponse(BaseModel):
     uuid: str
-    province_name: Optional[str] = None
     kh_name: str
     en_name: str
     popular_major: str

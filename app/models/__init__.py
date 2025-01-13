@@ -15,7 +15,6 @@ from app.models.user_test import UserTest
 from app.models.career import Career
 from app.models.user_feedback import UserFeedback
 from app.models.job import Job
-from app.models.province import Province
 from app.models.school import School
 from app.models.major import Major
 from app.models.school_major import SchoolMajor
@@ -51,7 +50,6 @@ __all__ = ["Role",
            "SchoolMajor",
            "Faculty",
            "CareerMajor",
-           "Province",
            "PersonalityType",
            "CareerCategory",
            "CareerPersonalityType",

@@ -135,7 +135,6 @@ async def create_school_endpoint(
 ):
     try:
         school = await create_school_service(
-            province_uuid=request.province_uuid,
             kh_name=request.kh_name,
             en_name=request.en_name,
             school_type=request.school_type,
