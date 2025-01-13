@@ -50,7 +50,11 @@ async def get_user_bookmarked_jobs_service(current_user: User, db: AsyncSession)
         stmt = (
             select(Job, Bookmark)
             .join(Bookmark, Bookmark.job_id == Job.uuid)
-            .where(Bookmark.user_id == current_user.id, Bookmark.is_deleted == False)
+            .where(
+                Bookmark.user_id == current_user.id,
+                Bookmark.is_deleted == False,
+                Job.is_deleted == False
+            )
         )
         result = await db.execute(stmt)
         bookmarked_jobs = result.fetchall()
@@ -106,9 +110,14 @@ async def add_job_to_bookmark_service(
         existing_bookmark = bookmark_result.scalars().first()
 
         if existing_bookmark:
-            raise HTTPException(
+            raise format_http_exception(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Job is already bookmarked."
+                message="Job is already bookmarked.📌",
+                details={
+                    "bookmark_uuid": str(existing_bookmark.uuid),
+                    "job_uuid": str(job.uuid),
+                    "job_title": job.title,
+                }
             )
 
         new_bookmark = Bookmark(

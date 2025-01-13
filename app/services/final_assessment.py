@@ -1,6 +1,5 @@
 import logging
 import json
-import os
 import uuid
 import numpy as np
 import pandas as pd
@@ -35,11 +34,12 @@ logger = logging.getLogger(__name__)
 
 async def get_user_test_details_service(test_uuid: str, db: AsyncSession):
     try:
+        # Fetch the main UserTest details
         stmt_user_test = (
             select(UserTest)
             .options(
-                joinedload(UserTest.assessment_type),
-                joinedload(UserTest.test_references)
+                joinedload(UserTest.assessment_type),  # Load assessment type
+                joinedload(UserTest.test_references)  # Load test references
             )
             .where(UserTest.uuid == test_uuid)
         )
@@ -52,6 +52,7 @@ async def get_user_test_details_service(test_uuid: str, db: AsyncSession):
                 detail=f"User test with UUID '{test_uuid}' not found."
             )
 
+        # Get referenced test UUIDs
         referenced_test_uuids = [
             str(reference.test_uuid) for reference in user_test.test_references
         ]
@@ -60,37 +61,34 @@ async def get_user_test_details_service(test_uuid: str, db: AsyncSession):
             return {
                 "test_uuid": str(user_test.uuid),
                 "test_name": user_test.name,
-                "assessment_type": user_test.assessment_type.name,
+                "assessment_type": user_test.assessment_type.name.replace(" ", ""),
                 "is_completed": user_test.is_completed,
                 "is_deleted": user_test.is_deleted,
                 "created_at": user_test.created_at,
-                "referenced_test_uuids": [],
+                "referenced_test_uuids": {}
             }
 
+        # Fetch assessment type names for referenced tests using UserTest
         stmt_referenced_tests = (
             select(UserTest.uuid, AssessmentType.name.label("assessment_type"))
             .join(AssessmentType, UserTest.assessment_type_id == AssessmentType.id)
             .where(UserTest.uuid.in_([uuid.UUID(ref_uuid) for ref_uuid in referenced_test_uuids]))
         )
         result_referenced_tests = await db.execute(stmt_referenced_tests)
-        response_mapping = {str(row.uuid): row.assessment_type for row in result_referenced_tests.fetchall()}
+        response_mapping = {
+            row.assessment_type.replace(" ", ""): {"test_uuid": str(row.uuid)}
+            for row in result_referenced_tests.fetchall()
+        }
 
-        mapped_referenced_tests = [
-            {
-                "test_uuid": test_uuid,
-                "assessment_type": response_mapping.get(test_uuid, "Unknown").replace(" ", ""),
-            }
-            for test_uuid in referenced_test_uuids
-        ]
-
+        # Construct final response
         return {
             "test_uuid": str(user_test.uuid),
             "test_name": user_test.name,
-            "assessment_type": user_test.assessment_type.name,
+            "assessment_type": user_test.assessment_type.name.replace(" ", ""),
             "is_completed": user_test.is_completed,
             "is_deleted": user_test.is_deleted,
             "created_at": user_test.created_at,
-            "referenced_test_uuids": mapped_referenced_tests,
+            "referenced_test_uuids": response_mapping
         }
 
     except HTTPException as e:
@@ -100,7 +98,6 @@ async def get_user_test_details_service(test_uuid: str, db: AsyncSession):
             status_code=500,
             detail=f"An unexpected error occurred: {str(e)}"
         )
-
 
 
 async def get_assessment_type_id(name: str, db: AsyncSession) -> int:
