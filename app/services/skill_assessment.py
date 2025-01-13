@@ -166,6 +166,8 @@ async def predict_skills(
                 logger.debug(f"Careers found: {[dc.career.name for dc in dimension_careers]}")
 
             suggested_careers = []
+            added_career_names = set()  # Track unique career names
+
             for dc in dimension_careers:
                 career = dc.career
                 majors = [
@@ -177,16 +179,20 @@ async def predict_skills(
                     }
                     for cm in career.majors
                 ]
-                suggested_careers.append(
-                    {
-                        "career_name": career.name,
-                        "description": career.description,
-                        "majors": majors,
-                    }
-                )
-        else:
-            logger.warning("No top category calculated.")
-            suggested_careers = []
+
+                # Check if the career name is already added
+                if career.name not in added_career_names:
+                    added_career_names.add(career.name)  # Mark this career name as added
+                    suggested_careers.append(
+                        {
+                            "career_name": career.name,
+                            "description": career.description,
+                            "majors": majors,
+                        }
+                    )
+            else:
+                if not suggested_careers:
+                    logger.warning("No top category calculated.")
 
         response = SkillAssessmentResponse(
             user_uuid=user_uuid,
