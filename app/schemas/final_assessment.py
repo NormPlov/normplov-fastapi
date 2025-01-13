@@ -10,7 +10,7 @@ class UserTestDetailsResponse(BaseModel):
     is_completed: bool
     is_deleted: bool
     created_at: datetime
-    referenced_test_uuids: List[str]
+    referenced_test_uuids: List[Dict[str, str]]
 
 
 class InterestAssessmentResponse(BaseModel):
