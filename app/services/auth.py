@@ -96,7 +96,7 @@ async def get_or_create_user(db: AsyncSession, user_info: dict) -> dict:
             "uuid": user.uuid,
             "username": user.username,
             "email": user.email,
-            "profile": user.avatar,
+            "avatar": user.avatar,
             "roles": user_roles,
             "access_token": access_token,
             "refresh_token": refresh_token,
