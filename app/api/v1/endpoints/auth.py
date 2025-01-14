@@ -116,7 +116,91 @@ async def facebook_callback(
         )
 
 
-@auth_router.post("/google", response_model=BaseResponse, status_code=200)
+# @auth_router.post("/google", response_model=BaseResponse, status_code=200)
+# async def google_callback(
+#         request: OAuthCallbackRequest,
+#         db: AsyncSession = Depends(get_db)
+# ):
+#     logger.info("Received Google auth request")
+#
+#     try:
+#         async with httpx.AsyncClient() as client:
+#             token_url = "https://oauth2.googleapis.com/token"
+#             data = {
+#                 "code": request.code,
+#                 "client_id": settings.GOOGLE_CLIENT_ID,
+#                 "client_secret": settings.GOOGLE_CLIENT_SECRET,
+#                 "redirect_uri": "http://localhost:3000/auth/google/callback",
+#                 "grant_type": "authorization_code",
+#             }
+#
+#             response = await client.post(token_url, data=data)
+#             token_data = response.json()
+#
+#             if "id_token" not in token_data:
+#                 raise HTTPException(
+#                     status_code=401,
+#                     detail=f"Invalid token response from Google: {token_data}",
+#                 )
+#
+#         id_token = token_data["id_token"]
+#         user_info = jwt.decode(id_token, algorithms=["RS256"], options={"verify_signature": False})
+#         logger.info(f"Decoded user info: {user_info}")
+#
+#         user_response = await get_or_create_user(db, user_info)
+#         user = user_response["payload"]
+#
+#         access_token = create_access_token({"sub": user.uuid})
+#         refresh_token = create_refresh_token({"sub": user.uuid})
+#
+#         refresh_token_entry = RefreshToken(
+#             user_id=user.id,
+#             token=refresh_token,
+#             expires_at=datetime.utcnow() + timedelta(days=7)
+#         )
+#         db.add(refresh_token_entry)
+#         await db.commit()
+#
+#         response_payload = {
+#             "status": 200,
+#             "message": "Google authentication successful",
+#             "date": datetime.utcnow().isoformat(),
+#             "user": {
+#                 "payload": user_response["payload"],
+#             },
+#         }
+#
+#         response = JSONResponse(content=response_payload)
+#         response.set_cookie(
+#             key="access_token",
+#             value=access_token,
+#             httponly=True,
+#             secure=True,
+#             samesite="Lax",
+#             max_age=60 * 15  # 15 minutes
+#         )
+#         response.set_cookie(
+#             key="refresh_token",
+#             value=refresh_token,
+#             httponly=True,
+#             secure=True,
+#             samesite="Lax",
+#             max_age=60 * 60 * 24 * 7  # 7 days
+#         )
+#
+#         return response
+#
+#     except HTTPException as http_exc:
+#         raise http_exc
+#
+#     except Exception as e:
+#         logger.error(f"Error during Google authentication: {str(e)}")
+#         raise HTTPException(
+#             status_code=500,
+#             detail=f"Unexpected error during Google OAuth: {str(e)}",
+#         )
+
+@auth_router.post("/google", response_model=dict, status_code=200)
 async def google_callback(
         request: OAuthCallbackRequest,
         db: AsyncSession = Depends(get_db)
@@ -147,14 +231,13 @@ async def google_callback(
         user_info = jwt.decode(id_token, algorithms=["RS256"], options={"verify_signature": False})
         logger.info(f"Decoded user info: {user_info}")
 
-        user_response = await get_or_create_user(db, user_info)
-        user = user_response["payload"]
+        user = await get_or_create_user(db, user_info)
 
-        access_token = create_access_token({"sub": user.uuid})
-        refresh_token = create_refresh_token({"sub": user.uuid})
+        access_token = create_access_token(data={"sub": user["uuid"]})
+        refresh_token = create_refresh_token(data={"sub": user["uuid"]})
 
         refresh_token_entry = RefreshToken(
-            user_id=user.id,
+            user_id=user["uuid"],
             token=refresh_token,
             expires_at=datetime.utcnow() + timedelta(days=7)
         )
@@ -162,12 +245,16 @@ async def google_callback(
         await db.commit()
 
         response_payload = {
-            "status": 200,
-            "message": "Google authentication successful",
-            "date": datetime.utcnow().isoformat(),
-            "user": {
-                "payload": user_response["payload"],
+            "accessToken": access_token,
+            "payload": {
+                "uuid": user["uuid"],
+                "username": user["username"],
+                "email": user["email"],
+                "avatar": user["avatar"],
+                "roles": user["roles"],
             },
+            "tokenType": "bearer",
+            "message": "Google authentication successful"
         }
 
         response = JSONResponse(content=response_payload)

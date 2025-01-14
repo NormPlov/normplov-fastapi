@@ -37,9 +37,76 @@ def generate_random_password(length: int = 12) -> str:
     return password
 
 
+# async def get_or_create_user(db: AsyncSession, user_info: dict) -> dict:
+#     email = user_info.get("email")
+#     name = user_info.get("name") or ""
+#     picture = user_info.get("picture", "")
+#     if isinstance(picture, dict):
+#         picture = picture.get("data", {}).get("url", "")
+#
+#     if not email:
+#         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email is required.")
+#
+#     stmt = select(User).options(selectinload(User.roles).joinedload(UserRole.role)).where(User.email == email)
+#     result = await db.execute(stmt)
+#     user = result.scalars().first()
+#
+#     if not user:
+#         raw_password = generate_random_password()
+#         hashed_password = hash_password(raw_password)
+#         user = User(
+#             uuid=str(uuid.uuid4()),
+#             username=name,
+#             email=email,
+#             avatar=picture,
+#             password=hashed_password,
+#             is_verified=True,
+#             is_active=True,
+#         )
+#         db.add(user)
+#         await db.commit()
+#         await db.refresh(user)
+#
+#         stmt = select(Role).where(Role.name == "USER")
+#         result = await db.execute(stmt)
+#         default_role = result.scalars().first()
+#
+#         if not default_role:
+#             raise HTTPException(
+#                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+#                 detail="Default role 'USER' not found in the database."
+#             )
+#
+#         user_role = UserRole(user_id=user.id, role_id=default_role.id)
+#         db.add(user_role)
+#         await db.commit()
+#
+#         stmt = select(User).options(selectinload(User.roles).joinedload(UserRole.role)).where(User.id == user.id)
+#         result = await db.execute(stmt)
+#         user = result.scalars().first()
+#
+#     user_roles = [user_role.role.name for user_role in user.roles if user_role.role] if user.roles else []
+#
+#     access_token = create_access_token(data={"sub": user.uuid})
+#     refresh_token = create_refresh_token(data={"sub": user.uuid})
+#
+#     return {
+#         "payload": user,
+#         "payload": {
+#             "uuid": user.uuid,
+#             "username": user.username,
+#             "email": user.email,
+#             "avatar": user.avatar,
+#             "roles": user_roles,
+#             "access_token": access_token,
+#             "refresh_token": refresh_token,
+#             "token_type": "bearer",
+#         }
+#     }
+
 async def get_or_create_user(db: AsyncSession, user_info: dict) -> dict:
     email = user_info.get("email")
-    name = user_info.get("name") or ""
+    name = user_info.get("name", "")
     picture = user_info.get("picture", "")
     if isinstance(picture, dict):
         picture = picture.get("data", {}).get("url", "")
@@ -87,21 +154,12 @@ async def get_or_create_user(db: AsyncSession, user_info: dict) -> dict:
 
     user_roles = [user_role.role.name for user_role in user.roles if user_role.role] if user.roles else []
 
-    access_token = create_access_token(data={"sub": user.uuid})
-    refresh_token = create_refresh_token(data={"sub": user.uuid})
-
     return {
-        "user": user,
-        "payload": {
-            "uuid": user.uuid,
-            "username": user.username,
-            "email": user.email,
-            "avatar": user.avatar,
-            "roles": user_roles,
-            "access_token": access_token,
-            "refresh_token": refresh_token,
-            "token_type": "bearer",
-        }
+        "uuid": user.uuid,
+        "username": user.username,
+        "email": user.email,
+        "avatar": user.avatar,
+        "roles": user_roles,
     }
 
 
