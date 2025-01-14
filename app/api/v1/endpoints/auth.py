@@ -247,6 +247,7 @@ async def google_callback(
         response_payload = {
             "date": datetime.utcnow().strftime("%Y-%m-%d"),  # Current date in YYYY-MM-DD format
             "status": 200,
+            "accessToken": access_token,
             "payload": {
                 "uuid": user["uuid"],
                 "username": user["username"],
