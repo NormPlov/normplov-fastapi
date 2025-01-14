@@ -33,13 +33,11 @@ async def get_bookmarked_jobs(
     try:
         bookmarked_jobs = await get_user_bookmarked_jobs_service(current_user, db)
 
-        paginated_result = paginate_results(bookmarked_jobs, page=page, page_size=page_size)
-
         return BaseResponse(
             date=datetime.utcnow().strftime("%d-%B-%Y"),
             status=status.HTTP_200_OK,
             message="Bookmarked jobs retrieved successfully",
-            payload=paginated_result,
+            payload=bookmarked_jobs,
         )
     except HTTPException as e:
         if e.status_code == 404:

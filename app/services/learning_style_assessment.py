@@ -4,7 +4,6 @@ import pandas as pd
 import logging
 import json
 import uuid
-import os
 
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession

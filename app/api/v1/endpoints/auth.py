@@ -47,7 +47,7 @@ async def facebook_callback(
 
     try:
         async with httpx.AsyncClient() as client:
-            token_url = "https://graph.facebook.com/v12.0/oauth/access_token"
+            token_url = "https://graph.facebook.com/v18.0/oauth/access_token"
             data = {
                 "code": request.code,
                 "client_id": settings.FACEBOOK_CLIENT_ID,
@@ -214,7 +214,7 @@ async def google_callback(
                 "code": request.code,
                 "client_id": settings.GOOGLE_CLIENT_ID,
                 "client_secret": settings.GOOGLE_CLIENT_SECRET,
-                "redirect_uri": "http://localhost:3000/auth/google/callback",
+                "redirect_uri": "http://localhost:5173/auth/google/callback",
                 "grant_type": "authorization_code",
             }
 
