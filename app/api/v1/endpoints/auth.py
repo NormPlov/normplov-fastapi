@@ -245,9 +245,8 @@ async def google_callback(
         await db.commit()
 
         response_payload = {
-            "date": datetime.utcnow().strftime("%Y-%m-%d"),  # Current date in YYYY-MM-DD format
+            "date": datetime.utcnow().strftime("%Y-%m-%d"),
             "status": 200,
-            "accessToken": access_token,
             "payload": {
                 "uuid": user["uuid"],
                 "username": user["username"],
@@ -263,6 +262,8 @@ async def google_callback(
                 "is_active": user.get("is_active", True),
                 "is_verified": user.get("is_verified", True),
                 "registered_at": user.get("registered_at", None),
+                "access_token": access_token,
+                "refresh_token": refresh_token,
             },
             "message": "User information retrieved successfully."
         }
