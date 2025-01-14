@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text
+from sqlalchemy import Column, Integer, String, Boolean, DateTime
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -18,3 +18,13 @@ class CareerCategory(Base):
 
     # Relationship
     career_category_links = relationship("CareerCategoryLink", back_populates="career_category", cascade="all, delete-orphan")
+    responsibilities = relationship(
+        "CareerCategoryResponsibility",
+        back_populates="career_category",
+        cascade="all, delete-orphan",
+    )
+    requirements = relationship(
+        "CareerCategoryRequirement",
+        back_populates="career_category",
+        cascade="all, delete-orphan",
+    )

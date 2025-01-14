@@ -29,6 +29,8 @@ from app.models.career_category_link import CareerCategoryLink
 from app.models.bookmark import Bookmark
 from app.models.value_category_key_improvement import ValueCategoryKeyImprovement
 from app.models.user_test_reference import UserTestReference
+from app.models.career_category_requirement import CareerCategoryRequirement
+from app.models.career_category_responsibility import CareerCategoryResponsibility
 
 __all__ = ["Role",
            "UserRole",
@@ -59,6 +61,8 @@ __all__ = ["Role",
            "Bookmark",
            "ValueCategoryKeyImprovement",
            "RefreshToken",
-           "UserTestReference"
+           "UserTestReference",
+           "CareerCategoryRequirement",
+           "CareerCategoryResponsibility"
            ]
 
