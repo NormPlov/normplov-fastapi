@@ -3,10 +3,10 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import get_db, is_admin_user
+from app.exceptions.formatters import format_http_exception
 from app.models import User
 from app.schemas.major import CreateMajorRequest, MajorResponse, UpdateMajorRequest
-from app.services.major import create_major, delete_major_by_uuid, get_careers_for_major, update_major_by_uuid, \
-    load_all_majors
+from app.services.major import create_major, delete_major_by_uuid, update_major_by_uuid, load_all_majors
 from app.schemas.payload import BaseResponse
 from datetime import datetime
 
@@ -20,16 +20,17 @@ major_router = APIRouter()
     description="Retrieve all majors with optional filters, sorting, and pagination.",
 )
 async def get_all_majors(
-    name: Optional[str] = Query(None, description="Filter by major name"),
-    faculty_uuid: Optional[str] = Query(None, description="Filter by faculty UUID"),
-    degree: Optional[str] = Query(None, description="Filter by degree type"),
-    sort_by: Optional[str] = Query("created_at", description="Column to sort by"),
-    order: Optional[str] = Query("asc", description="Sort order (asc or desc)"),
-    page: int = Query(1, description="Page number"),
-    page_size: int = Query(10, description="Number of items per page"),
-    db: AsyncSession = Depends(get_db),
+        name: Optional[str] = Query(None, description="Filter by major name"),
+        faculty_uuid: Optional[str] = Query(None, description="Filter by faculty UUID"),
+        degree: Optional[str] = Query(None, description="Filter by degree type"),
+        sort_by: Optional[str] = Query("created_at", description="Column to sort by"),
+        order: Optional[str] = Query("asc", description="Sort order (asc or desc)"),
+        page: int = Query(1, description="Page number"),
+        page_size: int = Query(10, description="Number of items per page"),
+        db: AsyncSession = Depends(get_db),
 ):
     try:
+        # Fetch paginated majors
         paginated_majors = await load_all_majors(
             db=db,
             name=name,
@@ -44,15 +45,22 @@ async def get_all_majors(
         return BaseResponse(
             date=datetime.utcnow().strftime("%d-%B-%Y"),
             status=status.HTTP_200_OK,
-            message="Majors retrieved successfully.",
+            message="🎉 Majors retrieved successfully.",
             payload=paginated_majors,
         )
-    except HTTPException as e:
-        raise e
+    except HTTPException as http_error:
+        raise http_error
+    except ValueError as value_error:
+        raise format_http_exception(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            message="📜 Invalid input value!",
+            details=str(value_error),
+        )
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while retrieving majors: {str(e)}",
+        raise format_http_exception(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            message="⚡ Oops! Something went wrong while retrieving majors.",
+            details=str(e),
         )
 
 
@@ -80,27 +88,6 @@ async def update_major_endpoint(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An error occurred while updating the major: {str(e)}",
-        )
-
-
-@major_router.get(
-    "/{major_uuid}/careers",
-    response_model=BaseResponse,
-    summary="Fetch careers for a specific major",
-    description="Retrieve all careers associated with a specific major UUID."
-)
-async def fetch_careers_for_major(
-    major_uuid: str,
-    db: AsyncSession = Depends(get_db),
-):
-    try:
-        return await get_careers_for_major(major_uuid, db)
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An unexpected error occurred: {str(e)}",
         )
 
 

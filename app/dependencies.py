@@ -79,8 +79,8 @@ async def is_admin_user(current_user: User = Depends(get_current_user_data)) -> 
         if not current_user:
             raise format_http_exception(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                message="Authentication required.",
-                details="No current user found.",
+                message="🔒 Whoops! You need to log in first.",
+                details="No current user found. Please log in to access this resource.",
             )
 
         # Validate user authentication (e.g., not blocked, etc.)
@@ -90,17 +90,20 @@ async def is_admin_user(current_user: User = Depends(get_current_user_data)) -> 
         if not current_user.roles or not any(role.role.name == "ADMIN" for role in current_user.roles):
             raise format_http_exception(
                 status_code=status.HTTP_403_FORBIDDEN,
-                message="Permission denied.",
-                details="You do not have permission to perform this action.",
+                message="⛔ Access Denied! Not so fast, partner.",
+                details="It seems you left your admin badge at home. Only admins can perform this action.",
             )
 
+        # Return the authenticated admin user
         return current_user
+
     except HTTPException as http_exc:
         raise http_exc
     except Exception as e:
         logger.error(f"Unexpected error while checking admin privileges: {e}")
         raise format_http_exception(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            message="An error occurred while checking admin privileges.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            message="⚠️ Something went wrong while verifying admin status.",
             details=str(e),
         )
+

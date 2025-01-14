@@ -1,22 +1,18 @@
 import logging
 import uuid
 
-from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from fastapi import HTTPException, status
+from app.exceptions.formatters import format_http_exception
 from app.models.major import Major
-from app.models.career_major import CareerMajor
-from app.models.career import Career
 from app.models.faculty import Faculty
-from app.schemas.payload import BaseResponse
+from app.utils.pagination import paginate_results
+from pydantic import ValidationError
 from app.schemas.major import (
     CreateMajorRequest,
-    MajorResponse,
-    MajorCareersResponse,
-    CareerResponse
+    MajorResponse, DegreeTypeEnum
 )
-from app.utils.pagination import paginate_results
 
 logger = logging.getLogger(__name__)
 
@@ -32,16 +28,43 @@ async def load_all_majors(
     page_size: int = 10,
 ) -> dict:
     try:
+
         query = select(Major).where(Major.is_deleted == False)
 
         if name:
             query = query.where(Major.name.ilike(f"%{name}%"))
+
         if faculty_uuid:
-            query = query.where(Major.faculty.has(uuid=faculty_uuid))
+            try:
+                parsed_uuid = uuid.UUID(faculty_uuid)
+                query = query.where(Major.faculty.has(uuid=parsed_uuid))
+            except ValueError:
+                raise format_http_exception(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    message="📜 Invalid faculty UUID format!",
+                    details=f"The faculty UUID '{faculty_uuid}' is not valid. Please provide a correct UUID.",
+                )
+
+        # Validate and apply degree filter
         if degree:
+            if degree not in DegreeTypeEnum.__members__.values():
+                raise format_http_exception(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    message="🎓 Invalid degree type!",
+                    details=f"The degree '{degree}' is not valid. Please provide a valid degree type.",
+                )
             query = query.where(Major.degree == degree)
 
-        sort_column = getattr(Major, sort_by, Major.created_at)
+        # Validate and apply sorting
+        if not hasattr(Major, sort_by):
+            logger.error(f"❌ Invalid sort field: {sort_by}")
+            raise format_http_exception(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                message="⚙️ Invalid sorting field!",
+                details=f"The field '{sort_by}' is not valid for sorting. Please use a valid column name.",
+            )
+
+        sort_column = getattr(Major, sort_by)
         if order.lower() == "desc":
             query = query.order_by(sort_column.desc())
         else:
@@ -50,187 +73,132 @@ async def load_all_majors(
         result = await db.execute(query)
         majors = result.scalars().all()
 
+        # Convert to response model and paginate
         major_items = [MajorResponse.from_orm(major) for major in majors]
-
         paginated_result = paginate_results(major_items, page=page, page_size=page_size)
 
         return paginated_result
+
+    except HTTPException as http_error:
+
+        raise http_error
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while loading majors: {str(e)}",
+
+        raise format_http_exception(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            message="⚡ Oops! Something went wrong while loading majors.",
+            details=str(e),
         )
 
 
 async def update_major_by_uuid(major_uuid: str, data: dict, db: AsyncSession):
     try:
+        logger.info(f"🔄 Attempting to update major with UUID: {major_uuid}")
+
+        # Validate UUID format
         try:
             parsed_uuid = uuid.UUID(major_uuid)
-        except ValueError as e:
-            logger.error(f"Invalid UUID format: {major_uuid}")
-            raise HTTPException(
+        except ValueError:
+            raise format_http_exception(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid UUID format.",
-            ) from e
+                message="📜 Invalid UUID format!",
+                details=f"The UUID '{major_uuid}' is not valid. Please provide a correct UUID.",
+            )
 
+        # Check if the major exists and is not deleted
         stmt = select(Major).where(Major.uuid == parsed_uuid, Major.is_deleted == False)
         result = await db.execute(stmt)
         major = result.scalars().first()
 
         if not major:
-            logger.warning(f"No active major found with UUID: {major_uuid}")
-            raise HTTPException(
+            raise format_http_exception(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Major not found or already deleted.",
+                message="🤔 Major not found!",
+                details=f"No active major with UUID '{major_uuid}' was found, or it has already been deleted.",
             )
 
-        if "faculty_uuid" in data and data["faculty_uuid"]:
-            try:
-                faculty_query = select(Faculty).where(
-                    Faculty.uuid == data["faculty_uuid"],
-                    Faculty.is_deleted == False
-                )
-                faculty_result = await db.execute(faculty_query)
-                faculty = faculty_result.scalars().first()
-
-                if not faculty:
-                    logger.error(f"Invalid or non-existent faculty UUID: {data['faculty_uuid']}")
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Invalid or non-existent faculty UUID.",
-                    )
-
-                major.faculty_id = faculty.id
-            except ValueError as e:
-                logger.error(f"Invalid UUID format for faculty UUID: {e}")
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid UUID format for faculty UUID.",
-                )
-
+        # Update fields in the major
         for field, value in data.items():
-            if value is not None and field != "faculty_uuid":
+            if value is not None:
                 setattr(major, field, value)
 
         await db.commit()
         await db.refresh(major)
 
-        logger.info(f"Major successfully updated: {major_uuid}")
-        return major
-
-    except HTTPException as http_error:
-        logger.warning(f"HTTP Exception: {http_error.detail}")
-        raise
-    except Exception as e:
-        logger.error(f"Unexpected error while updating major: {e}")
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An unexpected error occurred while updating the major.",
-        )
-
-
-async def get_careers_for_major(major_uuid: str, db: AsyncSession) -> BaseResponse:
-    try:
         try:
-            parsed_uuid = uuid.UUID(major_uuid)
-        except ValueError as e:
-            logger.error(f"Invalid UUID format: {major_uuid}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid UUID format.",
-            ) from e
-
-        stmt = select(Major).where(Major.uuid == parsed_uuid, Major.is_deleted == False)
-        result = await db.execute(stmt)
-        major = result.scalars().first()
-
-        if not major:
-            logger.warning(f"No active major found with UUID: {major_uuid}")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Major not found or already deleted.",
+            response = MajorResponse.from_orm(major)
+            logger.info(f"✅ Major successfully updated: {major_uuid}")
+            return response
+        except ValidationError as ve:
+            logger.error(f"❌ Validation error when creating response: {ve}")
+            raise format_http_exception(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                message="⚡ Validation error occurred while processing the major update.",
+                details=ve.errors(),
             )
 
-        career_stmt = (
-            select(Career)
-            .join(CareerMajor, CareerMajor.career_id == Career.id)
-            .where(CareerMajor.major_id == major.id, Career.is_deleted == False)
-        )
-        career_result = await db.execute(career_stmt)
-        careers = career_result.scalars().all()
-
-        response_payload = MajorCareersResponse(
-            major_uuid=str(major.uuid),
-            careers=[
-                CareerResponse(
-                    uuid=str(career.uuid),
-                    name=career.name,
-                    created_at=career.created_at.strftime("%d-%B-%Y"),
-                    updated_at=career.updated_at.strftime("%d-%B-%Y") if career.updated_at else None,
-                )
-                for career in careers
-            ],
-        )
-
-        return BaseResponse(
-            date=datetime.utcnow().strftime("%d-%B-%Y"),
-            status=status.HTTP_200_OK,
-            message="Careers retrieved successfully.",
-            payload=response_payload.dict(),
-        )
     except HTTPException as http_error:
-        logger.warning(f"HTTP Exception: {http_error.detail}")
-        raise
+        logger.warning(f"🚨 HTTP Exception: {http_error.detail}")
+        raise http_error
     except Exception as e:
-        logger.error(f"Unexpected error while fetching careers for major: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An unexpected error occurred while fetching careers for the major.",
+        logger.error(f"⚠️ Unexpected error while updating major: {e}")
+        await db.rollback()
+        raise format_http_exception(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            message="⚡ An unexpected error occurred while updating the major.",
+            details=str(e),
         )
 
 
 async def delete_major_by_uuid(major_uuid: str, db: AsyncSession) -> dict:
     try:
-        logger.info(f"Attempting to delete major with UUID: {major_uuid}")
+        logger.info(f"🛠️ Attempting to delete major with UUID: {major_uuid}")
 
+        # Validate UUID format
         try:
             parsed_uuid = uuid.UUID(major_uuid)
         except ValueError as e:
-            logger.error(f"Invalid UUID format: {major_uuid}")
-            raise HTTPException(
+            logger.error(f"❌ Invalid UUID format: {major_uuid}")
+            raise format_http_exception(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid UUID format.",
+                message="📜 Invalid UUID format!",
+                details=f"The UUID '{major_uuid}' is not valid. Please provide a correct UUID.",
             ) from e
 
-        # Check if major in the database
+        # Check if the major exists and is not deleted
         stmt = select(Major).where(Major.uuid == parsed_uuid, Major.is_deleted == False)
         result = await db.execute(stmt)
         major = result.scalars().first()
 
         if not major:
-            logger.warning(f"No active major found with UUID: {major_uuid}")
-            raise HTTPException(
+            logger.warning(f"🔍 Major not found or already deleted: {major_uuid}")
+            raise format_http_exception(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Major not found or already deleted.",
+                message="🤔 Major not found!",
+                details=f"No active major with UUID '{major_uuid}' was found, or it has already been deleted.",
             )
 
-        logger.info(f"Marking major as deleted: {major_uuid}")
+        # Mark the major as deleted
+        logger.info(f"🗑️ Marking major as deleted: {major_uuid}")
         major.is_deleted = True
         await db.commit()
 
-        logger.info(f"Major successfully deleted: {major_uuid}")
-        return {"message": "Major successfully deleted.", "uuid": major_uuid}
+        logger.info(f"✅ Major successfully deleted: {major_uuid}")
+        return {
+            "message": "🎉 Major successfully deleted.",
+            "uuid": major_uuid,
+        }
 
     except HTTPException as http_error:
-        logger.warning(f"HTTP Exception: {http_error.detail}")
-        raise
+        logger.warning(f"🚨 HTTP Exception: {http_error.detail}")
+        raise http_error
     except Exception as e:
-        logger.error(f"Unexpected error while deleting major: {e}")
+        logger.error(f"⚠️ Unexpected error while deleting major: {e}")
         await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An unexpected error occurred while deleting the major.",
+        raise format_http_exception(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            message="⚡ Oops! Something went wrong.",
+            details=str(e),
         )
 
 
@@ -241,54 +209,27 @@ async def create_major(data: CreateMajorRequest, db: AsyncSession) -> MajorRespo
         existing_major = result.scalars().first()
 
         if existing_major:
-
-            raise HTTPException(
+            raise format_http_exception(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="A major with this name already exists.",
-            )
-        try:
-            faculty_query = select(Faculty).where(
-                Faculty.uuid == data.faculty_uuid,
-                Faculty.is_deleted == False,
+                message="A major with this name already exists.",
             )
 
-            faculty_result = await db.execute(faculty_query)
-            faculty = faculty_result.scalars().first()
+        # Validate the faculty UUID
+        faculty_query = select(Faculty).where(
+            Faculty.uuid == data.faculty_uuid,
+            Faculty.is_deleted == False,
+        )
+        faculty_result = await db.execute(faculty_query)
+        faculty = faculty_result.scalars().first()
 
-            if not faculty:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Invalid or non-existent faculty UUID: {data.faculty_uuid}",
-                )
-        except ValueError as e:
-            raise HTTPException(
+        if not faculty:
+            raise format_http_exception(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid UUID format for faculty UUID.",
-            )
-        try:
-            input_career_uuids = set(data.career_uuids)
-            career_query = select(Career).where(
-                Career.uuid.in_([uuid.UUID(career_uuid) for career_uuid in input_career_uuids]),
-                Career.is_deleted == False,
-            )
-            career_result = await db.execute(career_query)
-            careers = career_result.scalars().all()
-            found_career_uuids = {str(career.uuid) for career in careers}
-            missing_career_uuids = input_career_uuids - found_career_uuids
-
-            if missing_career_uuids:
-                logger.error(f"Invalid career UUIDs: {', '.join(missing_career_uuids)}")
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Invalid or non-existent career UUIDs: {', '.join(missing_career_uuids)}",
-                )
-        except ValueError as e:
-            logger.error(f"Invalid UUID format in career UUIDs: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid UUID format in career UUIDs.",
+                message="Invalid or non-existent faculty UUID.",
+                details={"faculty_uuid": str(data.faculty_uuid)},
             )
 
+        # New major is created here
         new_major = Major(
             uuid=uuid.uuid4(),
             name=data.name,
@@ -303,26 +244,17 @@ async def create_major(data: CreateMajorRequest, db: AsyncSession) -> MajorRespo
         await db.commit()
         await db.refresh(new_major)
 
-        career_majors = [
-            CareerMajor(
-                career_id=career.id,
-                major_id=new_major.id,
-                created_at=datetime.utcnow(),
-            )
-            for career in careers
-        ]
-        db.add_all(career_majors)
-        await db.commit()
-
         return MajorResponse.from_orm(new_major)
 
     except HTTPException as http_error:
         logger.warning(f"HTTP Exception: {http_error.detail}")
-        raise
+        raise http_error
     except Exception as e:
         logger.error(f"Unexpected error while creating major: {e}")
         await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An unexpected error occurred while creating the major.",
+        raise format_http_exception(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            message="An unexpected error occurred while creating the major.",
+            details=str(e),
         )
+

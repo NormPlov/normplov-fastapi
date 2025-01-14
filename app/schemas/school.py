@@ -104,7 +104,7 @@ class UpdateSchoolRequest(BaseModel):
     def validate_type(cls, v):
         if isinstance(v, str):
             try:
-                return SchoolType(v).value  # Convert to Enum and return its value
+                return SchoolType(v).value
             except ValueError:
                 raise ValueError(f"Invalid school type: {v}. Allowed values: {[e.value for e in SchoolType]}")
         elif isinstance(v, SchoolType):

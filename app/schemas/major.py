@@ -22,7 +22,6 @@ class CareerResponse(BaseModel):
 
 class MajorCareersResponse(BaseModel):
     major_uuid: str = Field(...)
-    careers: List[CareerResponse] = Field(...)
 
 
 class DegreeTypeEnum(str, Enum):
@@ -39,7 +38,6 @@ class CreateMajorRequest(BaseModel):
     duration_years: Optional[int] = Field(None)
     degree: DegreeTypeEnum = Field(...)
     faculty_uuid: UUID4 = Field(...)
-    career_uuids: List[str] = Field(...)
 
 
 class MajorResponse(BaseModel):
