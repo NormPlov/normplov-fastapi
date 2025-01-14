@@ -122,6 +122,7 @@ async def get_or_create_user(db: AsyncSession, user_info: dict) -> dict:
         raw_password = generate_random_password()
         hashed_password = hash_password(raw_password)
         user = User(
+
             uuid=str(uuid.uuid4()),
             username=name,
             email=email,
@@ -155,6 +156,7 @@ async def get_or_create_user(db: AsyncSession, user_info: dict) -> dict:
     user_roles = [user_role.role.name for user_role in user.roles if user_role.role] if user.roles else []
 
     return {
+        "id": user.id,
         "uuid": user.uuid,
         "username": user.username,
         "email": user.email,

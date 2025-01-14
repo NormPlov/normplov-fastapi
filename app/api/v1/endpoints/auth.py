@@ -245,16 +245,25 @@ async def google_callback(
         await db.commit()
 
         response_payload = {
-            "accessToken": access_token,
+            "date": datetime.utcnow().strftime("%Y-%m-%d"),  # Current date in YYYY-MM-DD format
+            "status": 200,
             "payload": {
                 "uuid": user["uuid"],
                 "username": user["username"],
                 "email": user["email"],
                 "avatar": user["avatar"],
+                "address": user.get("address", None),
+                "phone_number": user.get("phone_number", None),
+                "bio": user.get("bio", None),
+                "gender": user.get("gender", None),
+                "date_of_birth": user.get("date_of_birth", None),
                 "roles": user["roles"],
+                "is_deleted": user.get("is_deleted", False),
+                "is_active": user.get("is_active", True),
+                "is_verified": user.get("is_verified", True),
+                "registered_at": user.get("registered_at", None),
             },
-            "tokenType": "bearer",
-            "message": "Google authentication successful"
+            "message": "User information retrieved successfully."
         }
 
         response = JSONResponse(content=response_payload)
