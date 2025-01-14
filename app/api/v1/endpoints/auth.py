@@ -237,7 +237,7 @@ async def google_callback(
         refresh_token = create_refresh_token(data={"sub": user["uuid"]})
 
         refresh_token_entry = RefreshToken(
-            user_id=user["uuid"],
+            user_id=user["id"],
             token=refresh_token,
             expires_at=datetime.utcnow() + timedelta(days=7)
         )
