@@ -166,7 +166,7 @@ async def google_callback(
             "message": "Google authentication successful",
             "date": datetime.utcnow().isoformat(),
             "payload": {
-                "user": user_response["payload"],
+                "payload": user_response["payload"],
             },
         }
 
