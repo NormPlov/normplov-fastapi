@@ -148,7 +148,7 @@ async def google_callback(
         logger.info(f"Decoded user info: {user_info}")
 
         user_response = await get_or_create_user(db, user_info)
-        user = user_response["user"]
+        user = user_response["payload"]
 
         access_token = create_access_token({"sub": user.uuid})
         refresh_token = create_refresh_token({"sub": user.uuid})
@@ -165,7 +165,7 @@ async def google_callback(
             "status": 200,
             "message": "Google authentication successful",
             "date": datetime.utcnow().isoformat(),
-            "payload": {
+            "user": {
                 "payload": user_response["payload"],
             },
         }
