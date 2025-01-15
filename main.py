@@ -76,7 +76,11 @@ app.add_middleware(
         "https://normplov-admin.vercel.app/",
         "https://normplov-admin.vercel.app",
         "https://normplov-admin-git-main-seameys-projects.vercel.app",
-        "https://normplov-admin-git-main-seameys-projects.vercel.app/"
+        "https://normplov-admin-git-main-seameys-projects.vercel.app/",
+
+        # Allow UI Production CORS Origin
+        "https://normplov.istad.co/",
+        "https://normplov.istad.co"
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],

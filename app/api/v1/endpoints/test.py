@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import UUID4
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi.responses import HTMLResponse, StreamingResponse
 from app.core.config import settings
 from app.dependencies import get_current_user_data
 from app.models import User
@@ -17,7 +18,7 @@ from app.services.test import (
     delete_test,
     generate_shareable_link,
     get_user_responses,
-    fetch_user_tests_for_current_user, get_public_responses
+    fetch_user_tests_for_current_user, get_public_responses, render_html_for_test, html_to_image
 )
 
 test_router = APIRouter()
@@ -113,6 +114,54 @@ async def get_all_tests_route(
         )
 
 
+@test_router.get(
+    "/{test_uuid}/image",
+    summary="Get test details as an image",
+    tags=["Test Results"],
+    response_class=StreamingResponse
+)
+async def get_test_image(
+        test_uuid: str,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user_data)
+):
+    try:
+        # Fetch user test response
+        user_responses = await get_user_responses(db, current_user.id, test_uuid)
+        if not user_responses:
+            raise HTTPException(
+                status_code=404,
+                detail="No test details found for this user."
+            )
+
+        test_data = user_responses[0]
+        if test_data["test_name"] == "Personality Test":
+            logger.info(f"Rendering personality test details for test_uuid: {test_uuid}")
+            html_content = render_html_for_test(test_data)  # Removed 'await'
+            image_stream = await html_to_image(html_content)
+
+            return StreamingResponse(
+                content=image_stream,
+                media_type="image/png",
+                headers={"Content-Disposition": "inline; filename=personality_test.png"}
+            )
+
+        logger.info(f"Test details for test_uuid {test_uuid} are not of type 'Personality Test'.")
+        raise HTTPException(
+            status_code=400,
+            detail="Test type is not supported for image generation."
+        )
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Unexpected error while processing test detail for image: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=500,
+            detail="An error occurred while generating the test image."
+        )
+
+
+# This code is stable version to load user test details
 @test_router.get(
     "/{test_uuid}",
     summary="Get user responses",

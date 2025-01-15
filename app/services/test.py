@@ -1,10 +1,14 @@
 import logging
+import traceback
 import uuid
 import json
 
 from uuid import UUID
 from typing import List, Dict, Any, Optional, Tuple
+from io import BytesIO
 from pydantic import UUID4
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import joinedload, selectinload
 from datetime import date
@@ -17,8 +21,13 @@ from fastapi import HTTPException, status
 from app.schemas.payload import BaseResponse
 from app.schemas.test import UserTestResponseSchema, PaginationMetadata, UserTestResponse
 from app.utils.pagination import paginate_results
+from fastapi.templating import Jinja2Templates
 
 logger = logging.getLogger(__name__)
+
+
+# Configure Jinja2 templates
+templates = Jinja2Templates(directory="templates")
 
 
 async def get_public_responses(
@@ -176,6 +185,48 @@ async def get_user_responses(
     except Exception as e:
         logger.error(f"Error fetching user responses: {e}")
         raise HTTPException(status_code=500, detail="An error occurred while fetching user responses.")
+
+
+async def render_html_for_test(test_name: str, test_data: dict) -> str:
+    try:
+        template_map = {
+            "Personality Test": "personality_test.html",
+            "Skill Test": "skill_test.html",
+            "Interest Test": "interest_test.html",
+            "Learning Style Test": "learning_style_test.html",
+            "Value Test": "value_test.html",
+            "All Tests": "all_test.html"
+        }
+
+        # Get the template file for the test
+        template_file = template_map.get(test_name)
+        if not template_file:
+            raise ValueError(f"No template found for test_name: {test_name}")
+
+        return templates.TemplateResponse(template_file, {"test_data": test_data}).body.decode("utf-8")
+    except Exception as e:
+        raise Exception(f"Error rendering template: {traceback.format_exc()}")
+
+
+async def html_to_image(html_content: str) -> BytesIO:
+
+    options = Options()
+    options.add_argument('--headless')
+    options.add_argument('--disable-gpu')
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-dev-shm-usage')
+    options.add_argument('--window-size=1024x768')
+
+    try:
+        with webdriver.Chrome(options=options) as driver:
+            driver.get("data:text/html;charset=utf-8," + html_content)
+            driver.implicitly_wait(2)
+
+            screenshot = driver.get_screenshot_as_png()
+
+        return BytesIO(screenshot)
+    except Exception as e:
+        raise Exception(f"Error while generating image: {traceback.format_exc()}")
 
 
 async def generate_shareable_link(
