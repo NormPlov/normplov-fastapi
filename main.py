@@ -71,6 +71,8 @@ app.add_middleware(
         "http://normplov-api.istad.co",
         "https://dev-normplov.shinoshike.studio",
         "https://deploy-norm-plov-v4.vercel.app",
+        "https://normplov-admin-o8ybbvzpa-seameys-projects.vercel.app/"
+        "https://normplov-admin-o8ybbvzpa-seameys-projects.vercel.app"
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
