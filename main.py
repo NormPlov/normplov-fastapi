@@ -68,6 +68,7 @@ app.add_middleware(
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "https://normplov-api.shinoshike.studio",
+        "http://normplov-api.istad.co",
         "https://dev-normplov.shinoshike.studio",
         "https://deploy-norm-plov-v4.vercel.app",
     ],

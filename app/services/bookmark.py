@@ -47,6 +47,7 @@ async def unbookmark_job_service(current_user: User, bookmark_uuid: uuid.UUID, d
 
 async def get_user_bookmarked_jobs_service(current_user: User, db: AsyncSession):
     try:
+        # Query to fetch jobs bookmarked by the user
         stmt = (
             select(Job, Bookmark)
             .join(Bookmark, Bookmark.job_id == Job.uuid)
@@ -60,9 +61,10 @@ async def get_user_bookmarked_jobs_service(current_user: User, db: AsyncSession)
         bookmarked_jobs = result.fetchall()
 
         if not bookmarked_jobs:
-            raise HTTPException(
+            raise format_http_exception(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="No bookmarked jobs found for this user."
+                message="📂 No bookmarked jobs found!",
+                details="It seems you have not bookmarked any jobs yet. Start exploring and bookmark your favorite jobs.",
             )
 
         job_list = [
@@ -83,9 +85,10 @@ async def get_user_bookmarked_jobs_service(current_user: User, db: AsyncSession)
     except HTTPException as e:
         raise e
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An unexpected error occurred: {str(e)}"
+        raise format_http_exception(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            message="⚠️ Oops! Something went wrong while retrieving your bookmarked jobs.",
+            details=str(e),
         )
 
 
