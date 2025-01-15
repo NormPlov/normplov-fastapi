@@ -7,6 +7,7 @@ from sqlalchemy.future import select
 from app.exceptions.formatters import format_http_exception
 from app.models import Job, Bookmark, User
 from app.schemas.job import CustomJobListingResponse
+from app.utils.pagination import paginate_results
 
 
 async def unbookmark_job_service(current_user: User, bookmark_uuid: uuid.UUID, db: AsyncSession) -> dict:
@@ -45,7 +46,9 @@ async def unbookmark_job_service(current_user: User, bookmark_uuid: uuid.UUID, d
         )
 
 
-async def get_user_bookmarked_jobs_service(current_user: User, db: AsyncSession):
+async def get_user_bookmarked_jobs_service(
+    current_user: User, db: AsyncSession, page: int, page_size: int
+):
     try:
         # Query to fetch jobs bookmarked by the user
         stmt = (
@@ -81,7 +84,9 @@ async def get_user_bookmarked_jobs_service(current_user: User, db: AsyncSession)
             for job, bookmark in bookmarked_jobs
         ]
 
-        return job_list
+        # Paginate results
+        paginated_jobs = paginate_results(job_list, page, page_size)
+        return paginated_jobs
     except HTTPException as e:
         raise e
     except Exception as e:

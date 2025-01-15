@@ -27,9 +27,13 @@ async def unbookmark_job_route(
 async def get_bookmarked_jobs(
     current_user: User = Depends(get_current_user_data),
     db: AsyncSession = Depends(get_db),
+    page: int = Query(1, description="Page number for pagination", ge=1),
+    page_size: int = Query(10, description="Number of items per page", ge=1, le=100),
 ):
     try:
-        bookmarked_jobs = await get_user_bookmarked_jobs_service(current_user, db)
+        bookmarked_jobs = await get_user_bookmarked_jobs_service(
+            current_user, db, page, page_size
+        )
 
         return BaseResponse(
             date=datetime.utcnow().strftime("%d-%B-%Y"),
@@ -44,7 +48,7 @@ async def get_bookmarked_jobs(
                 date=datetime.utcnow().strftime("%d-%B-%Y"),
                 status=status.HTTP_404_NOT_FOUND,
                 message=e.detail["message"],
-                payload={"items": []},
+                payload={"items": [], "metadata": {"page": page, "page_size": page_size, "total_items": 0, "total_pages": 0}},
             )
         # Other exceptions with formatted error messages
         raise format_http_exception(
