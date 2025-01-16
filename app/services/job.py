@@ -39,7 +39,7 @@ async def get_trending_jobs(db: AsyncSession) -> dict:
         trending_jobs = {}
 
         for row in category_data:
-            month_str = row.month.strftime("%b")
+            month_str = row.month.strftime("%b %Y")
             label = row.label.strip()
             count = row.count
 
