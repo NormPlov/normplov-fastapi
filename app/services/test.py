@@ -13,13 +13,15 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import joinedload, selectinload
 from datetime import date
 from app.exceptions.formatters import format_http_exception
-from app.models import UserResponse, UserTest, User, AssessmentType
+from app.models import UserResponse, UserTest, User, AssessmentType, Career, CareerCategoryLink, CareerCategory, \
+    CareerCategoryResponsibility, Major, CareerMajor, School, SchoolMajor
 from datetime import datetime
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status
 from app.schemas.payload import BaseResponse
 from app.schemas.test import UserTestResponseSchema, PaginationMetadata, UserTestResponse
+from app.schemas.test_career import CareerData, CategoryWithResponsibilities, MajorData
 from app.utils.pagination import paginate_results
 from fastapi.templating import Jinja2Templates
 
@@ -28,6 +30,89 @@ logger = logging.getLogger(__name__)
 
 # Configure Jinja2 templates
 templates = Jinja2Templates(directory="templates")
+
+
+async def fetch_careers_by_test_uuid(
+    db: AsyncSession,
+    test_uuid: str
+) -> List[CareerData]:
+
+    # validate the test uuid
+    test_stmt = select(UserTest).where(UserTest.uuid == test_uuid)
+    test_result = await db.execute(test_stmt)
+    user_test = test_result.scalars().first()
+    if not user_test:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No UserTest found with UUID {test_uuid}"
+        )
+
+    careers_stmt = select(Career).where(Career.is_deleted == False)
+    careers_result = await db.execute(careers_stmt)
+    careers = careers_result.scalars().all()
+
+    career_data_list: List[CareerData] = []
+
+    for career in careers:
+        category_links_stmt = select(CareerCategoryLink).where(
+            CareerCategoryLink.career_id == career.id
+        )
+        category_links_result = await db.execute(category_links_stmt)
+        career_category_links = category_links_result.scalars().all()
+
+        categories: List[CategoryWithResponsibilities] = []
+        for link in career_category_links:
+            category_stmt = select(CareerCategory).where(CareerCategory.id == link.career_category_id)
+            category_result = await db.execute(category_stmt)
+            career_category = category_result.scalars().first()
+
+            if career_category:
+                responsibilities_stmt = select(CareerCategoryResponsibility).where(
+                    CareerCategoryResponsibility.career_category_id == career_category.id
+                )
+                responsibilities_result = await db.execute(responsibilities_stmt)
+                responsibilities_entities = responsibilities_result.scalars().all()
+
+                category_info = CategoryWithResponsibilities(
+                    category_name=career_category.name,
+                    responsibilities=[r.description for r in responsibilities_entities]
+                )
+                categories.append(category_info)
+
+        # 2b. Fetch majors
+        majors_stmt = (
+            select(Major)
+            .join(CareerMajor, CareerMajor.major_id == Major.id)
+            .where(CareerMajor.career_id == career.id, CareerMajor.is_deleted == False)
+        )
+        majors_result = await db.execute(majors_stmt)
+        majors = majors_result.scalars().all()
+
+        majors_list: List[MajorData] = []
+        for major in majors:
+            schools_stmt = (
+                select(School)
+                .join(SchoolMajor, SchoolMajor.school_id == School.id)
+                .where(SchoolMajor.major_id == major.id, SchoolMajor.is_deleted == False)
+            )
+            schools_result = await db.execute(schools_stmt)
+            schools = schools_result.scalars().all()
+
+            majors_list.append(MajorData(
+                major_name=major.name,
+                schools=[school.en_name for school in schools]
+            ))
+
+        # 2c. Compile final CareerData
+        career_info = CareerData(
+            career_name=career.name,
+            description=career.description,
+            categories=categories,
+            majors=majors_list
+        )
+        career_data_list.append(career_info)
+
+    return career_data_list
 
 
 async def get_public_responses(

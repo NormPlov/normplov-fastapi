@@ -1,6 +1,7 @@
 import httpx
 from app.core.config import settings
 
+
 async def send_telegram_message(message: str):
     url = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {

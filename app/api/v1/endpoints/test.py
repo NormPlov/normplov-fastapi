@@ -1,7 +1,7 @@
 import logging
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import UUID4
 from sqlalchemy.exc import SQLAlchemyError
@@ -13,16 +13,48 @@ from app.models import User
 from app.schemas.payload import BaseResponse
 from app.schemas.test import PaginatedUserTestsWithUsersResponse, PaginatedUserTestsResponse
 from app.core.database import get_db
+from app.schemas.test_career import CareerData
 from app.services.user import fetch_all_tests
 from app.services.test import (
     delete_test,
     generate_shareable_link,
     get_user_responses,
-    fetch_user_tests_for_current_user, get_public_responses, render_html_for_test, html_to_image
+    fetch_user_tests_for_current_user, get_public_responses, render_html_for_test, html_to_image,
+    fetch_careers_by_test_uuid
 )
 
 test_router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+@test_router.get(
+    "/careers-data/{test_uuid}",
+    summary="Load careers data by test UUID",
+    response_model=BaseResponse,
+    tags=["Careers"],
+)
+async def get_careers_data_by_test_uuid(
+    test_uuid: str,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        career_data_list: List[CareerData] = await fetch_careers_by_test_uuid(db, test_uuid)
+
+        return BaseResponse(
+            date=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            status=200,
+            message=f"Careers data loaded successfully for test_uuid={test_uuid}.",
+            payload=career_data_list
+        )
+
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.exception("Error while fetching careers data by test_uuid.")
+        raise HTTPException(
+            status_code=500,
+            detail="An error occurred while fetching careers data."
+        )
 
 
 @test_router.get(
@@ -137,7 +169,7 @@ async def get_test_image(
         test_data = user_responses[0]
         if test_data["test_name"] == "Personality Test":
             logger.info(f"Rendering personality test details for test_uuid: {test_uuid}")
-            html_content = render_html_for_test(test_data)  # Removed 'await'
+            html_content = render_html_for_test(test_data)
             image_stream = await html_to_image(html_content)
 
             return StreamingResponse(

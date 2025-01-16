@@ -7,11 +7,11 @@ from urllib.parse import quote_plus
 
 
 class Settings(BaseSettings):
+    # Frontend URL Configuration
+    FRONTEND_URL: str = Field(default="http://localhost:3000", env="FRONTEND_URL")
+
     # Environment Configuration
     ENVIRONMENT: str = Field(default="development", env="ENVIRONMENT")
-
-    # UI Base URL
-    UI_BASE_URL: str = os.getenv("UI_BASE_URL", "https://dev-normplov.shinoshike.studio")
 
     # File Upload Configuration
     ALLOWED_EXTENSIONS: List[str] = Field(..., env="ALLOWED_EXTENSIONS")
@@ -44,7 +44,6 @@ class Settings(BaseSettings):
     # Login with Google
     GOOGLE_CLIENT_ID: str = Field(..., env="GOOGLE_CLIENT_ID")
     GOOGLE_CLIENT_SECRET: str = Field(..., env="GOOGLE_CLIENT_SECRET")
-    FRONTEND_URL: str = Field(default="http://localhost:3000", env="FRONTEND_URL")
 
     # Login with Facebook
     FACEBOOK_CLIENT_ID: str = Field(..., env="FACEBOOK_CLIENT_ID")

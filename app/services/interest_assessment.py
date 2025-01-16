@@ -10,7 +10,8 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from fastapi import HTTPException
-from app.models import UserTest, School, SchoolMajor, Major, CareerMajor, CareerHollandCode
+from app.models import UserTest, School, SchoolMajor, Major, CareerMajor, CareerHollandCode, \
+    CareerCategoryResponsibility, CareerCategory, CareerCategoryLink
 from app.models.user_response import UserResponse
 from app.models.user_assessment_score import UserAssessmentScore
 from app.models.dimension import Dimension
@@ -90,6 +91,7 @@ async def process_interest_assessment(
 
         career_data = []
         for career in career_paths:
+            # Fetch majors for the career
             career_majors_stmt = (
                 select(Major)
                 .join(CareerMajor, CareerMajor.major_id == Major.id)
@@ -112,9 +114,40 @@ async def process_interest_assessment(
                     "schools": [school.en_name for school in schools]
                 })
 
+            # Fetch categories for the career
+            category_links_stmt = select(CareerCategoryLink).where(
+                CareerCategoryLink.career_id == career.id
+            )
+            category_links_result = await db.execute(category_links_stmt)
+            career_category_links = category_links_result.scalars().all()
+
+            categories = []
+            for link in career_category_links:
+                category_stmt = select(CareerCategory).where(CareerCategory.id == link.career_category_id)
+                category_result = await db.execute(category_stmt)
+                career_category = category_result.scalars().first()
+
+                if career_category:
+                    category_info = {
+                        "category_name": career_category.name,
+                        "responsibilities": [],
+                    }
+
+                    # Fetch responsibilities for the category
+                    responsibilities_stmt = (
+                        select(CareerCategoryResponsibility)
+                        .where(CareerCategoryResponsibility.career_category_id == career_category.id)
+                    )
+                    responsibilities_result = await db.execute(responsibilities_stmt)
+                    responsibilities = responsibilities_result.scalars().all()
+                    category_info["responsibilities"] = [r.description for r in responsibilities]
+
+                    categories.append(category_info)
+
             career_data.append({
                 "career_name": career.name,
                 "description": career.description,
+                "categories": categories,
                 "majors": majors_with_schools
             })
 

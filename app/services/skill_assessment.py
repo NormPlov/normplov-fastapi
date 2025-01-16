@@ -17,11 +17,12 @@ from app.models import (
     UserTest,
     CareerMajor,
     Major,
-    SchoolMajor, Career
+    SchoolMajor, Career, CareerCategoryLink, CareerCategory
 )
 from app.models.dimension import Dimension
 from app.services.test import create_user_test
-from app.schemas.skill_assessment import SkillAssessmentInput, SkillAssessmentResponse, CareerWithMajors, MajorWithSchools
+from app.schemas.skill_assessment import SkillAssessmentResponse, CategoryWithResponsibilities, CareerData, \
+    MajorWithSchools
 from ml_models.model_loader import load_skill_model
 
 logger = logging.getLogger(__name__)
@@ -143,13 +144,66 @@ async def predict_skills(
                         "description": skill_category.category_description,
                     }
 
-        if top_category:
+        # if top_category:
+        #
+        #     dimension_query = (
+        #         select(DimensionCareer)
+        #         .options(
+        #             joinedload(DimensionCareer.career).joinedload(Career.majors).joinedload(
+        #                 CareerMajor.major).joinedload(Major.school_majors).joinedload(SchoolMajor.school)
+        #         )
+        #         .join(Dimension)
+        #         .join(SkillCategory)
+        #         .where(SkillCategory.category_name == top_category["name"])
+        #         .filter(DimensionCareer.is_deleted == False)
+        #     )
+        #
+        #     result = await db.execute(dimension_query)
+        #     dimension_careers = result.unique().scalars().all()
+        #
+        #     if not dimension_careers:
+        #         logger.warning(f"No careers found for top category: {top_category['name']}")
+        #     else:
+        #         logger.debug(f"Careers found: {[dc.career.name for dc in dimension_careers]}")
+        #
+        #     suggested_careers = []
+        #     added_career_names = set()  # Track unique career names
+        #
+        #     for dc in dimension_careers:
+        #         career = dc.career
+        #         majors = [
+        #             {
+        #                 "major_name": cm.major.name,
+        #                 "schools": [
+        #                     sm.school.en_name for sm in cm.major.school_majors
+        #                 ],
+        #             }
+        #             for cm in career.majors
+        #         ]
+        #
+        #         # Check if the career name is already added
+        #         if career.name not in added_career_names:
+        #             added_career_names.add(career.name)  # Mark this career name as added
+        #             suggested_careers.append(
+        #                 {
+        #                     "career_name": career.name,
+        #                     "description": career.description,
+        #                     "majors": majors,
+        #                 }
+        #             )
+        #     else:
+        #         if not suggested_careers:
+        #             logger.warning("No top category calculated.")
 
+        career_path = []
+        if top_category:
             dimension_query = (
                 select(DimensionCareer)
                 .options(
                     joinedload(DimensionCareer.career).joinedload(Career.majors).joinedload(
-                        CareerMajor.major).joinedload(Major.school_majors).joinedload(SchoolMajor.school)
+                        CareerMajor.major).joinedload(Major.school_majors).joinedload(SchoolMajor.school),
+                    joinedload(DimensionCareer.career).joinedload(Career.career_category_links).joinedload(
+                        CareerCategoryLink.career_category).joinedload(CareerCategory.responsibilities)
                 )
                 .join(Dimension)
                 .join(SkillCategory)
@@ -160,39 +214,30 @@ async def predict_skills(
             result = await db.execute(dimension_query)
             dimension_careers = result.unique().scalars().all()
 
-            if not dimension_careers:
-                logger.warning(f"No careers found for top category: {top_category['name']}")
-            else:
-                logger.debug(f"Careers found: {[dc.career.name for dc in dimension_careers]}")
-
-            suggested_careers = []
-            added_career_names = set()  # Track unique career names
-
             for dc in dimension_careers:
                 career = dc.career
                 majors = [
-                    {
-                        "major_name": cm.major.name,
-                        "schools": [
-                            sm.school.en_name for sm in cm.major.school_majors
-                        ],
-                    }
-                    for cm in career.majors
+                    MajorWithSchools(
+                        major_name=cm.major.name,
+                        schools=[sm.school.en_name for sm in cm.major.school_majors if sm.school and not sm.is_deleted]
+                    )
+                    for cm in career.majors if not cm.is_deleted
                 ]
 
-                # Check if the career name is already added
-                if career.name not in added_career_names:
-                    added_career_names.add(career.name)  # Mark this career name as added
-                    suggested_careers.append(
-                        {
-                            "career_name": career.name,
-                            "description": career.description,
-                            "majors": majors,
-                        }
+                categories = [
+                    CategoryWithResponsibilities(
+                        category_name=link.career_category.name,
+                        responsibilities=[resp.description for resp in link.career_category.responsibilities]
                     )
-            else:
-                if not suggested_careers:
-                    logger.warning("No top category calculated.")
+                    for link in career.career_category_links
+                ]
+
+                career_path.append(CareerData(
+                    career_name=career.name,
+                    description=career.description,
+                    categories=categories,
+                    majors=majors
+                ))
 
         response = SkillAssessmentResponse(
             user_uuid=user_uuid,
@@ -201,7 +246,8 @@ async def predict_skills(
             top_category=top_category,
             category_percentages=overall_category_percentages,
             skills_grouped=skills_by_levels,
-            strong_careers=suggested_careers,
+            # strong_careers=suggested_careers,
+            strong_careers=career_path,
         )
 
         user_response = UserResponse(

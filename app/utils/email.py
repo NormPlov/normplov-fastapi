@@ -15,7 +15,7 @@ env = Environment(loader=FileSystemLoader(os.path.join(os.path.dirname(__file__)
 
 async def send_thank_you_email(email: str, username: str):
     template = env.get_template('thank_you_feedback.html')
-    logo_url = f"{settings.UI_BASE_URL}/uploads/682bd0d2-6c9a-4e0f-b5af-07b19aa96ce8.png"
+    logo_url = f"{settings.FRONTEND_URL}/uploads/682bd0d2-6c9a-4e0f-b5af-07b19aa96ce8.png"
     current_year = datetime.utcnow().year
 
     html_content = template.render(

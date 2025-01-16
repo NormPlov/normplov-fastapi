@@ -15,12 +15,12 @@ from app.models.user_response import UserResponse
 from app.models.user_assessment_score import UserAssessmentScore
 from app.models.assessment_type import AssessmentType
 from app.models import UserTest, School, SchoolMajor, CareerMajor, Major, CareerValueCategory, \
-    ValueCategoryKeyImprovement
+    ValueCategoryKeyImprovement, CareerCategoryResponsibility, CareerCategoryLink, CareerCategory
 from app.models.dimension import Dimension
 from app.schemas.value_assessment import (
     ValueAssessmentResponse,
     ChartData,
-    ValueCategoryDetails,
+    ValueCategoryDetails, CareerData, CategoryWithResponsibilities, MajorData,
 )
 from app.services.test import create_user_test
 from ml_models.model_loader import load_feature_score_models, load_target_value_model
@@ -52,7 +52,7 @@ expected_features = [
 
 def normalize_scores(scores_df, target_min=1, target_max=10):
     min_score, max_score = scores_df.min().min(), scores_df.max().max()
-    logger.debug(f"Normalizing scores with min: {min_score}, max: {max_score}")
+    logger.debug(f"normalizing scores with min: {min_score}, max: {max_score}")
 
     if max_score == min_score:
         return scores_df.applymap(lambda _: (target_min + target_max) / 2)
@@ -168,6 +168,46 @@ async def process_value_assessment(
                 )
             )
 
+            # careers_query = (
+            #     select(Career)
+            #     .join(CareerValueCategory, CareerValueCategory.career_id == Career.id)
+            #     .where(CareerValueCategory.value_category_id == value_category.id)
+            #     .distinct()
+            # )
+            # careers_result = await db.execute(careers_query)
+            # careers = careers_result.scalars().all()
+            #
+            # for career in careers:
+            #     career_majors_stmt = (
+            #         select(Major)
+            #         .join(CareerMajor, CareerMajor.major_id == Major.id)
+            #         .where(CareerMajor.career_id == career.id, CareerMajor.is_deleted == False)
+            #     )
+            #     result = await db.execute(career_majors_stmt)
+            #     majors = result.scalars().all()
+            #
+            #     majors_with_schools = []
+            #     for major in majors:
+            #         schools_stmt = (
+            #             select(School)
+            #             .join(SchoolMajor, SchoolMajor.school_id == School.id)
+            #             .where(SchoolMajor.major_id == major.id, SchoolMajor.is_deleted == False)
+            #         )
+            #         result = await db.execute(schools_stmt)
+            #         schools = result.scalars().all()
+            #         majors_with_schools.append({
+            #             "major_name": major.name,
+            #             "schools": [school.en_name for school in schools]
+            #         })
+            #
+            #     career_recommendations.append({
+            #         "career_name": career.name,
+            #         "description": career.description,
+            #         "majors": majors_with_schools
+            #     })
+
+
+            # Query all of the career that the model predict getting from the value category
             careers_query = (
                 select(Career)
                 .join(CareerValueCategory, CareerValueCategory.career_id == Career.id)
@@ -195,18 +235,42 @@ async def process_value_assessment(
                     )
                     result = await db.execute(schools_stmt)
                     schools = result.scalars().all()
-                    majors_with_schools.append({
-                        "major_name": major.name,
-                        "schools": [school.en_name for school in schools]
-                    })
+                    majors_with_schools.append(MajorData(
+                        major_name=major.name,
+                        schools=[school.en_name for school in schools]
+                    ))
 
-                career_recommendations.append({
-                    "career_name": career.name,
-                    "description": career.description,
-                    "majors": majors_with_schools
-                })
+                categories_query = (
+                    select(CareerCategory)
+                    .join(CareerCategoryLink, CareerCategoryLink.career_category_id == CareerCategory.id)
+                    .where(CareerCategoryLink.career_id == career.id)
+                )
+                categories_result = await db.execute(categories_query)
+                categories = categories_result.scalars().all()
 
-        career_recommendations = list({career["career_name"]: career for career in career_recommendations}.values())
+                categories_with_responsibilities = []
+                for category in categories:
+                    responsibilities_query = (
+                        select(CareerCategoryResponsibility.description)
+                        .where(CareerCategoryResponsibility.career_category_id == category.id)
+                    )
+                    responsibilities_result = await db.execute(responsibilities_query)
+                    responsibilities = responsibilities_result.scalars().all()
+
+                    categories_with_responsibilities.append(CategoryWithResponsibilities(
+                        category_name=category.name,
+                        responsibilities=responsibilities
+                    ))
+
+                career_recommendations.append(CareerData(
+                    career_name=career.name,
+                    description=career.description,
+                    categories=categories_with_responsibilities,
+                    majors=majors_with_schools
+                ))
+
+        career_recommendations = list({career.career_name: career for career in career_recommendations}.values())
+        career_recommendations = [career for career in career_recommendations if isinstance(career, CareerData)]
 
         db.add_all(assessment_scores)
 

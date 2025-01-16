@@ -6,7 +6,10 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from fastapi import HTTPException
-from app.models import AssessmentType, Career, CareerMajor, SchoolMajor, School, Major, CareerPersonalityType, UserTest
+from sqlalchemy.orm import joinedload
+
+from app.models import AssessmentType, Career, CareerMajor, SchoolMajor, School, Major, CareerPersonalityType, UserTest, \
+    CareerCategory, CareerCategoryLink
 from app.models.user_response import UserResponse
 from app.models.user_assessment_score import UserAssessmentScore
 from app.models.dimension import Dimension
@@ -19,7 +22,7 @@ from app.schemas.personality_assessment import (
     PersonalityAssessmentResponse,
     PersonalityTypeDetails,
     DimensionScore,
-    PersonalityTraits
+    PersonalityTraits, CategoryWithResponsibilities, MajorData, CareerData
 )
 from ml_models.model_loader import load_personality_models
 import logging
@@ -119,44 +122,95 @@ async def process_personality_assessment(
         weaknesses_result = await db.execute(weaknesses_query)
         weaknesses = [w.weakness for w in weaknesses_result.scalars().all()]
 
+        # career_query = (
+        #     select(Career)
+        #     .join(CareerPersonalityType, CareerPersonalityType.career_id == Career.id)
+        #     .where(CareerPersonalityType.personality_type_id == personality_details.id)
+        #     .distinct()
+        # )
+        # career_result = await db.execute(career_query)
+        # careers = career_result.scalars().all()
+        #
+        # career_data = []
+        # for career in careers:
+        #     career_majors_stmt = (
+        #         select(Major)
+        #         .join(CareerMajor, CareerMajor.major_id == Major.id)
+        #         .where(CareerMajor.career_id == career.id, CareerMajor.is_deleted == False)
+        #     )
+        #     result = await db.execute(career_majors_stmt)
+        #     majors = result.scalars().all()
+        #
+        #     majors_with_schools = []
+        #     for major in majors:
+        #         schools_stmt = (
+        #             select(School)
+        #             .join(SchoolMajor, SchoolMajor.school_id == School.id)
+        #             .where(SchoolMajor.major_id == major.id, SchoolMajor.is_deleted == False)
+        #         )
+        #         result = await db.execute(schools_stmt)
+        #         schools = result.scalars().all()
+        #         majors_with_schools.append({
+        #             "major_name": major.name,
+        #             "schools": [school.en_name for school in schools]
+        #         })
+        #
+        #     career_data.append({
+        #         "career_name": career.name,
+        #         "description": career.description,
+        #         "majors": majors_with_schools
+        #     })
+        # Update the career query and data processing
+        # Update the career query
         career_query = (
             select(Career)
+            .options(
+                joinedload(Career.career_category_links).joinedload(CareerCategoryLink.career_category).joinedload(
+                    CareerCategory.responsibilities),
+                joinedload(Career.majors).joinedload(CareerMajor.major).joinedload(Major.school_majors).joinedload(
+                    SchoolMajor.school)
+            )
             .join(CareerPersonalityType, CareerPersonalityType.career_id == Career.id)
             .where(CareerPersonalityType.personality_type_id == personality_details.id)
+            .where(Career.is_deleted == False)
             .distinct()
         )
         career_result = await db.execute(career_query)
-        careers = career_result.scalars().all()
+        careers = career_result.unique().scalars().all()
 
+        # Process career data
         career_data = []
         for career in careers:
-            career_majors_stmt = (
-                select(Major)
-                .join(CareerMajor, CareerMajor.major_id == Major.id)
-                .where(CareerMajor.career_id == career.id, CareerMajor.is_deleted == False)
-            )
-            result = await db.execute(career_majors_stmt)
-            majors = result.scalars().all()
+            categories = []
+            for link in career.career_category_links:
+                category = link.career_category
+                responsibilities = [resp.description for resp in category.responsibilities]
+                categories.append(CategoryWithResponsibilities(
+                    category_name=category.name,
+                    responsibilities=responsibilities
+                ))
 
             majors_with_schools = []
-            for major in majors:
-                schools_stmt = (
-                    select(School)
-                    .join(SchoolMajor, SchoolMajor.school_id == School.id)
-                    .where(SchoolMajor.major_id == major.id, SchoolMajor.is_deleted == False)
-                )
-                result = await db.execute(schools_stmt)
-                schools = result.scalars().all()
-                majors_with_schools.append({
-                    "major_name": major.name,
-                    "schools": [school.en_name for school in schools]
-                })
+            for career_major in career.majors:
+                if not career_major.is_deleted:
+                    major = career_major.major
+                    schools = []
+                    for sm in major.school_majors:
+                        if not sm.is_deleted and sm.school is not None and sm.school.en_name is not None:
+                            schools.append(sm.school.en_name)
 
-            career_data.append({
-                "career_name": career.name,
-                "description": career.description,
-                "majors": majors_with_schools
-            })
+                    if schools:  # Only add the major if it has associated schools
+                        majors_with_schools.append(MajorData(
+                            major_name=major.name,
+                            schools=schools
+                        ))
+
+            career_data.append(CareerData(
+                career_name=career.name,
+                description=career.description,
+                categories=categories,
+                majors=majors_with_schools
+            ))
 
         response = PersonalityAssessmentResponse(
             user_uuid=current_user.uuid,

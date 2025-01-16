@@ -26,9 +26,15 @@ class MajorWithSchools(BaseModel):
     schools: List[str]
 
 
+class CategoryWithResponsibilities(BaseModel):
+    category_name: str
+    responsibilities: List[str]
+
+
 class CareerWithMajors(BaseModel):
     career_name: str
     description: Optional[str] = None
+    categories: List[CategoryWithResponsibilities]
     majors: List[MajorWithSchools]
 
 
