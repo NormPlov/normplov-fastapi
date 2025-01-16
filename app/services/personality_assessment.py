@@ -206,6 +206,7 @@ async def process_personality_assessment(
                         ))
 
             career_data.append(CareerData(
+                career_uuid=str(career.uuid),
                 career_name=career.name,
                 description=career.description,
                 categories=categories,

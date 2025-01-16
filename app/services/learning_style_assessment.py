@@ -375,6 +375,7 @@ async def predict_learning_style(
 
                     # Step 4: Compile career information along with categories
                     career_info = {
+                        "career_uuid": str(career.career.uuid),
                         "career_name": career.career.name,
                         "description": career.career.description,
                         "categories": career_categories,

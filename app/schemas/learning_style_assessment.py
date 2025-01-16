@@ -31,7 +31,8 @@ class CategoryWithResponsibilities(BaseModel):
     responsibilities: List[str]
 
 
-class CareerWithMajors(BaseModel):
+class CareerData(BaseModel):
+    career_uuid: Optional[str] = None
     career_name: str
     description: Optional[str] = None
     categories: List[CategoryWithResponsibilities] = Field(default_factory=list)
@@ -66,4 +67,4 @@ class LearningStyleResponse(BaseModel):
     chart: LearningStyleChart
     dimensions: List[DimensionDetail]
     recommended_techniques: List[Technique]
-    related_careers: List[CareerWithMajors]
+    related_careers: List[CareerData]

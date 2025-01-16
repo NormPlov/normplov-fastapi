@@ -10,12 +10,13 @@ from sqlalchemy.orm import joinedload
 from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException
-from app.models import UserTest, AssessmentType, UserResponse, User, Career, School, Major, CareerMajor, SchoolMajor
+from app.models import UserTest, AssessmentType, UserResponse, User, Career, School, Major, CareerMajor, SchoolMajor, \
+    CareerCategoryResponsibility, CareerCategory, CareerCategoryLink
 from app.models.user_test_reference import UserTestReference
 from app.schemas.final_assessment import AllAssessmentsResponse, PredictCareersRequest
 from sqlalchemy.future import select
 from app.schemas.interest_assessment import InterestAssessmentResponse
-from app.schemas.learning_style_assessment import LearningStyleResponse, CareerWithMajors
+from app.schemas.learning_style_assessment import LearningStyleResponse
 from app.services.test import create_user_test
 from app.utils.prepare_model_input import prepare_model_input
 from ml_models.model_loader import load_career_recommendation_model
@@ -121,13 +122,13 @@ async def predict_careers_service(
         user_input = prepare_model_input(aggregated_response)
 
         # Load the training dataset to fit the model in server
-        dataset_path = "/app/datasets/train_testing.csv"
+        # dataset_path = "/app/datasets/train_testing.csv"
 
         # Load the training dataset to fit the model from local computer
-        # dataset_path = os.path.join(
-        #     os.getcwd(),
-        #     r"D:\CSTAD Scholarship Program\python for data analytics\NORMPLOV_PROJECT\normplov-fastapi\datasets\train_testing.csv",
-        # )
+        dataset_path = os.path.join(
+            os.getcwd(),
+            r"D:\CSTAD Scholarship Program\python for data analytics\NORMPLOV_PROJECT\normplov-fastapi\datasets\train_testing.csv",
+        )
 
         career_model = load_career_recommendation_model(dataset_path=dataset_path)
         model_features = career_model.get_feature_columns()
@@ -175,12 +176,37 @@ async def predict_careers_service(
                     "schools": schools,
                 })
 
-            career_responses.append({
-                "career_name": career_name,
-                "career_description": career.description,
-                "similarity": similarity,
-                "majors": majors_with_schools,
-            })
+                # Fetch related categories and responsibilities
+                stmt_categories = (
+                    select(CareerCategory)
+                    .join(CareerCategoryLink, CareerCategoryLink.career_category_id == CareerCategory.id)
+                    .where(CareerCategoryLink.career_id == career.id)
+                )
+                result_categories = await db.execute(stmt_categories)
+                categories = result_categories.scalars().all()
+
+                categories_with_responsibilities = []
+                for category in categories:
+                    responsibilities_stmt = (
+                        select(CareerCategoryResponsibility.description)
+                        .where(CareerCategoryResponsibility.career_category_id == category.id)
+                    )
+                    responsibilities_result = await db.execute(responsibilities_stmt)
+                    responsibilities = [resp for resp in responsibilities_result.scalars().all()]
+
+                    categories_with_responsibilities.append({
+                        "category_name": category.name,
+                        "responsibilities": responsibilities,
+                    })
+
+                career_responses.append({
+                    "career_uuid": str(career.uuid),
+                    "career_name": career_name,
+                    "description": career.description,
+                    "similarity": similarity,
+                    "categories": categories_with_responsibilities,
+                    "majors": majors_with_schools,
+                })
 
         assessment_type_id = await get_assessment_type_id("All Tests", db)
         user_test = await create_user_test(db, current_user.id, assessment_type_id)
@@ -334,7 +360,7 @@ async def get_aggregated_tests_service(
                                 for major in career.get("majors", [])
                             ]
                             strong_careers.append(
-                                CareerWithMajors(
+                                CareerData(
                                     career_name=career.get("career_name", "Unknown"),
                                     description=career.get("description", ""),
                                     majors=majors

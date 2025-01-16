@@ -233,6 +233,7 @@ async def predict_skills(
                 ]
 
                 career_path.append(CareerData(
+                    career_uuid=str(career.uuid),
                     career_name=career.name,
                     description=career.description,
                     categories=categories,

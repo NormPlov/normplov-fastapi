@@ -263,6 +263,7 @@ async def process_value_assessment(
                     ))
 
                 career_recommendations.append(CareerData(
+                    career_uuid=str(career.uuid),
                     career_name=career.name,
                     description=career.description,
                     categories=categories_with_responsibilities,

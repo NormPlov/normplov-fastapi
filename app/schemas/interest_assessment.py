@@ -28,6 +28,7 @@ class CategoryWithResponsibilities(BaseModel):
 
 
 class CareerData(BaseModel):
+    career_uuid: Optional[str] = None
     career_name: str
     description: Optional[str] = None
     categories: List[CategoryWithResponsibilities] = Field(default_factory=list)

@@ -145,6 +145,7 @@ async def process_interest_assessment(
                     categories.append(category_info)
 
             career_data.append({
+                "career_uuid": str(career.uuid),
                 "career_name": career.name,
                 "description": career.description,
                 "categories": categories,

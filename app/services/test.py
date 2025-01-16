@@ -13,8 +13,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import joinedload, selectinload
 from datetime import date
 from app.exceptions.formatters import format_http_exception
-from app.models import UserResponse, UserTest, User, AssessmentType, Career, CareerCategoryLink, CareerCategory, \
-    CareerCategoryResponsibility, Major, CareerMajor, School, SchoolMajor
+from app.models import UserResponse, UserTest, User, AssessmentType
 from datetime import datetime
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,11 +31,12 @@ logger = logging.getLogger(__name__)
 templates = Jinja2Templates(directory="templates")
 
 
-async def fetch_careers_from_user_response_by_test_uuid(
+async def fetch_specific_career_from_user_response_by_test_uuid(
     db: AsyncSession,
-    test_uuid: str
-) -> List[CareerData]:
-
+    test_uuid: str,
+    career_name: Optional[str] = None,
+    career_uuid: Optional[str] = None,
+) -> Optional[CareerData]:
     stmt = (
         select(UserResponse)
         .join(UserTest, UserResponse.user_test_id == UserTest.id)
@@ -53,58 +53,83 @@ async def fetch_careers_from_user_response_by_test_uuid(
             detail=f"No UserResponse found for test_uuid '{test_uuid}'"
         )
 
-    # Parse the JSON from user_response.response_data
     try:
         response_data = user_response.response_data
+        logger.debug("Response data from API: %s", response_data)
+
         if isinstance(response_data, str):
-            # If it's stored as a string in the DB, parse it
             response_data = json.loads(response_data)
-    except (json.JSONDecodeError, TypeError):
+
+    except (json.JSONDecodeError, TypeError) as e:
+        logger.exception("Failed to parse JSON response_data")
         raise HTTPException(
             status_code=400,
-            detail="Invalid or missing JSON in user_response.response_data."
+            detail=f"Invalid or malformed JSON in user_response.response_data: {str(e)}"
         )
 
-    # Extract "career_recommendations" from the JSON
-    career_recommendations = response_data.get("career_recommendations")
-    if not career_recommendations:
-        return []
+    # Look for career-related data in potential keys
+    career_keys = ["career_path", "career_recommendations", "related_careers", "strong_careers", "recommendations"]
+    career_recommendations = None
 
-    # convert to Pydantic List[CareerData]
-    career_data_list: List[CareerData] = []
+    for key in career_keys:
+        if key in response_data:
+            career_recommendations = response_data[key]
+            logger.debug("career_recommendations: %s", career_recommendations)
+            # If the key contains nested recommendations, extract them
+            if isinstance(career_recommendations, dict) and "recommendations" in career_recommendations:
+                career_recommendations = career_recommendations["recommendations"]
+            break
 
-    for career_json in career_recommendations:
-        career_name = career_json.get("career_name", "")
-        description = career_json.get("description", "")
+    if not career_recommendations or not isinstance(career_recommendations, list):
+        raise HTTPException(
+            status_code=404,
+            detail=f"No career data found for test_uuid '{test_uuid}' and specified filters."
+        )
 
-        categories_json = career_json.get("categories", [])
-        categories_list: List[CategoryWithResponsibilities] = []
-        for cat in categories_json:
-            cat_name = cat.get("category_name", "")
-            responsibilities = cat.get("responsibilities", [])
-            categories_list.append(CategoryWithResponsibilities(
-                category_name=cat_name,
-                responsibilities=responsibilities
-            ))
+    # Find the specific career by name or UUID
+    specific_career_json = None
+    if career_uuid or career_name:
+        specific_career_json = next(
+            (career for career in career_recommendations
+             if (career_uuid and career.get("career_uuid") == career_uuid)
+             or (career_name and career.get("career_name") == career_name)),
+            None
+        )
 
-        majors_json = career_json.get("majors", [])
-        majors_list: List[MajorData] = []
-        for major_data in majors_json:
-            major_name = major_data.get("major_name", "")
-            schools = major_data.get("schools", [])
-            majors_list.append(MajorData(
-                major_name=major_name,
-                schools=schools
-            ))
+    # If no specific filters, return the first career as default
+    if not specific_career_json and not career_uuid and not career_name:
+        specific_career_json = career_recommendations[0]  # Default to first career
 
-        career_data_list.append(CareerData(
-            career_name=career_name,
-            description=description,
-            categories=categories_list,
-            majors=majors_list,
-        ))
+    if not specific_career_json:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No career found for career_uuid='{career_uuid}' or career_name='{career_name}' in test_uuid '{test_uuid}'."
+        )
 
-    return career_data_list
+    # Convert to CareerData
+    categories_json = specific_career_json.get("categories", [])
+    categories_list: List[CategoryWithResponsibilities] = [
+        CategoryWithResponsibilities(
+            category_name=cat.get("category_name", ""),
+            responsibilities=cat.get("responsibilities", [])
+        ) for cat in categories_json
+    ]
+
+    majors_json = specific_career_json.get("majors", [])
+    majors_list: List[MajorData] = [
+        MajorData(
+            major_name=major.get("major_name", ""),
+            schools=major.get("schools", [])
+        ) for major in majors_json
+    ]
+
+    return CareerData(
+        career_uuid=specific_career_json.get("career_uuid"),
+        career_name=specific_career_json.get("career_name", ""),
+        description=specific_career_json.get("description", ""),
+        categories=categories_list,
+        majors=majors_list,
+    )
 
 
 async def get_public_responses(

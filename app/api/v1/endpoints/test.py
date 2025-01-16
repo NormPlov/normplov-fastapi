@@ -20,7 +20,7 @@ from app.services.test import (
     generate_shareable_link,
     get_user_responses,
     fetch_user_tests_for_current_user, get_public_responses, render_html_for_test, html_to_image,
-    fetch_careers_from_user_response_by_test_uuid
+    fetch_specific_career_from_user_response_by_test_uuid
 )
 
 test_router = APIRouter()
@@ -29,31 +29,41 @@ logger = logging.getLogger(__name__)
 
 @test_router.get(
     "/careers-data/{test_uuid}",
-    summary="Load careers data by test UUID",
+    summary="Load specific career data by test UUID",
     response_model=BaseResponse,
     tags=["Careers"],
 )
-async def get_careers_data_by_test_uuid(
+async def get_specific_career_data_by_test_uuid(
     test_uuid: str,
+    career_name: Optional[str] = None,
+    career_uuid: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        career_data_list: List[CareerData] = await fetch_careers_from_user_response_by_test_uuid(db, test_uuid)
+        career_data: Optional[CareerData] = await fetch_specific_career_from_user_response_by_test_uuid(
+            db, test_uuid, career_name, career_uuid
+        )
+
+        if not career_data:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No career data found for test_uuid '{test_uuid}' and specified filters."
+            )
 
         return BaseResponse(
             date=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
             status=200,
-            message=f"Careers data loaded successfully for test_uuid={test_uuid}.",
-            payload=career_data_list
+            message=f"Career data loaded successfully for test_uuid={test_uuid}.",
+            payload=career_data
         )
 
     except HTTPException as he:
         raise he
     except Exception as e:
-        logger.exception("Error while fetching careers data by test_uuid.")
+        logger.exception("Error while fetching specific career data by test_uuid.")
         raise HTTPException(
             status_code=500,
-            detail="An error occurred while fetching careers data."
+            detail="An error occurred while fetching specific career data."
         )
 
 

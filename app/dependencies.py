@@ -22,7 +22,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
         logger.error(f"Error in get_current_user: {e}")
         raise format_http_exception(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            message="🚫 Oops! No credentials found. Are you even allowed here? 😅",
+            message="🚫 Oops! No credentials found. Are you even allowed here? 🤔",
             details={"icon": "🔒", "hint": "Check your login details and try again."}
         )
 
