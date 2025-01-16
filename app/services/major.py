@@ -1,5 +1,6 @@
 import logging
 import uuid
+from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -7,6 +8,7 @@ from fastapi import HTTPException, status
 from app.exceptions.formatters import format_http_exception
 from app.models.major import Major
 from app.models.faculty import Faculty
+from app.schemas.payload import BaseResponse
 from app.utils.pagination import paginate_results
 from pydantic import ValidationError
 from app.schemas.major import (
@@ -150,9 +152,9 @@ async def update_major_by_uuid(major_uuid: str, data: dict, db: AsyncSession):
         )
 
 
-async def delete_major_by_uuid(major_uuid: str, db: AsyncSession) -> dict:
+async def delete_major_by_uuid(major_uuid: str, db: AsyncSession) -> BaseResponse:
     try:
-        logger.info(f"🛠️ Attempting to delete major with UUID: {major_uuid}")
+        logger.info(f"🛠️ Processing to delete major with UUID: {major_uuid}")
 
         # Validate UUID format
         try:
@@ -174,26 +176,36 @@ async def delete_major_by_uuid(major_uuid: str, db: AsyncSession) -> dict:
             logger.warning(f"🔍 Major not found or already deleted: {major_uuid}")
             raise format_http_exception(
                 status_code=status.HTTP_404_NOT_FOUND,
-                message="🤔 Major not found!",
+                message="Major not found!",
                 details=f"No active major with UUID '{major_uuid}' was found, or it has already been deleted.",
             )
 
-        # Mark the major as deleted
-        logger.info(f"🗑️ Marking major as deleted: {major_uuid}")
+        if major.is_recommended:
+            logger.warning(f"Cannot delete recommended major: {major_uuid}")
+            raise format_http_exception(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                message="⛔ Deletion not allowed for recommended majors.",
+                details=f"Major '{major_uuid}' is recommended and cannot be deleted.",
+            )
+
+        logger.info(f"Marking major as deleted: {major_uuid}")
         major.is_deleted = True
+
         await db.commit()
 
-        logger.info(f"✅ Major successfully deleted: {major_uuid}")
-        return {
-            "message": "🎉 Major successfully deleted.",
-            "uuid": major_uuid,
-        }
+        logger.info(f"Major successfully deleted: {major_uuid}")
+        return BaseResponse(
+            date=datetime.utcnow(),
+            status=status.HTTP_200_OK,
+            payload={"uuid": str(major_uuid)},
+            message="🎉 Major successfully deleted.",
+        )
 
     except HTTPException as http_error:
-        logger.warning(f"🚨 HTTP Exception: {http_error.detail}")
+        logger.warning(f"HTTP Exception: {http_error.detail}")
         raise http_error
     except Exception as e:
-        logger.error(f"⚠️ Unexpected error while deleting major: {e}")
+        logger.error(f"Unexpected error while deleting major: {e}")
         await db.rollback()
         raise format_http_exception(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -238,6 +250,8 @@ async def create_major(data: CreateMajorRequest, db: AsyncSession) -> MajorRespo
             duration_years=data.duration_years,
             degree=data.degree,
             faculty_id=faculty.id,
+            is_recommended=False,
+            is_deleted=False
         )
 
         db.add(new_major)

@@ -37,6 +37,7 @@ class School(Base):
     description = Column(Text, nullable=True)
     mission = Column(Text, nullable=True)
     vision = Column(Text, nullable=True)
+    is_recommended = Column(Boolean, nullable=True)
     is_popular = Column(Boolean, default=False, nullable=True)
     reference_url = Column(String, nullable=True, default="https://edurank.org/geo/kh/")
     is_deleted = Column(Boolean, default=False, nullable=False)

@@ -38,6 +38,7 @@ class CreateMajorRequest(BaseModel):
     duration_years: Optional[int] = Field(None)
     degree: DegreeTypeEnum = Field(...)
     faculty_uuid: UUID4 = Field(...)
+    is_recommended: Optional[bool] = Field(None)
 
 
 class MajorResponse(BaseModel):

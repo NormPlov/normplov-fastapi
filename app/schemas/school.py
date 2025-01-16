@@ -79,6 +79,7 @@ class CreateSchoolRequest(BaseModel):
     logo: Optional[str]
     cover_image: Optional[str]
     is_popular: Optional[bool] = False
+    is_recommended: Optional[bool] = False
 
 
 class UpdateSchoolRequest(BaseModel):

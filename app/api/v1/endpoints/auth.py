@@ -236,13 +236,13 @@ async def google_callback(
         access_token = create_access_token(data={"sub": user["uuid"]})
         refresh_token = create_refresh_token(data={"sub": user["uuid"]})
 
-        refresh_token_entry = RefreshToken(
-            user_id=user["id"],
-            token=refresh_token,
-            expires_at=datetime.utcnow() + timedelta(days=7)
-        )
-        db.add(refresh_token_entry)
-        await db.commit()
+        # refresh_token_entry = RefreshToken(
+        #     user_id=user["id"],
+        #     token=refresh_token,
+        #     expires_at=datetime.utcnow() + timedelta(days=7)
+        # )
+        # db.add(refresh_token_entry)
+        # await db.commit()
 
         response_payload = {
             "date": datetime.utcnow().strftime("%Y-%m-%d"),

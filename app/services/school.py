@@ -325,30 +325,43 @@ async def update_school(school_uuid: str, data: UpdateSchoolRequest, db: AsyncSe
 
 async def delete_school(school_uuid: str, db: AsyncSession):
 
-    stmt = select(School).where(School.uuid == school_uuid, School.is_deleted == False)
-    result = await db.execute(stmt)
-    school = result.scalars().first()
+    try:
+        stmt = select(School).where(School.uuid == school_uuid, School.is_deleted == False)
+        result = await db.execute(stmt)
+        school = result.scalars().first()
 
-    if not school:
+        if not school:
+            raise format_http_exception(
+                status_code=status.HTTP_404_NOT_FOUND,
+                message="🔍 School not found or has already been deleted."
+            )
+
+        if school.is_recommended:
+            raise format_http_exception(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                message="❌Cannot delete a recommended school."
+            )
+
+        school.is_deleted = True
+        school.updated_at = datetime.utcnow()
+
+        db.add(school)
+        await db.commit()
+
         return BaseResponse(
             date=datetime.utcnow(),
-            status=status.HTTP_404_NOT_FOUND,
-            payload=None,
-            message="School not found or has already been deleted."
+            status=status.HTTP_200_OK,
+            payload={"id": school.id, "uuid": str(school.uuid)},
+            message="School deleted successfully."
         )
 
-    school.is_deleted = True
-    school.updated_at = datetime.utcnow()
-
-    db.add(school)
-    await db.commit()
-
-    return BaseResponse(
-        date=datetime.utcnow(),
-        status=status.HTTP_200_OK,
-        payload={"id": school.id, "uuid": str(school.uuid)},
-        message="School deleted successfully."
-    )
+    except Exception as exc:
+        logger.error(f"Error while deleting school with UUID {school_uuid}: {exc}")
+        raise format_http_exception(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            message="An unexpected error occurred during school deletion.",
+            details=str(exc)
+        )
 
 
 async def create_school_service(
@@ -421,6 +434,7 @@ async def create_school_service(
             logo_url=logo,
             cover_image=cover_image,
             is_popular=is_popular,
+            is_recommended=False,
             reference_url=reference_url,
         )
 

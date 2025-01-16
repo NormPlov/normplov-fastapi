@@ -25,6 +25,7 @@ class Major(Base):
     is_popular = Column(Boolean, nullable=True)
     degree = Column(Enum(DegreeType), nullable=True)
     is_deleted = Column(Boolean, nullable=True)
+    is_recommended = Column(Boolean, nullable=True)
     faculty_id = Column(Integer, ForeignKey("faculties.id", ondelete="CASCADE"), nullable=True)
     created_at = Column(DateTime, nullable=True)
     updated_at = Column(DateTime, nullable=True)
