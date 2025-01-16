@@ -1,5 +1,6 @@
 import logging
 import json
+import os
 import uuid
 import numpy as np
 import pandas as pd
@@ -119,7 +120,14 @@ async def predict_careers_service(
         aggregated_response = await get_aggregated_tests_service(request.test_uuids, db, current_user)
         user_input = prepare_model_input(aggregated_response)
 
+        # Load the training dataset to fit the model in server
         dataset_path = "/app/datasets/train_testing.csv"
+
+        # Load the training dataset to fit the model from local computer
+        # dataset_path = os.path.join(
+        #     os.getcwd(),
+        #     r"D:\CSTAD Scholarship Program\python for data analytics\NORMPLOV_PROJECT\normplov-fastapi\datasets\train_testing.csv",
+        # )
 
         career_model = load_career_recommendation_model(dataset_path=dataset_path)
         model_features = career_model.get_feature_columns()

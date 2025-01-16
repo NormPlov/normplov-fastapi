@@ -34,8 +34,8 @@ class CategoryWithResponsibilities(BaseModel):
 class CareerWithMajors(BaseModel):
     career_name: str
     description: Optional[str] = None
-    categories: List[CategoryWithResponsibilities]
-    majors: List[MajorWithSchools]
+    categories: List[CategoryWithResponsibilities] = Field(default_factory=list)
+    majors: List[MajorWithSchools] = Field(default_factory=list)
 
 
 class LearningStyleChart(BaseModel):

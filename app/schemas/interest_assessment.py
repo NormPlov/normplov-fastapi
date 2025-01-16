@@ -30,8 +30,8 @@ class CategoryWithResponsibilities(BaseModel):
 class CareerData(BaseModel):
     career_name: str
     description: Optional[str] = None
-    categories: List[CategoryWithResponsibilities]
-    majors: List[MajorData]
+    categories: List[CategoryWithResponsibilities] = Field(default_factory=list)
+    majors: List[MajorData] = Field(default_factory=list)
 
 
 class ChartData(BaseModel):

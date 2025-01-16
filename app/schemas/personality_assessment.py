@@ -21,8 +21,8 @@ class CategoryWithResponsibilities(BaseModel):
 class CareerData(BaseModel):
     career_name: str
     description: Optional[str] = None
-    categories: List[CategoryWithResponsibilities]
-    majors: List[MajorData]
+    categories: List[CategoryWithResponsibilities] = Field(default_factory=list)
+    majors: List[MajorData] = Field(default_factory=list)
 
 
 class PersonalityTypeDetails(BaseModel):
@@ -50,4 +50,4 @@ class PersonalityAssessmentResponse(BaseModel):
     traits: PersonalityTraits
     strengths: List[str]
     weaknesses: List[str]
-    career_recommendations: List[CareerData]
+    career_recommendations: List[CareerData] = Field(default_factory=list)
