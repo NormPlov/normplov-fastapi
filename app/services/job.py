@@ -14,6 +14,9 @@ logger = logging.getLogger(__name__)
 
 
 async def get_trending_jobs(db: AsyncSession) -> dict:
+    """
+    Only fetch data for the most recent 5 months (including current month).
+    """
     try:
         category_query = text("""
             SELECT 
@@ -24,6 +27,8 @@ async def get_trending_jobs(db: AsyncSession) -> dict:
             WHERE jobs.is_deleted = false 
               AND jobs.posted_at IS NOT NULL
               AND jobs.category IS NOT NULL
+              -- Only include the last 5 months (current + previous 4)
+              AND jobs.posted_at >= date_trunc('month', current_date) - interval '4 months'
             GROUP BY date_trunc('month', jobs.posted_at), jobs.category
             ORDER BY date_trunc('month', jobs.posted_at) ASC, COUNT(jobs.id) DESC
         """)
@@ -34,12 +39,16 @@ async def get_trending_jobs(db: AsyncSession) -> dict:
         trending_jobs = {}
 
         for row in category_data:
-            month = row.month.strftime("%b")
+            month_str = row.month.strftime("%b")
             label = row.label.strip()
             count = row.count
 
-            if month not in trending_jobs or count > trending_jobs[month]["count"]:
-                trending_jobs[month] = {"month": month, "label": label, "count": count}
+            if month_str not in trending_jobs or count > trending_jobs[month_str]["count"]:
+                trending_jobs[month_str] = {
+                    "month": month_str,
+                    "label": label,
+                    "count": count
+                }
 
         trending_jobs_list = list(trending_jobs.values())
 
