@@ -264,6 +264,7 @@ async def google_callback(
                 "registered_at": user.get("registered_at", None),
                 "access_token": access_token,
                 "refresh_token": refresh_token,
+                "token_type": "bearer",
             },
             "message": "User information retrieved successfully."
         }
