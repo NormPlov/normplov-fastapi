@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import UUID4
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from app.core.config import settings
 from app.dependencies import get_current_user_data
 from app.models import User
@@ -20,7 +20,7 @@ from app.services.test import (
     generate_shareable_link,
     get_user_responses,
     fetch_user_tests_for_current_user, get_public_responses, render_html_for_test, html_to_image,
-    fetch_careers_by_test_uuid
+    fetch_careers_from_user_response_by_test_uuid
 )
 
 test_router = APIRouter()
@@ -38,7 +38,7 @@ async def get_careers_data_by_test_uuid(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        career_data_list: List[CareerData] = await fetch_careers_by_test_uuid(db, test_uuid)
+        career_data_list: List[CareerData] = await fetch_careers_from_user_response_by_test_uuid(db, test_uuid)
 
         return BaseResponse(
             date=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),

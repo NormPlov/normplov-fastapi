@@ -32,85 +32,77 @@ logger = logging.getLogger(__name__)
 templates = Jinja2Templates(directory="templates")
 
 
-async def fetch_careers_by_test_uuid(
+async def fetch_careers_from_user_response_by_test_uuid(
     db: AsyncSession,
     test_uuid: str
 ) -> List[CareerData]:
 
-    # validate the test uuid
-    test_stmt = select(UserTest).where(UserTest.uuid == test_uuid)
-    test_result = await db.execute(test_stmt)
-    user_test = test_result.scalars().first()
-    if not user_test:
+    stmt = (
+        select(UserResponse)
+        .join(UserTest, UserResponse.user_test_id == UserTest.id)
+        .where(UserTest.uuid == test_uuid)
+        .where(UserResponse.is_deleted == False)
+        .where(UserResponse.is_completed == True)
+    )
+    result = await db.execute(stmt)
+    user_response: Optional[UserResponse] = result.scalars().first()
+
+    if not user_response:
         raise HTTPException(
             status_code=404,
-            detail=f"No UserTest found with UUID {test_uuid}"
+            detail=f"No UserResponse found for test_uuid '{test_uuid}'"
         )
 
-    careers_stmt = select(Career).where(Career.is_deleted == False)
-    careers_result = await db.execute(careers_stmt)
-    careers = careers_result.scalars().all()
+    # Parse the JSON from user_response.response_data
+    try:
+        response_data = user_response.response_data
+        if isinstance(response_data, str):
+            # If it's stored as a string in the DB, parse it
+            response_data = json.loads(response_data)
+    except (json.JSONDecodeError, TypeError):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid or missing JSON in user_response.response_data."
+        )
 
+    # Extract "career_recommendations" from the JSON
+    career_recommendations = response_data.get("career_recommendations")
+    if not career_recommendations:
+        return []
+
+    # convert to Pydantic List[CareerData]
     career_data_list: List[CareerData] = []
 
-    for career in careers:
-        category_links_stmt = select(CareerCategoryLink).where(
-            CareerCategoryLink.career_id == career.id
-        )
-        category_links_result = await db.execute(category_links_stmt)
-        career_category_links = category_links_result.scalars().all()
+    for career_json in career_recommendations:
+        career_name = career_json.get("career_name", "")
+        description = career_json.get("description", "")
 
-        categories: List[CategoryWithResponsibilities] = []
-        for link in career_category_links:
-            category_stmt = select(CareerCategory).where(CareerCategory.id == link.career_category_id)
-            category_result = await db.execute(category_stmt)
-            career_category = category_result.scalars().first()
-
-            if career_category:
-                responsibilities_stmt = select(CareerCategoryResponsibility).where(
-                    CareerCategoryResponsibility.career_category_id == career_category.id
-                )
-                responsibilities_result = await db.execute(responsibilities_stmt)
-                responsibilities_entities = responsibilities_result.scalars().all()
-
-                category_info = CategoryWithResponsibilities(
-                    category_name=career_category.name,
-                    responsibilities=[r.description for r in responsibilities_entities]
-                )
-                categories.append(category_info)
-
-        # 2b. Fetch majors
-        majors_stmt = (
-            select(Major)
-            .join(CareerMajor, CareerMajor.major_id == Major.id)
-            .where(CareerMajor.career_id == career.id, CareerMajor.is_deleted == False)
-        )
-        majors_result = await db.execute(majors_stmt)
-        majors = majors_result.scalars().all()
-
-        majors_list: List[MajorData] = []
-        for major in majors:
-            schools_stmt = (
-                select(School)
-                .join(SchoolMajor, SchoolMajor.school_id == School.id)
-                .where(SchoolMajor.major_id == major.id, SchoolMajor.is_deleted == False)
-            )
-            schools_result = await db.execute(schools_stmt)
-            schools = schools_result.scalars().all()
-
-            majors_list.append(MajorData(
-                major_name=major.name,
-                schools=[school.en_name for school in schools]
+        categories_json = career_json.get("categories", [])
+        categories_list: List[CategoryWithResponsibilities] = []
+        for cat in categories_json:
+            cat_name = cat.get("category_name", "")
+            responsibilities = cat.get("responsibilities", [])
+            categories_list.append(CategoryWithResponsibilities(
+                category_name=cat_name,
+                responsibilities=responsibilities
             ))
 
-        # 2c. Compile final CareerData
-        career_info = CareerData(
-            career_name=career.name,
-            description=career.description,
-            categories=categories,
-            majors=majors_list
-        )
-        career_data_list.append(career_info)
+        majors_json = career_json.get("majors", [])
+        majors_list: List[MajorData] = []
+        for major_data in majors_json:
+            major_name = major_data.get("major_name", "")
+            schools = major_data.get("schools", [])
+            majors_list.append(MajorData(
+                major_name=major_name,
+                schools=schools
+            ))
+
+        career_data_list.append(CareerData(
+            career_name=career_name,
+            description=description,
+            categories=categories_list,
+            majors=majors_list,
+        ))
 
     return career_data_list
 
