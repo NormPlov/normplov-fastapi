@@ -31,7 +31,7 @@ class FacultyResponse(BaseModel):
 
 class SchoolDetailsResponse(BaseModel):
     uuid: str
-    kh_name: str
+    kh_name: Optional[str]
     en_name: str
     type: SchoolType
     popular_major: str
@@ -49,6 +49,7 @@ class SchoolDetailsResponse(BaseModel):
     description: Optional[str]
     mission: Optional[str]
     vision: Optional[str]
+    is_popular: Optional[bool]
     faculties: List[FacultyResponse]
 
     class Config:
@@ -131,6 +132,7 @@ class SchoolResponse(BaseModel):
     description: Optional[str]
     mission: Optional[str]
     vision: Optional[str]
+    is_recommended: bool
     is_deleted: bool
     created_at: str
     updated_at: str

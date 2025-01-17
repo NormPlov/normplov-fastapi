@@ -48,6 +48,7 @@ class MajorResponse(BaseModel):
     fee_per_year: Optional[float]
     duration_years: Optional[int]
     degree: DegreeTypeEnum
+    is_recommended: Optional[bool]
 
 
     @validator("uuid", pre=True)

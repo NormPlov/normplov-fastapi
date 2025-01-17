@@ -131,6 +131,7 @@ async def get_school_with_paginated_majors(
             description=school.description,
             mission=school.mission,
             vision=school.vision,
+            is_popular=school.is_popular,
             faculties=faculty_responses,
         )
 
@@ -218,6 +219,7 @@ async def load_all_schools(
                 "description": school.description,
                 "mission": school.mission,
                 "vision": school.vision,
+                "is_recommended": school.is_recommended,
                 "created_at": school.created_at.strftime("%d-%B-%Y"),
                 "updated_at": school.updated_at.strftime("%d-%B-%Y"),
             }
