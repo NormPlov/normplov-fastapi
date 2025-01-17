@@ -1,12 +1,13 @@
 import logging
 import uuid
+from sqlalchemy.sql.expression import cast
+from sqlalchemy.dialects.postgresql import ENUM
 from datetime import datetime
-
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from fastapi import HTTPException, status
 from app.exceptions.formatters import format_http_exception
-from app.models.major import Major
+from app.models.major import Major, DegreeType
 from app.models.faculty import Faculty
 from app.schemas.payload import BaseResponse
 from app.utils.pagination import paginate_results
@@ -216,6 +217,17 @@ async def delete_major_by_uuid(major_uuid: str, db: AsyncSession) -> BaseRespons
 
 async def create_major(data: CreateMajorRequest, db: AsyncSession) -> MajorResponse:
     try:
+        # Validate the degree type
+        try:
+            validated_degree = DegreeType(data.degree.upper())
+            logger.debug("validated_degree: %s", validated_degree)
+        except ValueError:
+            raise format_http_exception(
+                status_code=400,
+                message="Invalid degree type.",
+                details=f"Must be one of: {', '.join([t.value for t in DegreeType])}",
+            )
+
         # Validate the faculty UUID
         faculty_query = select(Faculty).where(
             Faculty.uuid == data.faculty_uuid,
@@ -226,28 +238,31 @@ async def create_major(data: CreateMajorRequest, db: AsyncSession) -> MajorRespo
 
         if not faculty:
             raise format_http_exception(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=400,
                 message="Invalid or non-existent faculty UUID.",
                 details={"faculty_uuid": str(data.faculty_uuid)},
             )
 
         # Check if a major with the same name and degree exists within the same faculty
-        existing_major_query = select(Major).where(
-            Major.name == data.name,
-            Major.degree == data.degree,
-            Major.faculty_id == faculty.id,
-            Major.is_deleted == False,
+        existing_major_query = (
+            select(Major)
+            .where(
+                Major.name == data.name,
+                cast(Major.degree, ENUM(DegreeType)) == validated_degree.value,  # Explicit cast
+                Major.faculty_id == faculty.id,
+                Major.is_deleted == False,
+            )
         )
         existing_major_result = await db.execute(existing_major_query)
         existing_major = existing_major_result.scalars().first()
 
         if existing_major:
             raise format_http_exception(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=400,
                 message="A major with this name and degree already exists in the selected faculty.",
                 details={
                     "major_name": data.name,
-                    "degree": data.degree,
+                    "degree": validated_degree.value,
                     "faculty_uuid": str(data.faculty_uuid),
                 },
             )
@@ -259,7 +274,7 @@ async def create_major(data: CreateMajorRequest, db: AsyncSession) -> MajorRespo
             description=data.description,
             fee_per_year=data.fee_per_year,
             duration_years=data.duration_years,
-            degree=data.degree,
+            degree=validated_degree.value,  # Use the validated enum value
             faculty_id=faculty.id,
             is_recommended=False,
             is_deleted=False,
@@ -278,8 +293,7 @@ async def create_major(data: CreateMajorRequest, db: AsyncSession) -> MajorRespo
         logger.error(f"Unexpected error while creating major: {e}")
         await db.rollback()
         raise format_http_exception(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=500,
             message="An unexpected error occurred while creating the major.",
             details=str(e),
         )
-
