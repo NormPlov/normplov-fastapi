@@ -231,9 +231,10 @@ async def create_major(data: CreateMajorRequest, db: AsyncSession) -> MajorRespo
                 details={"faculty_uuid": str(data.faculty_uuid)},
             )
 
-        # Check if a major with the same name exists within the same faculty
+        # Check if a major with the same name and degree exists within the same faculty
         existing_major_query = select(Major).where(
             Major.name == data.name,
+            Major.degree == data.degree,
             Major.faculty_id == faculty.id,
             Major.is_deleted == False,
         )
@@ -243,8 +244,12 @@ async def create_major(data: CreateMajorRequest, db: AsyncSession) -> MajorRespo
         if existing_major:
             raise format_http_exception(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                message="A major with this name already exists in the selected faculty.",
-                details={"major_name": data.name, "faculty_uuid": str(data.faculty_uuid)},
+                message="A major with this name and degree already exists in the selected faculty.",
+                details={
+                    "major_name": data.name,
+                    "degree": data.degree,
+                    "faculty_uuid": str(data.faculty_uuid),
+                },
             )
 
         # Create the new major
@@ -257,7 +262,7 @@ async def create_major(data: CreateMajorRequest, db: AsyncSession) -> MajorRespo
             degree=data.degree,
             faculty_id=faculty.id,
             is_recommended=False,
-            is_deleted=False
+            is_deleted=False,
         )
 
         db.add(new_major)
@@ -277,3 +282,4 @@ async def create_major(data: CreateMajorRequest, db: AsyncSession) -> MajorRespo
             message="An unexpected error occurred while creating the major.",
             details=str(e),
         )
+
