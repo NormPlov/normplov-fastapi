@@ -205,7 +205,7 @@ async def delete_job(uuid: str, db: AsyncSession) -> dict:
 async def load_all_jobs(
     db: AsyncSession,
     search: Optional[str] = None,
-    sort_by: str = "created_at",
+    sort_by: Optional[str] = None,
     order: str = "desc",
     location: Optional[str] = None,
     job_type: Optional[str] = None,
@@ -228,67 +228,60 @@ async def load_all_jobs(
                 | Job.job_type.ilike(f"%{job_type}%")
             )
 
-        # Execute query to retrieve jobs
         result = await db.execute(stmt)
         jobs = result.scalars().all()
 
-        # Helper function to calculate "days ago"
         def calculate_days_ago(date):
             if not date:
                 return "Unknown"
             delta = datetime.utcnow() - date
             return f"{delta.days} days ago" if delta.days > 0 else "Today"
 
-        # Create job response list with calculated "days ago"
+        # Prepare job response
         job_responses = [
-            {
-                "job_data": JobDetailsWithBookmarkResponse(
-                    uuid=job.uuid,
-                    title=job.title if job.title else "Unknown Title",
-                    company_name=job.company if job.company else "Unknown Company",
-                    logo=job.logo,
-                    location=job.location,
-                    job_type=job.job_type,
-                    posted_at=job.posted_at,
-                    posted_at_days_ago=str(
-                        calculate_days_ago(job.posted_at)
-                    ),  # Convert to string
-                    schedule=job.schedule,
-                    salary=job.salary,
-                    is_scraped=job.is_scraped,
-                    description=job.description,
-                    requirements=job.requirements,
-                    responsibilities=job.responsibilities,
-                    benefits=job.benefits,
-                    facebook_url=job.facebook_url,
-                    email=job.email,
-                    phone=job.phone,
-                    website=job.website,
-                    created_at=job.created_at,
-                    created_at_days_ago=str(
-                        calculate_days_ago(job.created_at)
-                    ),  # Convert to string
-                    closing_date=job.closing_date.strftime("%d.%b.%Y")
-                    if job.closing_date and job.closing_date >= datetime.utcnow()
-                    else None,
-                    category=job.category,
-                    visitor_count=job.visitor_count,
-                ),
-                "sort_key": calculate_days_ago(
-                    job.posted_at if sort_by == "posted_at" else job.created_at
-                ),
-            }
+            JobDetailsWithBookmarkResponse(
+                uuid=job.uuid,
+                title=job.title if job.title else "Unknown Title",
+                company_name=job.company if job.company else "Unknown Company",
+                logo=job.logo,
+                location=job.location,
+                job_type=job.job_type,
+                posted_at=job.posted_at,
+                posted_at_days_ago=calculate_days_ago(job.posted_at),
+                schedule=job.schedule,
+                salary=job.salary,
+                is_scraped=job.is_scraped,
+                description=job.description,
+                requirements=job.requirements,
+                responsibilities=job.responsibilities,
+                benefits=job.benefits,
+                facebook_url=job.facebook_url,
+                email=job.email,
+                phone=job.phone,
+                website=job.website,
+                created_at=job.created_at,
+                created_at_days_ago=calculate_days_ago(job.created_at),
+                closing_date=job.closing_date.strftime("%d.%b.%Y")
+                if job.closing_date and job.closing_date >= datetime.utcnow()
+                else None,
+                category=job.category,
+                visitor_count=job.visitor_count,
+            )
             for job in jobs
             if job.closing_date is None or job.closing_date >= datetime.utcnow()
         ]
 
-        # Sort the jobs based on the specified `sort_by` key
-        job_responses.sort(
-            key=lambda x: x["sort_key"], reverse=(order.lower() == "desc")
+        # Ensure sorting respects `posted_at_days_ago` and `created_at_days_ago`
+        sorted_jobs = sorted(
+            job_responses,
+            key=lambda job: (
+                int(job.posted_at_days_ago.split()[0]) if "days" in job.posted_at_days_ago else 0,
+                int(job.created_at_days_ago.split()[0]) if "days" in job.created_at_days_ago else 0,
+            ),
+            reverse=(order.lower() == "asc"),  # Descending order by default
         )
 
-        # Return sorted jobs
-        return [job["job_data"] for job in job_responses]
+        return sorted_jobs
 
     except Exception as exc:
         raise HTTPException(

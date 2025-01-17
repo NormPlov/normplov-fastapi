@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.responses import StreamingResponse
 from app.core.config import settings
 from app.dependencies import get_current_user_data
+from app.exceptions.formatters import format_http_exception
 from app.models import User
 from app.schemas.payload import BaseResponse
 from app.schemas.test import PaginatedUserTestsWithUsersResponse, PaginatedUserTestsResponse
@@ -43,25 +44,24 @@ async def get_specific_career_data_by_test_uuid(
         )
 
         if not career_data:
-            raise HTTPException(
+            raise format_http_exception(
                 status_code=404,
-                detail=f"No career data found for test_uuid '{test_uuid}' and specified filters."
+                message=f"No career data found for test_uuid '{test_uuid}'.",
             )
 
         return BaseResponse(
             date=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
             status=200,
             message=f"Career data loaded successfully for test_uuid={test_uuid}.",
-            payload=career_data
+            payload=career_data,
         )
 
-    except HTTPException as he:
-        raise he
     except Exception as e:
         logger.exception("Error while fetching specific career data by test_uuid.")
-        raise HTTPException(
-            status_code=500,
-            detail="An error occurred while fetching specific career data."
+        raise format_http_exception(
+            status_code=400,
+            message="Unable to process the request. Please try again later or contact support.",
+
         )
 
 

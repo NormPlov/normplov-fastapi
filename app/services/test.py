@@ -34,8 +34,6 @@ templates = Jinja2Templates(directory="templates")
 async def fetch_specific_career_from_user_response_by_test_uuid(
     db: AsyncSession,
     test_uuid: str,
-    career_name: Optional[str] = None,
-    career_uuid: Optional[str] = None,
 ) -> Optional[CareerData]:
     stmt = (
         select(UserResponse)
@@ -48,9 +46,9 @@ async def fetch_specific_career_from_user_response_by_test_uuid(
     user_response: Optional[UserResponse] = result.scalars().first()
 
     if not user_response:
-        raise HTTPException(
+        raise format_http_exception(
             status_code=404,
-            detail=f"No UserResponse found for test_uuid '{test_uuid}'"
+            message=f"No UserResponse found for test_uuid '{test_uuid}'.",
         )
 
     try:
@@ -62,9 +60,10 @@ async def fetch_specific_career_from_user_response_by_test_uuid(
 
     except (json.JSONDecodeError, TypeError) as e:
         logger.exception("Failed to parse JSON response_data")
-        raise HTTPException(
+        raise format_http_exception(
             status_code=400,
-            detail=f"Invalid or malformed JSON in user_response.response_data: {str(e)}"
+            message="Invalid or malformed JSON in user_response.response_data.",
+            details=str(e),
         )
 
     # Look for career-related data in potential keys
@@ -75,52 +74,36 @@ async def fetch_specific_career_from_user_response_by_test_uuid(
         if key in response_data:
             career_recommendations = response_data[key]
             logger.debug("career_recommendations: %s", career_recommendations)
-            # If the key contains nested recommendations, extract them
             if isinstance(career_recommendations, dict) and "recommendations" in career_recommendations:
                 career_recommendations = career_recommendations["recommendations"]
             break
 
     if not career_recommendations or not isinstance(career_recommendations, list):
-        raise HTTPException(
+        raise format_http_exception(
             status_code=404,
-            detail=f"No career data found for test_uuid '{test_uuid}' and specified filters."
+            message=f"No career data found for test_uuid '{test_uuid}'.",
         )
 
-    # Find the specific career by name or UUID
-    specific_career_json = None
-    if career_uuid or career_name:
-        specific_career_json = next(
-            (career for career in career_recommendations
-             if (career_uuid and career.get("career_uuid") == career_uuid)
-             or (career_name and career.get("career_name") == career_name)),
-            None
-        )
-
-    # If no specific filters, return the first career as default
-    if not specific_career_json and not career_uuid and not career_name:
-        specific_career_json = career_recommendations[0]  # Default to first career
-
-    if not specific_career_json:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No career found for career_uuid='{career_uuid}' or career_name='{career_name}' in test_uuid '{test_uuid}'."
-        )
+    # Default to the first career if multiple are available
+    specific_career_json = career_recommendations[0]
 
     # Convert to CareerData
     categories_json = specific_career_json.get("categories", [])
     categories_list: List[CategoryWithResponsibilities] = [
         CategoryWithResponsibilities(
             category_name=cat.get("category_name", ""),
-            responsibilities=cat.get("responsibilities", [])
-        ) for cat in categories_json
+            responsibilities=cat.get("responsibilities", []),
+        )
+        for cat in categories_json
     ]
 
     majors_json = specific_career_json.get("majors", [])
     majors_list: List[MajorData] = [
         MajorData(
             major_name=major.get("major_name", ""),
-            schools=major.get("schools", [])
-        ) for major in majors_json
+            schools=major.get("schools", []),
+        )
+        for major in majors_json
     ]
 
     return CareerData(

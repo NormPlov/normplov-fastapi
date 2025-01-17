@@ -102,7 +102,10 @@ async def get_school_with_paginated_majors(
                 major for major in faculty.majors
                 if not major.is_deleted and (degree is None or major.degree.value == degree)
             ]
-            paginated_majors = paginate_results(filtered_majors, page, page_size)
+            # Query to load only the unique major of the faculty
+            unique_majors = list({major.name: major for major in filtered_majors}.values())
+
+            paginated_majors = paginate_results(unique_majors, page, page_size)
 
             faculty_responses.append({
                 "uuid": str(faculty.uuid),

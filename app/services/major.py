@@ -216,16 +216,6 @@ async def delete_major_by_uuid(major_uuid: str, db: AsyncSession) -> BaseRespons
 
 async def create_major(data: CreateMajorRequest, db: AsyncSession) -> MajorResponse:
     try:
-        stmt = select(Major).where(Major.name == data.name, Major.is_deleted == False)
-        result = await db.execute(stmt)
-        existing_major = result.scalars().first()
-
-        if existing_major:
-            raise format_http_exception(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                message="A major with this name already exists.",
-            )
-
         # Validate the faculty UUID
         faculty_query = select(Faculty).where(
             Faculty.uuid == data.faculty_uuid,
@@ -241,7 +231,23 @@ async def create_major(data: CreateMajorRequest, db: AsyncSession) -> MajorRespo
                 details={"faculty_uuid": str(data.faculty_uuid)},
             )
 
-        # New major is created here
+        # Check if a major with the same name exists within the same faculty
+        existing_major_query = select(Major).where(
+            Major.name == data.name,
+            Major.faculty_id == faculty.id,
+            Major.is_deleted == False,
+        )
+        existing_major_result = await db.execute(existing_major_query)
+        existing_major = existing_major_result.scalars().first()
+
+        if existing_major:
+            raise format_http_exception(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                message="A major with this name already exists in the selected faculty.",
+                details={"major_name": data.name, "faculty_uuid": str(data.faculty_uuid)},
+            )
+
+        # Create the new major
         new_major = Major(
             uuid=uuid.uuid4(),
             name=data.name,
@@ -271,4 +277,3 @@ async def create_major(data: CreateMajorRequest, db: AsyncSession) -> MajorRespo
             message="An unexpected error occurred while creating the major.",
             details=str(e),
         )
-

@@ -50,7 +50,6 @@ class MajorResponse(BaseModel):
     degree: DegreeTypeEnum
     is_recommended: Optional[bool]
 
-
     @validator("uuid", pre=True)
     def uuid_to_string(cls, value):
         if isinstance(value, UUID):
