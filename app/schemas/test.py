@@ -12,7 +12,6 @@ class UserTestResponse(BaseModel):
         from_attributes = True
 
 
-
 class UserTestWithUserSchema(BaseModel):
     test_uuid: str
     test_name: str

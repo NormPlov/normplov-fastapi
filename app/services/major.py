@@ -263,11 +263,10 @@ async def create_major(data: CreateMajorRequest, db: AsyncSession) -> MajorRespo
                 details={
                     "major_name": data.name,
                     "degree": validated_degree.value,
-                    "faculty_uuid": str(data.faculty_uuid),
+                    "faculty_uuid": str(data.faculty_uuid)
                 },
             )
 
-        # Create the new major
         new_major = Major(
             uuid=uuid.uuid4(),
             name=data.name,

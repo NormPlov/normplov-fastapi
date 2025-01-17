@@ -243,7 +243,7 @@ async def generate_shareable_link_route(
         db: AsyncSession = Depends(get_db),
 ):
     try:
-        base_url = settings.UI_BASE_URL
+        base_url = settings.FRONTEND_URL
         return await generate_shareable_link(test_uuid, base_url, db)
 
     except HTTPException as e:
