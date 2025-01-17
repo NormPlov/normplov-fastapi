@@ -225,53 +225,70 @@ async def load_all_jobs(
                 Job.title.ilike(f"%{search}%")
                 | Job.company.ilike(f"%{search}%")
                 | Job.location.ilike(f"%{search}%")
-                | Job.job_type.ilike(f"%{search}%")
+                | Job.job_type.ilike(f"%{job_type}%")
             )
 
-        sort_column = getattr(Job, sort_by, Job.created_at)
-        stmt = stmt.order_by(sort_column.desc() if order.lower() == "desc" else sort_column.asc())
-
+        # Execute query to retrieve jobs
         result = await db.execute(stmt)
         jobs = result.scalars().all()
 
+        # Helper function to calculate "days ago"
         def calculate_days_ago(date):
             if not date:
                 return "Unknown"
             delta = datetime.utcnow() - date
             return f"{delta.days} days ago" if delta.days > 0 else "Today"
 
-        return [
-            JobDetailsWithBookmarkResponse(
-                uuid=job.uuid,
-                title=job.title if job.title else "Unknown Title",
-                company_name=job.company if job.company else "Unknown Company",
-                logo=job.logo,
-                location=job.location,
-                job_type=job.job_type,
-                posted_at=job.posted_at,
-                posted_at_days_ago=calculate_days_ago(job.posted_at),
-                schedule=job.schedule,
-                salary=job.salary,
-                is_scraped=job.is_scraped,
-                description=job.description,
-                requirements=job.requirements,
-                responsibilities=job.responsibilities,
-                benefits=job.benefits,
-                facebook_url=job.facebook_url,
-                email=job.email,
-                phone=job.phone,
-                website=job.website,
-                created_at=job.created_at,
-                created_at_days_ago=calculate_days_ago(job.created_at),
-                closing_date=job.closing_date.strftime("%d.%b.%Y")
-                if job.closing_date and job.closing_date >= datetime.utcnow()
-                else None,
-                category=job.category,
-                visitor_count=job.visitor_count,
-            )
+        # Create job response list with calculated "days ago"
+        job_responses = [
+            {
+                "job_data": JobDetailsWithBookmarkResponse(
+                    uuid=job.uuid,
+                    title=job.title if job.title else "Unknown Title",
+                    company_name=job.company if job.company else "Unknown Company",
+                    logo=job.logo,
+                    location=job.location,
+                    job_type=job.job_type,
+                    posted_at=job.posted_at,
+                    posted_at_days_ago=str(
+                        calculate_days_ago(job.posted_at)
+                    ),  # Convert to string
+                    schedule=job.schedule,
+                    salary=job.salary,
+                    is_scraped=job.is_scraped,
+                    description=job.description,
+                    requirements=job.requirements,
+                    responsibilities=job.responsibilities,
+                    benefits=job.benefits,
+                    facebook_url=job.facebook_url,
+                    email=job.email,
+                    phone=job.phone,
+                    website=job.website,
+                    created_at=job.created_at,
+                    created_at_days_ago=str(
+                        calculate_days_ago(job.created_at)
+                    ),  # Convert to string
+                    closing_date=job.closing_date.strftime("%d.%b.%Y")
+                    if job.closing_date and job.closing_date >= datetime.utcnow()
+                    else None,
+                    category=job.category,
+                    visitor_count=job.visitor_count,
+                ),
+                "sort_key": calculate_days_ago(
+                    job.posted_at if sort_by == "posted_at" else job.created_at
+                ),
+            }
             for job in jobs
             if job.closing_date is None or job.closing_date >= datetime.utcnow()
         ]
+
+        # Sort the jobs based on the specified `sort_by` key
+        job_responses.sort(
+            key=lambda x: x["sort_key"], reverse=(order.lower() == "desc")
+        )
+
+        # Return sorted jobs
+        return [job["job_data"] for job in job_responses]
 
     except Exception as exc:
         raise HTTPException(

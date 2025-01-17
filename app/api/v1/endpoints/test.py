@@ -28,20 +28,18 @@ logger = logging.getLogger(__name__)
 
 
 @test_router.get(
-    "/careers-data/{test_uuid}",
+    "/careers-data/{test_uuid}/{career_uuid}",
     summary="Load specific career data by test UUID",
     response_model=BaseResponse,
     tags=["Careers"],
 )
 async def get_specific_career_data_by_test_uuid(
     test_uuid: str,
-    career_name: Optional[str] = None,
-    career_uuid: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
 ):
     try:
         career_data: Optional[CareerData] = await fetch_specific_career_from_user_response_by_test_uuid(
-            db, test_uuid, career_name, career_uuid
+            db, test_uuid
         )
 
         if not career_data:

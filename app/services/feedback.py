@@ -6,8 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload
 from datetime import datetime
-from sqlalchemy.sql.functions import current_user
-
+from sqlalchemy.sql.functions import func
 from app.exceptions.formatters import format_http_exception
 from app.models import AssessmentType, UserTest
 from app.models.user_feedback import UserFeedback
@@ -185,6 +184,7 @@ async def get_all_feedbacks(
     sort_order: str = "desc",
 ) -> dict:
     try:
+        # Base query for feedbacks
         query = select(UserFeedback).options(joinedload(UserFeedback.user))
 
         filters = []
@@ -197,6 +197,12 @@ async def get_all_feedbacks(
 
         query = query.where(*filters)
 
+        # Count the total feedbacks that match the filters
+        count_query = select(func.count()).select_from(query.subquery())
+        total_feedbacks_result = await db.execute(count_query)
+        total_feedbacks = total_feedbacks_result.scalar()
+
+        # Fetch feedbacks with pagination
         result = await db.execute(query)
         feedbacks = result.scalars().all()
 
@@ -224,7 +230,10 @@ async def get_all_feedbacks(
 
         paginated_results = paginate_results(formatted_feedbacks, page, page_size)
 
-        return paginated_results
+        return {
+            "total_feedbacks": total_feedbacks,
+            "feedbacks": paginated_results,
+        }
 
     except Exception as e:
         logger.exception("Error fetching feedbacks")
