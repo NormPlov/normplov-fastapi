@@ -16,7 +16,7 @@ fake = Faker()
 # Function to create static ADMIN
 async def init_roles_and_admin(db: AsyncSession):
     try:
-        default_roles = ["ADMIN", "USER"]
+        default_roles = ["ADMIN", "USER", "MENTOR"]
 
         for role_name in default_roles:
             stmt = select(Role).where(Role.name == role_name, Role.is_deleted == False)

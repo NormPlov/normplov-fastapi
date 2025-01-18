@@ -21,11 +21,32 @@ from app.services.test import (
     generate_shareable_link,
     get_user_responses,
     fetch_user_tests_for_current_user, get_public_responses, render_html_for_test, html_to_image,
-    fetch_specific_career_from_user_response_by_test_uuid
+    fetch_specific_career_from_user_response_by_test_uuid, fetch_all_tests_with_users,
+    generate_excel_for_tests
 )
 
 test_router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+@test_router.get("/excel", summary="Export all tests as Excel")
+async def export_all_tests_excel(
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        tests = await fetch_all_tests_with_users(db)
+        excel_file = await generate_excel_for_tests(tests)
+
+        return StreamingResponse(
+            excel_file,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": "attachment; filename=all_tests.xlsx"},
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to export tests to Excel: {str(e)}"
+        )
 
 
 @test_router.get(

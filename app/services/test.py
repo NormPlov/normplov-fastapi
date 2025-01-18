@@ -6,6 +6,8 @@ import json
 from uuid import UUID
 from typing import List, Dict, Any, Optional, Tuple
 from io import BytesIO
+
+import pandas as pd
 from pydantic import UUID4
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -29,6 +31,88 @@ logger = logging.getLogger(__name__)
 
 # Configure Jinja2 templates
 templates = Jinja2Templates(directory="templates")
+
+
+async def fetch_all_tests_with_users(db: AsyncSession, page: int = 1, page_size: int = 1000) -> list:
+
+    try:
+        if page < 1:
+            raise format_http_exception(
+                status_code=400,
+                message="Invalid page number.",
+                details="Page number must be greater than or equal to 1.",
+            )
+
+        if page_size < 1 or page_size > 1000:
+            raise format_http_exception(
+                status_code=400,
+                message="Invalid page size.",
+                details="Page size must be between 1 and 1000.",
+            )
+
+        stmt = (
+            select(UserTest)
+            .options(joinedload(UserTest.user))
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        result = await db.execute(stmt)
+        tests = result.scalars().all()
+
+        if not tests:
+            raise format_http_exception(
+                status_code=404,
+                message="No tests found.",
+                details="The database contains no tests for the specified criteria.",
+            )
+
+        return tests
+
+    except Exception as e:
+        raise format_http_exception(
+            status_code=500,
+            message="An error occurred while fetching tests.",
+            details=str(e),
+        )
+
+
+async def generate_excel_for_tests(tests: list) -> BytesIO:
+
+    try:
+        if not tests:
+            raise format_http_exception(
+                status_code=404,
+                message="No tests available for Excel export.",
+                details="The provided test data is empty.",
+            )
+
+        test_data = [
+            {
+                "Test UUID": test.uuid,
+                "Test Name": test.name,
+                "User": test.user.username if test.user else "Unknown",
+                "Email": test.user.email if test.user else "Unknown",
+                "Created At": test.created_at.strftime("%Y-%m-%d"),
+                "Is Completed": test.is_completed,
+            }
+            for test in tests
+        ]
+        df = pd.DataFrame(test_data)
+
+        # Create Excel in memory
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
+            df.to_excel(writer, index=False, sheet_name="Tests")
+        output.seek(0)
+
+        return output
+
+    except Exception as e:
+        raise format_http_exception(
+            status_code=500,
+            message="Failed to generate Excel file.",
+            details=str(e),
+        )
 
 
 async def fetch_specific_career_from_user_response_by_test_uuid(

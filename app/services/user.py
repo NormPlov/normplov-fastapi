@@ -28,6 +28,77 @@ from app.utils.verify import is_valid_uuid
 logger = logging.getLogger(__name__)
 
 
+async def get_all_mentors(
+    db: AsyncSession,
+    search: Optional[str],
+    sort_by: Optional[str],
+    sort_order: Optional[str],
+    page: int,
+    page_size: int,
+):
+    try:
+        # Base query to fetch users with "MENTOR" role
+        stmt = (
+            select(User)
+            .join(UserRole, User.id == UserRole.user_id)
+            .join(Role, Role.id == UserRole.role_id)
+            .where(
+                Role.name == "MENTOR",
+                User.is_deleted == False,
+                User.is_active == True,
+            )
+            .options(joinedload(User.roles))
+        )
+
+        # Apply search filter
+        if search:
+            stmt = stmt.where(
+                or_(
+                    User.username.ilike(f"%{search}%"),
+                    User.bio.ilike(f"%{search}%"),
+                )
+            )
+
+        # Apply sorting
+        order_by = getattr(User, sort_by, User.created_at)
+        if sort_order.lower() == "desc":
+            order_by = order_by.desc()
+        stmt = stmt.order_by(order_by)
+
+        # Apply pagination
+        stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+
+        # Execute query and ensure uniqueness
+        result = await db.execute(stmt)
+        mentors = result.unique().scalars().all()
+
+        if not mentors:
+            raise format_http_exception(
+                status_code=404,
+                message="No mentors found.",
+                details=None,
+            )
+
+        # Format the response
+        return [
+            {
+                "uuid": mentor.uuid,
+                "username": mentor.username,
+                "avatar": mentor.avatar,
+                "email": mentor.email,
+                "phone": mentor.phone_number,
+                "bio": mentor.bio,
+            }
+            for mentor in mentors
+        ]
+    except Exception as e:
+        raise format_http_exception(
+            status_code=400,
+            message="An error occurred while fetching mentors.",
+            details=str(e),
+        )
+
+
 async def fetch_all_tests(
     db: AsyncSession,
     page: int,

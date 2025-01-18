@@ -7,6 +7,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
+from app.exceptions.formatters import format_http_exception
 from app.utils.format_date import format_date
 from app.models import User
 from app.schemas.payload import BaseResponse
@@ -21,7 +22,7 @@ from app.services.user import (
     update_user_by_uuid,
     get_all_users,
     get_user_by_uuid,
-    unblock_user
+    unblock_user, get_all_mentors
 )
 from app.dependencies import (
     is_admin_user,
@@ -31,6 +32,46 @@ from app.dependencies import (
 user_router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 logger = logging.getLogger(__name__)
+
+
+@user_router.get(
+    "/mentors",
+    summary="Retrieve all mentors",
+    response_model=BaseResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def get_mentors_route(
+    search: Optional[str] = Query(None, description="Search term for mentors (username or bio)"),
+    sort_by: Optional[str] = Query("created_at", description="Field to sort by (e.g., username, email)"),
+    sort_order: Optional[str] = Query("asc", regex="^(asc|desc)$", description="Sort order (asc or desc)"),
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(10, ge=1, le=100, description="Number of mentors per page"),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        result = await get_all_mentors(
+            db=db,
+            search=search,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            page=page,
+            page_size=page_size,
+        )
+
+        return BaseResponse(
+            date=datetime.utcnow().strftime("%d-%B-%Y"),
+            status=status.HTTP_200_OK,
+            payload=result,
+            message="Mentors retrieved successfully!",
+        )
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise format_http_exception(
+            status_code=400,
+            message="Failed to retrieve mentors.",
+            details=str(e),
+        )
 
 
 # Unblock User Route
