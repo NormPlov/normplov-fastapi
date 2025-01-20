@@ -84,14 +84,90 @@ async def process_interest_assessment(
         key_traits_result = await db.execute(key_traits_query)
         key_traits = [trait.key_trait for trait in key_traits_result.scalars().all()]
 
+        # career_query = select(Career).join(CareerHollandCode).where(
+        #     CareerHollandCode.holland_code_id == holland_code_obj.id)
+        # career_result = await db.execute(career_query)
+        # career_paths = career_result.scalars().all()
+        #
+        # career_data = []
+        # for career in career_paths:
+        #     # Fetch majors for the career
+        #     career_majors_stmt = (
+        #         select(Major)
+        #         .join(CareerMajor, CareerMajor.major_id == Major.id)
+        #         .where(CareerMajor.career_id == career.id, CareerMajor.is_deleted == False)
+        #     )
+        #     result = await db.execute(career_majors_stmt)
+        #     majors = result.scalars().all()
+        #
+        #     majors_with_schools = []
+        #     for major in majors:
+        #         schools_stmt = (
+        #             select(School)
+        #             .join(SchoolMajor, SchoolMajor.school_id == School.id)
+        #             .where(SchoolMajor.major_id == major.id, SchoolMajor.is_deleted == False)
+        #         )
+        #         result = await db.execute(schools_stmt)
+        #         schools = result.scalars().all()
+        #         majors_with_schools.append({
+        #             "major_name": major.name,
+        #             "schools": [school.en_name for school in schools]
+        #         })
+        #
+        #     # Fetch categories for the career
+        #     category_links_stmt = select(CareerCategoryLink).where(
+        #         CareerCategoryLink.career_id == career.id
+        #     )
+        #     category_links_result = await db.execute(category_links_stmt)
+        #     career_category_links = category_links_result.scalars().all()
+        #
+        #     categories = []
+        #     for link in career_category_links:
+        #         category_stmt = select(CareerCategory).where(CareerCategory.id == link.career_category_id)
+        #         category_result = await db.execute(category_stmt)
+        #         career_category = category_result.scalars().first()
+        #
+        #         if career_category:
+        #             category_info = {
+        #                 "category_name": career_category.name,
+        #                 "responsibilities": [],
+        #             }
+        #
+        #             # Fetch responsibilities for the category
+        #             responsibilities_stmt = (
+        #                 select(CareerCategoryResponsibility)
+        #                 .where(CareerCategoryResponsibility.career_category_id == career_category.id)
+        #             )
+        #             responsibilities_result = await db.execute(responsibilities_stmt)
+        #             responsibilities = responsibilities_result.scalars().all()
+        #             category_info["responsibilities"] = [r.description for r in responsibilities]
+        #
+        #             categories.append(category_info)
+        #
+        #     career_data.append({
+        #         "career_uuid": str(career.uuid),
+        #         "career_name": career.name,
+        #         "description": career.description,
+        #         "categories": categories,
+        #         "majors": majors_with_schools
+        #     })
+
         career_query = select(Career).join(CareerHollandCode).where(
-            CareerHollandCode.holland_code_id == holland_code_obj.id)
+            CareerHollandCode.holland_code_id == holland_code_obj.id
+        )
         career_result = await db.execute(career_query)
         career_paths = career_result.scalars().all()
 
         career_data = []
+        unique_career_uuids = set()  # set to track unique career UUIDs
+
         for career in career_paths:
-            # Fetch majors for the career
+            if career.uuid in unique_career_uuids:
+                continue  # we skip if the career is already processed
+            # mark the career as processed
+            unique_career_uuids.add(career.uuid)
+
+            # get majors for the career
             career_majors_stmt = (
                 select(Major)
                 .join(CareerMajor, CareerMajor.major_id == Major.id)
@@ -249,6 +325,9 @@ async def process_interest_assessment(
         return response
 
     except Exception as e:
-        logger.exception("An error occurred during interest assessment.")
         await db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=400,
+            detail=f"An unexpected error occurred during the prediction process. Please check your input or try again."
+
+        )

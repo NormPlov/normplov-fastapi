@@ -314,7 +314,178 @@ async def predict_learning_style(
 
         dimension_details = []
         recommended_techniques = []
+        # related_careers = []
+        #
+        # for style, prob in row.items():
+        #     dimension_name = style.replace("_Prob", "").replace("ReadWrite", "Read/Write")
+        #     dimension_stmt = select(Dimension).where(Dimension.name == dimension_name)
+        #     dimension = await db.execute(dimension_stmt)
+        #     dimension = dimension.scalars().first()
+        #
+        #     if dimension:
+        #         percentage = round(prob * 100, 2)
+        #
+        #         if prob > 0.6:
+        #             level = 3
+        #         elif prob >= 0.3:
+        #             level = 2
+        #         else:
+        #             level = 1
+        #
+        #         careers_stmt = (
+        #             select(DimensionCareer)
+        #             .options(joinedload(DimensionCareer.career))
+        #             .where(DimensionCareer.dimension_id == dimension.id)
+        #         )
+        #         careers = await db.execute(careers_stmt)
+        #         careers = careers.scalars().all()
+        #
+        #         for career in careers:
+        #             # Step 1: Retrieve career category links
+        #             category_links_stmt = select(CareerCategoryLink).where(
+        #                 CareerCategoryLink.career_id == career.career.id
+        #             )
+        #             category_links_result = await db.execute(category_links_stmt)
+        #             career_category_links = category_links_result.scalars().all()
+        #
+        #             career_categories = []
+        #
+        #             for link in career_category_links:
+        #                 # Step 2: Fetching category details
+        #                 category_stmt = select(CareerCategory).where(CareerCategory.id == link.career_category_id)
+        #                 category_result = await db.execute(category_stmt)
+        #                 career_category = category_result.scalars().first()
+        #
+        #                 if career_category:
+        #                     category_info = {
+        #                         "category_name": career_category.name,
+        #                         "responsibilities": [],
+        #                     }
+        #
+        #                     # Step 3: Fetching responsibilities for this category
+        #                     responsibilities_stmt = (
+        #                         select(CareerCategoryResponsibility)
+        #                         .where(CareerCategoryResponsibility.career_category_id == career_category.id)
+        #                     )
+        #                     responsibilities_result = await db.execute(responsibilities_stmt)
+        #                     responsibilities = responsibilities_result.scalars().all()
+        #                     category_info["responsibilities"] = [r.description for r in responsibilities]
+        #
+        #                     career_categories.append(category_info)
+        #
+        #             # Step 4: Compile career information along with categories
+        #             career_info = {
+        #                 "career_uuid": str(career.career.uuid),
+        #                 "career_name": career.career.name,
+        #                 "description": career.career.description,
+        #                 "categories": career_categories,
+        #                 "majors": [],
+        #             }
+        #
+        #             # Step 5: Fetching major details
+        #             career_majors_stmt = (
+        #                 select(Major)
+        #                 .join(CareerMajor, CareerMajor.major_id == Major.id)
+        #                 .where(CareerMajor.career_id == career.career.id, CareerMajor.is_deleted == False)
+        #             )
+        #             result = await db.execute(career_majors_stmt)
+        #             majors = result.scalars().all()
+        #
+        #             for major in majors:
+        #                 major_info = {"major_name": major.name, "schools": []}
+        #
+        #                 # Step 6: Fetching schools related to each major
+        #                 schools_stmt = (
+        #                     select(School)
+        #                     .join(SchoolMajor, SchoolMajor.school_id == School.id)
+        #                     .where(SchoolMajor.major_id == major.id, SchoolMajor.is_deleted == False)
+        #                 )
+        #                 result = await db.execute(schools_stmt)
+        #                 schools = result.scalars().all()
+        #
+        #                 major_info["schools"] = [school.en_name for school in schools]
+        #                 career_info["majors"].append(major_info)
+        #
+        #             related_careers.append(career_info)
+        #
+        #         dimension_details.append(
+        #             {
+        #                 "dimension_name": dimension.name,
+        #                 "dimension_description": dimension.description,
+        #                 "level": level,
+        #             }
+        #         )
+        #
+        # highest_scoring_dimension_stmt = select(Dimension).where(Dimension.name == learning_style)
+        # highest_scoring_dimension = await db.execute(highest_scoring_dimension_stmt)
+        # highest_scoring_dimension = highest_scoring_dimension.scalars().first()
+        #
+        # if highest_scoring_dimension:
+        #     techniques_stmt = select(LearningStyleStudyTechnique).where(
+        #         LearningStyleStudyTechnique.dimension_id == highest_scoring_dimension.id,
+        #         LearningStyleStudyTechnique.is_deleted == False,
+        #     )
+        #     techniques = await db.execute(techniques_stmt)
+        #     recommended_techniques = [
+        #         {
+        #             "technique_name": t.technique_name,
+        #             "category": t.category,
+        #             "description": t.description,
+        #             "image_url": f"{t.image_url}",
+        #         }
+        #         for t in techniques.scalars().all()
+        #     ]
+        #
+        # unique_careers = list({c["career_name"]: c for c in related_careers}.values())
+        #
+        # response = LearningStyleResponse(
+        #     user_uuid=current_user.uuid,
+        #     test_uuid=str(user_test.uuid),
+        #     test_name=user_test.name,
+        #     learning_style=learning_style,
+        #     probability=round(max_prob * 100, 2),
+        #     details=row.to_dict(),
+        #     chart=LearningStyleChart(labels=chart_data["labels"], values=chart_data["values"]),
+        #     dimensions=dimension_details,
+        #     recommended_techniques=recommended_techniques,
+        #     related_careers=unique_careers,
+        # )
+        #
+        # user_responses = UserResponse(
+        #     uuid=str(uuid.uuid4()),
+        #     user_id=current_user.id,
+        #     user_test_id=user_test.id,
+        #     assessment_type_id=assessment_type_id,
+        #     response_data=json.dumps(response.dict()),
+        #     is_completed=True,
+        #     created_at=datetime.utcnow(),
+        # )
+        # db.add(user_responses)
+        #
+        # for style, prob in row.items():
+        #     dimension_name = style.replace("_Prob", "")
+        #     dimension_stmt = select(Dimension).where(Dimension.name == dimension_name)
+        #     dimension = await db.execute(dimension_stmt)
+        #     dimension = dimension.scalars().first()
+        #
+        #     if dimension:
+        #         user_assessment_score = UserAssessmentScore(
+        #             uuid=str(uuid.uuid4()),
+        #             user_id=current_user.id,
+        #             user_test_id=user_test.id,
+        #             assessment_type_id=assessment_type_id,
+        #             dimension_id=dimension.id,
+        #             score=json.dumps({style: prob}),
+        #             created_at=datetime.utcnow(),
+        #         )
+        #         db.add(user_assessment_score)
+        #
+        # await db.commit()
+        #
+        # return response.dict()
+
         related_careers = []
+        processed_career_uuids = set()  # Track processed career UUIDs
 
         for style, prob in row.items():
             dimension_name = style.replace("_Prob", "").replace("ReadWrite", "Read/Write")
@@ -341,6 +512,12 @@ async def predict_learning_style(
                 careers = careers.scalars().all()
 
                 for career in careers:
+                    # Check if the career has already been processed
+                    if career.career.uuid in processed_career_uuids:
+                        continue
+
+                    processed_career_uuids.add(career.career.uuid)
+
                     # Step 1: Retrieve career category links
                     category_links_stmt = select(CareerCategoryLink).where(
                         CareerCategoryLink.career_id == career.career.id
@@ -436,8 +613,6 @@ async def predict_learning_style(
                 for t in techniques.scalars().all()
             ]
 
-        unique_careers = list({c["career_name"]: c for c in related_careers}.values())
-
         response = LearningStyleResponse(
             user_uuid=current_user.uuid,
             test_uuid=str(user_test.uuid),
@@ -448,7 +623,7 @@ async def predict_learning_style(
             chart=LearningStyleChart(labels=chart_data["labels"], values=chart_data["values"]),
             dimensions=dimension_details,
             recommended_techniques=recommended_techniques,
-            related_careers=unique_careers,
+            related_careers=related_careers,  # No duplicates
         )
 
         user_responses = UserResponse(
@@ -462,29 +637,14 @@ async def predict_learning_style(
         )
         db.add(user_responses)
 
-        for style, prob in row.items():
-            dimension_name = style.replace("_Prob", "")
-            dimension_stmt = select(Dimension).where(Dimension.name == dimension_name)
-            dimension = await db.execute(dimension_stmt)
-            dimension = dimension.scalars().first()
-
-            if dimension:
-                user_assessment_score = UserAssessmentScore(
-                    uuid=str(uuid.uuid4()),
-                    user_id=current_user.id,
-                    user_test_id=user_test.id,
-                    assessment_type_id=assessment_type_id,
-                    dimension_id=dimension.id,
-                    score=json.dumps({style: prob}),
-                    created_at=datetime.utcnow(),
-                )
-                db.add(user_assessment_score)
-
         await db.commit()
 
         return response.dict()
 
     except Exception as e:
-        logger.exception("An error occurred during prediction.")
         await db.rollback()
-        raise HTTPException(status_code=500, detail="Internal Server Error")
+        raise HTTPException(
+            status_code=400,
+            detail=f"An unexpected error occurred during the prediction process. Please check your input or try again."
+
+        )

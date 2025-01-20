@@ -301,6 +301,8 @@ async def process_value_assessment(
         return response
 
     except Exception as e:
-        logger.exception("Error processing value assessment.")
         await db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=400,
+            detail=f"An unexpected error occurred during the prediction process. Please check your input or try again."
+        )

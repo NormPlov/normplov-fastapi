@@ -321,13 +321,17 @@ async def fetch_user_tests_for_current_user(
 
 async def get_user_responses(
     db: AsyncSession,
-    test_uuid: Optional[str] = None,
+    user_id: int,
+    test_uuid: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     try:
         query = select(UserResponse).options(
             joinedload(UserResponse.user_test),
             joinedload(UserResponse.assessment_type)
-        ).where(UserResponse.is_deleted == False)
+        ).where(
+            UserResponse.user_id == user_id,
+            UserResponse.is_deleted == False
+        )
 
         if test_uuid:
             query = query.where(UserResponse.user_test.has(UserTest.uuid == test_uuid))
@@ -335,14 +339,12 @@ async def get_user_responses(
         result = await db.execute(query)
         responses = result.scalars().all()
 
-        # Deserialize response_data if it's a string
         return [
             {
                 "test_uuid": str(response.user_test.uuid),
                 "test_name": response.user_test.name,
                 "assessment_type_name": response.assessment_type.name,
-                "user_response_data": json.loads(response.response_data)
-                if isinstance(response.response_data, str) else response.response_data,
+                "user_response_data": response.response_data,
                 "created_at": response.created_at.strftime("%Y-%m-%d %H:%M:%S"),
                 "is_deleted": response.is_deleted,
             }
@@ -351,10 +353,7 @@ async def get_user_responses(
 
     except Exception as e:
         logger.error(f"Error fetching user responses: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="An error occurred while fetching user responses.",
-        )
+        raise HTTPException(status_code=500, detail="An error occurred while fetching user responses.")
 
 
 async def render_html_for_test(request: Request, test_name: str, test_data: dict) -> str:
