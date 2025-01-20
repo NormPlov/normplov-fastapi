@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ test_name }}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+
+        .container {
+            min-height: 100vh;
+            margin: 0 auto;
+            padding: 20px;
+            position: relative;
+            background: url('https://hebbkx1anhila5yf.public.blob.vercel-storage.com/5-wpj2kEEjp815Rqocs3v3N7FVMsEBe8.png') no-repeat center center fixed;
+            background-size: cover;
+        }
+
+        .result-subtitle {
+            font-size: 36px;
+            color: #333;
+            position: absolute;
+            top: 62%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <main class="content">
+            <h3 class="result-subtitle">{{ user_response_data.personality_type.name }}</h3>
+        </main>
+    </div>
+</body>
+</html>

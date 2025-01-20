@@ -1,8 +1,10 @@
+import json
 import logging
+import traceback
 
 from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from pydantic import UUID4
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -182,36 +184,38 @@ async def get_all_tests_route(
     response_class=StreamingResponse
 )
 async def get_test_image(
+        request: Request,
         test_uuid: str,
-        db: AsyncSession = Depends(get_db),
-        current_user: User = Depends(get_current_user_data)
+        db: AsyncSession = Depends(get_db)
 ):
     try:
-        # Fetch user test response
-        user_responses = await get_user_responses(db, current_user.id, test_uuid)
+        # Fetch test response without relying on the current user
+        user_responses = await get_user_responses(db, test_uuid=test_uuid)
         if not user_responses:
             raise HTTPException(
                 status_code=404,
-                detail="No test details found for this user."
+                detail="No test details found for the provided test UUID."
             )
 
         test_data = user_responses[0]
-        if test_data["test_name"] == "Personality Test":
-            logger.info(f"Rendering personality test details for test_uuid: {test_uuid}")
-            html_content = render_html_for_test(test_data)
-            image_stream = await html_to_image(html_content)
 
-            return StreamingResponse(
-                content=image_stream,
-                media_type="image/png",
-                headers={"Content-Disposition": "inline; filename=personality_test.png"}
-            )
+        # Debugging logs
+        logger.debug(f"Type of test_data: {type(test_data)}")
+        logger.debug(f"Content of test_data: {test_data}")
 
-        logger.info(f"Test details for test_uuid {test_uuid} are not of type 'Personality Test'.")
-        raise HTTPException(
-            status_code=400,
-            detail="Test type is not supported for image generation."
+        # Render the HTML
+        logger.info(f"Rendering personality test details for test_uuid: {test_uuid}")
+        html_content = await render_html_for_test(request, test_data["test_name"], test_data)
+
+        # Generate an image
+        image_stream = await html_to_image(html_content)
+
+        return StreamingResponse(
+            content=image_stream,
+            media_type="image/png",
+            headers={"Content-Disposition": "inline; filename=personality_test.png"}
         )
+
     except HTTPException as e:
         raise e
     except Exception as e:

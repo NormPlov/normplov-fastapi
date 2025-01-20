@@ -2,15 +2,15 @@ import logging
 import traceback
 import uuid
 import json
+import os
 
+from fastapi import Request
 from uuid import UUID
 from typing import List, Dict, Any, Optional, Tuple
 from io import BytesIO
-
 import pandas as pd
 from pydantic import UUID4
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
+from html2image import Html2Image
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import joinedload, selectinload
 from datetime import date
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 
 # Configure Jinja2 templates
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory="app/templates")
 
 
 async def fetch_all_tests_with_users(db: AsyncSession, page: int = 1, page_size: int = 1000) -> list:
@@ -321,17 +321,13 @@ async def fetch_user_tests_for_current_user(
 
 async def get_user_responses(
     db: AsyncSession,
-    user_id: int,
-    test_uuid: Optional[str] = None
+    test_uuid: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     try:
         query = select(UserResponse).options(
             joinedload(UserResponse.user_test),
             joinedload(UserResponse.assessment_type)
-        ).where(
-            UserResponse.user_id == user_id,
-            UserResponse.is_deleted == False
-        )
+        ).where(UserResponse.is_deleted == False)
 
         if test_uuid:
             query = query.where(UserResponse.user_test.has(UserTest.uuid == test_uuid))
@@ -339,12 +335,14 @@ async def get_user_responses(
         result = await db.execute(query)
         responses = result.scalars().all()
 
+        # Deserialize response_data if it's a string
         return [
             {
                 "test_uuid": str(response.user_test.uuid),
                 "test_name": response.user_test.name,
                 "assessment_type_name": response.assessment_type.name,
-                "user_response_data": response.response_data,
+                "user_response_data": json.loads(response.response_data)
+                if isinstance(response.response_data, str) else response.response_data,
                 "created_at": response.created_at.strftime("%Y-%m-%d %H:%M:%S"),
                 "is_deleted": response.is_deleted,
             }
@@ -353,47 +351,86 @@ async def get_user_responses(
 
     except Exception as e:
         logger.error(f"Error fetching user responses: {e}")
-        raise HTTPException(status_code=500, detail="An error occurred while fetching user responses.")
+        raise HTTPException(
+            status_code=500,
+            detail="An error occurred while fetching user responses.",
+        )
 
 
-async def render_html_for_test(test_name: str, test_data: dict) -> str:
+async def render_html_for_test(request: Request, test_name: str, test_data: dict) -> str:
     try:
+        # Ensure `test_data` contains the required fields
+        if not isinstance(test_data, dict):
+            raise ValueError(f"test_data must be a dictionary, got {type(test_data)}")
+
+        # Map templates for each assessment type
         template_map = {
-            "Personality Test": "personality_test.html",
-            "Skill Test": "skill_test.html",
-            "Interest Test": "interest_test.html",
-            "Learning Style Test": "learning_style_test.html",
-            "Value Test": "value_test.html",
-            "All Tests": "all_test.html"
+            "Personality Test": "assessments/personality_test.html",
+            "Skill Test": "assessments/skill_test.html",
+            "Interest Test": "assessments/interest_test.html",
+            "Learning Style Test": "assessments/learning_style_test.html",
+            "Value Test": "assessments/value_test.html",
+            "All Test": "assessments/all_tests.html",
         }
 
-        # Get the template file for the test
+        # Select the template based on the test name
         template_file = template_map.get(test_name)
         if not template_file:
             raise ValueError(f"No template found for test_name: {test_name}")
 
-        return templates.TemplateResponse(template_file, {"test_data": test_data}).body.decode("utf-8")
+        # Extract user response data
+        user_response_data = test_data.get("user_response_data", {})
+        if not user_response_data:
+            raise ValueError("Missing 'user_response_data' in test_data.")
+
+        # log the response from each test
+        logger.debug(f"user_response_data: {user_response_data}")
+
+        # Render the template with the required context
+        html_content = templates.TemplateResponse(
+            template_file,
+            {
+                "request": request,
+                "user_response_data": user_response_data,
+                "test_name": test_data.get("test_name", "Unknown Test"),
+                "test_uuid": test_data.get("test_uuid", "Unknown UUID"),
+            }
+        ).body.decode("utf-8")
+
+        logger.debug(f"Generated HTML content: {html_content}")
+        return html_content
+
     except Exception as e:
+        logger.error(f"Error rendering template: {traceback.format_exc()}")
         raise Exception(f"Error rendering template: {traceback.format_exc()}")
 
 
 async def html_to_image(html_content: str) -> BytesIO:
 
-    options = Options()
-    options.add_argument('--headless')
-    options.add_argument('--disable-gpu')
-    options.add_argument('--no-sandbox')
-    options.add_argument('--disable-dev-shm-usage')
-    options.add_argument('--window-size=1024x768')
-
     try:
-        with webdriver.Chrome(options=options) as driver:
-            driver.get("data:text/html;charset=utf-8," + html_content)
-            driver.implicitly_wait(2)
+        hti = Html2Image()
 
-            screenshot = driver.get_screenshot_as_png()
+        temp_image_path = "temp_rendered_image.png"
+        temp_html_path = "temp_rendered_html.html"
 
-        return BytesIO(screenshot)
+        with open(temp_html_path, "w", encoding="utf-8") as file:
+            file.write(html_content)
+
+        # Here is the way we set the size of the image
+        hti.screenshot(
+            html_file=temp_html_path,
+            save_as=temp_image_path,
+            size=(1200, 630)
+        )
+
+        with open(temp_image_path, "rb") as image_file:
+            image_stream = BytesIO(image_file.read())
+
+        os.remove(temp_image_path)
+        os.remove(temp_html_path)
+
+        return image_stream
+
     except Exception as e:
         raise Exception(f"Error while generating image: {traceback.format_exc()}")
 

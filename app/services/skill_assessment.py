@@ -195,7 +195,53 @@ async def predict_skills(
         #         if not suggested_careers:
         #             logger.warning("No top category calculated.")
 
+        # career_path = []
+        # if top_category:
+        #     dimension_query = (
+        #         select(DimensionCareer)
+        #         .options(
+        #             joinedload(DimensionCareer.career).joinedload(Career.majors).joinedload(
+        #                 CareerMajor.major).joinedload(Major.school_majors).joinedload(SchoolMajor.school),
+        #             joinedload(DimensionCareer.career).joinedload(Career.career_category_links).joinedload(
+        #                 CareerCategoryLink.career_category).joinedload(CareerCategory.responsibilities)
+        #         )
+        #         .join(Dimension)
+        #         .join(SkillCategory)
+        #         .where(SkillCategory.category_name == top_category["name"])
+        #         .filter(DimensionCareer.is_deleted == False)
+        #     )
+        #
+        #     result = await db.execute(dimension_query)
+        #     dimension_careers = result.unique().scalars().all()
+        #
+        #     for dc in dimension_careers:
+        #         career = dc.career
+        #         majors = [
+        #             MajorWithSchools(
+        #                 major_name=cm.major.name,
+        #                 schools=[sm.school.en_name for sm in cm.major.school_majors if sm.school and not sm.is_deleted]
+        #             )
+        #             for cm in career.majors if not cm.is_deleted
+        #         ]
+        #
+        #         categories = [
+        #             CategoryWithResponsibilities(
+        #                 category_name=link.career_category.name,
+        #                 responsibilities=[resp.description for resp in link.career_category.responsibilities]
+        #             )
+        #             for link in career.career_category_links
+        #         ]
+        #
+        #         career_path.append(CareerData(
+        #             career_uuid=str(career.uuid),
+        #             career_name=career.name,
+        #             description=career.description,
+        #             categories=categories,
+        #             majors=majors
+        #         ))
         career_path = []
+        unique_career_uuids = set()  # Set to store unique career UUIDs
+
         if top_category:
             dimension_query = (
                 select(DimensionCareer)
@@ -216,6 +262,14 @@ async def predict_skills(
 
             for dc in dimension_careers:
                 career = dc.career
+
+                # Skip if career UUID is already processed
+                if career.uuid in unique_career_uuids:
+                    continue
+
+                # Add career UUID to the set
+                unique_career_uuids.add(career.uuid)
+
                 majors = [
                     MajorWithSchools(
                         major_name=cm.major.name,
