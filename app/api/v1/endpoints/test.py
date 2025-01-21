@@ -1,4 +1,3 @@
-import json
 import logging
 import traceback
 
@@ -24,7 +23,7 @@ from app.services.test import (
     get_user_responses,
     fetch_user_tests_for_current_user, get_public_responses, render_html_for_test, html_to_image,
     fetch_specific_career_from_user_response_by_test_uuid, fetch_all_tests_with_users,
-    generate_excel_for_tests
+    generate_excel_for_tests, get_user_responses_to_render_test_details_in_html
 )
 
 test_router = APIRouter()
@@ -190,7 +189,7 @@ async def get_test_image(
 ):
     try:
         # Fetch test response without relying on the current user
-        user_responses = await get_user_responses(db, test_uuid=test_uuid)
+        user_responses = await get_user_responses_to_render_test_details_in_html(db, test_uuid=test_uuid)
         if not user_responses:
             raise HTTPException(
                 status_code=404,

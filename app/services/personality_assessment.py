@@ -1,13 +1,14 @@
-from typing import Optional
-
 import pandas as pd
 import uuid
+import logging
+import json
+
+from typing import Optional
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from fastapi import HTTPException
 from sqlalchemy.orm import joinedload
-
 from app.models import AssessmentType, Career, CareerMajor, SchoolMajor, Major, CareerPersonalityType, UserTest, \
     CareerCategory, CareerCategoryLink
 from app.models.user_response import UserResponse
@@ -25,8 +26,6 @@ from app.schemas.personality_assessment import (
     PersonalityTraits, CategoryWithResponsibilities, MajorData, CareerData
 )
 from ml_models.model_loader import load_personality_models
-import logging
-import json
 
 logger = logging.getLogger(__name__)
 dimension_models, personality_predictor, label_encoder = load_personality_models()
@@ -48,16 +47,20 @@ async def process_personality_assessment(
     final_user_test: Optional[UserTest] = None
 ) -> PersonalityAssessmentResponse:
     try:
+        # Get assessment type ID for "Personality"
         assessment_type_id = await get_assessment_type_id("Personality", db)
 
+        # Create or reuse user test
         user_test = final_user_test if final_user_test else await create_user_test(db, current_user.id, assessment_type_id)
 
+        # Predict dimension scores using models
         input_responses_df = pd.DataFrame([input_data])
         dimension_scores = {}
         for dimension, model in dimension_models.items():
             prediction = model.predict(input_responses_df)[0]
             dimension_scores[dimension] = prediction
 
+        # Normalize dimension scores
         total_score = sum(dimension_scores.values())
         normalized_scores = {
             dim: {
@@ -67,17 +70,27 @@ async def process_personality_assessment(
             for dim, score in dimension_scores.items()
         }
 
-        input_data_for_prediction = pd.DataFrame([dimension_scores])
-        predicted_class = personality_predictor.predict(input_data_for_prediction)
-        predicted_personality = label_encoder.inverse_transform(predicted_class)[0]
+        # Determine personality type
+        type_map = {
+            "E": dimension_scores["E_Score"] >= dimension_scores["I_Score"],
+            "N": dimension_scores["N_Score"] >= dimension_scores["S_Score"],
+            "F": dimension_scores["F_Score"] >= dimension_scores["T_Score"],
+            "J": dimension_scores["J_Score"] >= dimension_scores["P_Score"],
+        }
+        personality_code = "".join(
+            key if value else key.replace("E", "I").replace("N", "S").replace("F", "T").replace("J", "P")
+            for key, value in type_map.items()
+        )
 
-        personality_query = select(PersonalityType).where(PersonalityType.name == predicted_personality)
+        # Retrieve personality type details
+        personality_query = select(PersonalityType).where(PersonalityType.name == personality_code)
         result = await db.execute(personality_query)
         personality_details = result.scalars().first()
 
         if not personality_details:
-            raise HTTPException(status_code=400, detail="Personality details not found for the predicted class.")
+            raise HTTPException(status_code=404, detail=f"Personality type '{personality_code}' not found.")
 
+        # Create assessment scores
         assessment_scores = []
         for dimension_name, score_data in normalized_scores.items():
             dimension_query = select(Dimension).where(Dimension.name == dimension_name)
@@ -101,13 +114,11 @@ async def process_personality_assessment(
             )
 
         if not assessment_scores:
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to resolve dimension IDs for personality assessment scores.",
-            )
+            raise HTTPException(status_code=400, detail="No valid dimensions found for scoring.")
 
         db.add_all(assessment_scores)
 
+        # Fetch personality traits, strengths, and weaknesses
         traits_query = select(PersonalityTrait).where(PersonalityTrait.personality_type_id == personality_details.id)
         traits_result = await db.execute(traits_query)
         traits = traits_result.scalars().all()
@@ -122,138 +133,16 @@ async def process_personality_assessment(
         weaknesses_result = await db.execute(weaknesses_query)
         weaknesses = [w.weakness for w in weaknesses_result.scalars().all()]
 
-        # career_query = (
-        #     select(Career)
-        #     .join(CareerPersonalityType, CareerPersonalityType.career_id == Career.id)
-        #     .where(CareerPersonalityType.personality_type_id == personality_details.id)
-        #     .distinct()
-        # )
-        # career_result = await db.execute(career_query)
-        # careers = career_result.scalars().all()
-        #
-        # career_data = []
-        # for career in careers:
-        #     career_majors_stmt = (
-        #         select(Major)
-        #         .join(CareerMajor, CareerMajor.major_id == Major.id)
-        #         .where(CareerMajor.career_id == career.id, CareerMajor.is_deleted == False)
-        #     )
-        #     result = await db.execute(career_majors_stmt)
-        #     majors = result.scalars().all()
-        #
-        #     majors_with_schools = []
-        #     for major in majors:
-        #         schools_stmt = (
-        #             select(School)
-        #             .join(SchoolMajor, SchoolMajor.school_id == School.id)
-        #             .where(SchoolMajor.major_id == major.id, SchoolMajor.is_deleted == False)
-        #         )
-        #         result = await db.execute(schools_stmt)
-        #         schools = result.scalars().all()
-        #         majors_with_schools.append({
-        #             "major_name": major.name,
-        #             "schools": [school.en_name for school in schools]
-        #         })
-        #
-        #     career_data.append({
-        #         "career_name": career.name,
-        #         "description": career.description,
-        #         "majors": majors_with_schools
-        #     })
-
-        # Update the career query
-        # career_query = (
-        #     select(Career)
-        #     .options(
-        #         joinedload(Career.career_category_links).joinedload(CareerCategoryLink.career_category).joinedload(
-        #             CareerCategory.responsibilities),
-        #         joinedload(Career.majors).joinedload(CareerMajor.major).joinedload(Major.school_majors).joinedload(
-        #             SchoolMajor.school)
-        #     )
-        #     .join(CareerPersonalityType, CareerPersonalityType.career_id == Career.id)
-        #     .where(CareerPersonalityType.personality_type_id == personality_details.id)
-        #     .where(Career.is_deleted == False)
-        #     .distinct()
-        # )
-        # career_result = await db.execute(career_query)
-        # careers = career_result.unique().scalars().all()
-        #
-        # # Process career data
-        # career_data = []
-        # for career in careers:
-        #     categories = []
-        #     for link in career.career_category_links:
-        #         category = link.career_category
-        #         responsibilities = [resp.description for resp in category.responsibilities]
-        #         categories.append(CategoryWithResponsibilities(
-        #             category_name=category.name,
-        #             responsibilities=responsibilities
-        #         ))
-        #
-        #     majors_with_schools = []
-        #     for career_major in career.majors:
-        #         if not career_major.is_deleted:
-        #             major = career_major.major
-        #             schools = []
-        #             for sm in major.school_majors:
-        #                 if not sm.is_deleted and sm.school is not None and sm.school.en_name is not None:
-        #                     schools.append(sm.school.en_name)
-        #
-        #             if schools:  # Only add the major if it has associated schools
-        #                 majors_with_schools.append(MajorData(
-        #                     major_name=major.name,
-        #                     schools=schools
-        #                 ))
-        #
-        #     career_data.append(CareerData(
-        #         career_uuid=str(career.uuid),
-        #         career_name=career.name,
-        #         description=career.description,
-        #         categories=categories,
-        #         majors=majors_with_schools
-        #     ))
-        #
-        # response = PersonalityAssessmentResponse(
-        #     user_uuid=current_user.uuid,
-        #     test_uuid=str(user_test.uuid),
-        #     test_name=user_test.name,
-        #     personality_type=PersonalityTypeDetails(
-        #         name=personality_details.name,
-        #         title=personality_details.title,
-        #         description=personality_details.description,
-        #     ),
-        #     dimensions=[DimensionScore(
-        #         dimension_name=dim,
-        #         score=data["score"],
-        #         percentage=f"{data['percentage']}%"
-        #     ) for dim, data in normalized_scores.items()],
-        #     traits=PersonalityTraits(positive=positive_traits, negative=negative_traits),
-        #     strengths=strengths,
-        #     weaknesses=weaknesses,
-        #     career_recommendations=career_data,
-        # )
-        #
-        # user_response = UserResponse(
-        #     uuid=str(uuid.uuid4()),
-        #     user_id=current_user.id,
-        #     user_test_id=user_test.id,
-        #     assessment_type_id=assessment_type_id,
-        #     response_data=json.dumps(response.dict()),
-        #     is_completed=True,
-        #     created_at=datetime.utcnow(),
-        # )
-        # db.add(user_response)
-        #
-        # await db.commit()
-        #
-        # return response
+        # Retrieve career recommendations
         career_query = (
             select(Career)
             .options(
                 joinedload(Career.career_category_links).joinedload(CareerCategoryLink.career_category).joinedload(
-                    CareerCategory.responsibilities),
+                    CareerCategory.responsibilities
+                ),
                 joinedload(Career.majors).joinedload(CareerMajor.major).joinedload(Major.school_majors).joinedload(
-                    SchoolMajor.school)
+                    SchoolMajor.school
+                ),
             )
             .join(CareerPersonalityType, CareerPersonalityType.career_id == Career.id)
             .where(CareerPersonalityType.personality_type_id == personality_details.id)
@@ -263,48 +152,44 @@ async def process_personality_assessment(
         career_result = await db.execute(career_query)
         careers = career_result.unique().scalars().all()
 
-        # Process career data
+        # Process career data and remove duplicates
+        processed_careers = set()
         career_data = []
-        processed_career_uuids = set()
-
         for career in careers:
-            if career.uuid in processed_career_uuids:
-                continue  # Skip duplicate careers
+            if career.uuid in processed_careers:
+                continue
 
-            processed_career_uuids.add(career.uuid)
+            processed_careers.add(career.uuid)
+            categories = [
+                CategoryWithResponsibilities(
+                    category_name=link.career_category.name,
+                    responsibilities=[resp.description for resp in link.career_category.responsibilities],
+                )
+                for link in career.career_category_links
+            ]
+            majors = [
+                MajorData(
+                    major_name=major.name,
+                    schools=[
+                        school.en_name
+                        for school_major in major.school_majors if not school_major.is_deleted
+                        for school in [school_major.school] if school
+                    ],
+                )
+                for career_major in career.majors if not career_major.is_deleted
+                for major in [career_major.major]
+            ]
+            career_data.append(
+                CareerData(
+                    career_uuid=str(career.uuid),
+                    career_name=career.name,
+                    description=career.description,
+                    categories=categories,
+                    majors=majors,
+                )
+            )
 
-            categories = []
-            for link in career.career_category_links:
-                category = link.career_category
-                responsibilities = [resp.description for resp in category.responsibilities]
-                categories.append(CategoryWithResponsibilities(
-                    category_name=category.name,
-                    responsibilities=responsibilities
-                ))
-
-            majors_with_schools = []
-            for career_major in career.majors:
-                if not career_major.is_deleted:
-                    major = career_major.major
-                    schools = []
-                    for sm in major.school_majors:
-                        if not sm.is_deleted and sm.school is not None and sm.school.en_name is not None:
-                            schools.append(sm.school.en_name)
-
-                    if schools:  # Only add the major if it has associated schools
-                        majors_with_schools.append(MajorData(
-                            major_name=major.name,
-                            schools=schools
-                        ))
-
-            career_data.append(CareerData(
-                career_uuid=str(career.uuid),
-                career_name=career.name,
-                description=career.description,
-                categories=categories,
-                majors=majors_with_schools
-            ))
-
+        # Construct response
         response = PersonalityAssessmentResponse(
             user_uuid=current_user.uuid,
             test_uuid=str(user_test.uuid),
@@ -314,17 +199,21 @@ async def process_personality_assessment(
                 title=personality_details.title,
                 description=personality_details.description,
             ),
-            dimensions=[DimensionScore(
-                dimension_name=dim,
-                score=data["score"],
-                percentage=f"{data['percentage']}%"
-            ) for dim, data in normalized_scores.items()],
+            dimensions=[
+                DimensionScore(
+                    dimension_name=dim,
+                    score=data["score"],
+                    percentage=f"{data['percentage']}%",
+                )
+                for dim, data in normalized_scores.items()
+            ],
             traits=PersonalityTraits(positive=positive_traits, negative=negative_traits),
             strengths=strengths,
             weaknesses=weaknesses,
             career_recommendations=career_data,
         )
 
+        # Save user response
         user_response = UserResponse(
             uuid=str(uuid.uuid4()),
             user_id=current_user.id,
@@ -335,14 +224,11 @@ async def process_personality_assessment(
             created_at=datetime.utcnow(),
         )
         db.add(user_response)
-
         await db.commit()
 
         return response
 
     except Exception as e:
         await db.rollback()
-        raise HTTPException(
-            status_code=400,
-            detail=f"An unexpected error occurred during the prediction process. Please check your input or try again."
-        )
+        logger.exception("Error processing personality assessment.")
+        raise HTTPException(status_code=400, detail="An unexpected error occurred during the assessment process.")

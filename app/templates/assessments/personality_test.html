@@ -20,26 +20,61 @@
             margin: 0 auto;
             padding: 20px;
             position: relative;
-            background: url('https://hebbkx1anhila5yf.public.blob.vercel-storage.com/5-wpj2kEEjp815Rqocs3v3N7FVMsEBe8.png') no-repeat center center fixed;
+            background: url('https://hebbkx1anhila5yf.public.blob.vercel-storage.com/10-IDJyXTcgQmU5y7LhHETAkirIgyHQ7y.png') no-repeat center center fixed;
             background-size: cover;
         }
 
-        .result-subtitle {
-            font-size: 36px;
-            color: #333;
+        .dynamic-section {
             position: absolute;
-            top: 62%;
-            left: 50%;
+            top: 50%;
+            left: 60%;
             transform: translate(-50%, -50%);
-            text-align: center
+            text-align: center;
+            color: #333;
+        }
+
+        .dynamic-section .type {
+            font-size: 40px;
+            color: #FF4545;
+        }
+
+        .percentages {
+            width: 400px;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 40px;
+            margin-top: 20px;
+            margin-left: 260px;
+        }
+
+        .percentages .percentage-item {
+            color: #FF4545;
+            font-size: 26px;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <main class="content">
-            <h3 class="result-subtitle">{{ user_response_data.personality_type.name }}</h3>
+            <!-- Dynamic Type and Percentage -->
+            <div class="dynamic-section">
+                <div class="type">{{ user_response_data.personality_type.name }}</div>
+                <!-- Here is the way that I split only the percentage that contain in the personality type only -->
+                <div class="percentages">
+                    {% for letter in user_response_data.personality_type.name %}
+                        {% for dimension in user_response_data.dimensions %}
+                            {% if dimension.dimension_name.startswith(letter) %}
+                                <div class="percentage-item">{{ letter }} - {{ dimension.percentage }}</div>
+                            {% endif %}
+                        {% endfor %}
+                    {% endfor %}
+                </div>
+            </div>
         </main>
     </div>
 </body>
 </html>
+
+
+
+

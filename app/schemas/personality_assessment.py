@@ -35,6 +35,7 @@ class PersonalityTypeDetails(BaseModel):
 class DimensionScore(BaseModel):
     dimension_name: str
     score: float
+    percentage: str
 
 
 class PersonalityTraits(BaseModel):
