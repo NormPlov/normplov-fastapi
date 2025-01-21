@@ -33,6 +33,75 @@ logger = logging.getLogger(__name__)
 templates = Jinja2Templates(directory="app/templates")
 
 
+async def get_final_public_test_details_service(test_uuid: str, db: AsyncSession):
+    try:
+        # Fetch the main UserTest details
+        stmt_user_test = (
+            select(UserTest)
+            .options(
+                joinedload(UserTest.assessment_type),
+                joinedload(UserTest.test_references)
+            )
+            .where(UserTest.uuid == test_uuid)
+        )
+        result_user_test = await db.execute(stmt_user_test)
+        user_test = result_user_test.scalar()
+
+        if not user_test:
+            raise format_http_exception(
+                status_code=404,
+                message=f"User test with UUID '{test_uuid}' not found."
+            )
+
+        # Get referenced test UUIDs
+        referenced_test_uuids = [
+            str(reference.test_uuid) for reference in user_test.test_references
+        ]
+
+        if not referenced_test_uuids:
+            return {
+                "test_uuid": str(user_test.uuid),
+                "test_name": user_test.name,
+                "assessment_type": user_test.assessment_type.name.replace(" ", ""),
+                "is_completed": user_test.is_completed,
+                "is_deleted": user_test.is_deleted,
+                "created_at": user_test.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                "referenced_test_uuids": {}
+            }
+
+        # Fetch assessment type names for referenced tests
+        stmt_referenced_tests = (
+            select(UserTest.uuid, AssessmentType.name.label("assessment_type"))
+            .join(AssessmentType, UserTest.assessment_type_id == AssessmentType.id)
+            .where(UserTest.uuid.in_([UUID(ref_uuid) for ref_uuid in referenced_test_uuids]))
+        )
+        result_referenced_tests = await db.execute(stmt_referenced_tests)
+        response_mapping = {
+            row.assessment_type.replace(" ", ""): {"test_uuid": str(row.uuid)}
+            for row in result_referenced_tests.fetchall()
+        }
+
+        return {
+            "test_uuid": str(user_test.uuid),
+            "test_name": user_test.name,
+            "assessment_type": user_test.assessment_type.name.replace(" ", ""),
+            "is_completed": user_test.is_completed,
+            "is_deleted": user_test.is_deleted,
+            "created_at": user_test.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "referenced_test_uuids": response_mapping
+        }
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Unexpected error in service: {e}")
+        raise format_http_exception(
+            status_code=400,
+            message="An unexpected error occurred while processing test details.",
+            details=str(e),
+        )
+
+
 async def fetch_all_tests_with_users(db: AsyncSession, page: int = 1, page_size: int = 1000) -> list:
 
     try:

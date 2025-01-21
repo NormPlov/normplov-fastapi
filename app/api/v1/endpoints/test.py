@@ -23,11 +23,35 @@ from app.services.test import (
     get_user_responses,
     fetch_user_tests_for_current_user, get_public_responses, render_html_for_test, html_to_image,
     fetch_specific_career_from_user_response_by_test_uuid, fetch_all_tests_with_users,
-    generate_excel_for_tests, get_user_responses_to_render_test_details_in_html
+    generate_excel_for_tests, get_user_responses_to_render_test_details_in_html, get_final_public_test_details_service
 )
 
 test_router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+# Load final test details for public sharing
+@test_router.get("/final-test/public/{test_uuid}", summary="Get User Test Details by UUID")
+async def get_user_test_details(
+    test_uuid: str,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        user_test_details = await get_final_public_test_details_service(test_uuid, db)
+        return BaseResponse(
+            date=datetime.utcnow(),
+            status=200,
+            payload=user_test_details,
+            message="User test details fetched successfully."
+        )
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Unexpected error while fetching user test details: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="An unexpected error occurred while fetching user test details."
+        )
 
 
 @test_router.get("/excel", summary="Export all tests as Excel")
