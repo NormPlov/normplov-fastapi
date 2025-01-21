@@ -2,9 +2,58 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ test_name }}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+
+        .container {
+            min-height: 100vh;
+            margin: 0 auto;
+            padding: 20px;
+            position: relative;
+            background: url('https://hebbkx1anhila5yf.public.blob.vercel-storage.com/8-P3jo1CYPfO9hiWx7HzpulTmNWt5pvW.png') no-repeat center center fixed;
+            background-size: cover;
+        }
+
+        .dynamic-section {
+            position: absolute;
+            top: 64%;
+            left: 68%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #333;
+        }
+
+        .dynamic-section .type {
+            font-size: 40px;
+            color: #FF4545;
+        }
+    </style>
 </head>
 <body>
+    <div class="container">
+        <main class="content">
+            <!-- Dynamic Type and Percentage -->
+            <div class="dynamic-section">
+                <div class="type">
+                    {{ user_response_data.top_category.name.replace('Skills', '').strip() }}
+                </div>
+            </div>
 
+        </main>
+    </div>
 </body>
 </html>
+
+
+
+

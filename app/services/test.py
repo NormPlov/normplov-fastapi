@@ -425,6 +425,7 @@ async def get_user_responses(
         raise HTTPException(status_code=500, detail="An error occurred while fetching user responses.")
 
 
+#
 async def get_user_responses_to_render_test_details_in_html(
     db: AsyncSession,
     test_uuid: Optional[str] = None,
@@ -442,25 +443,36 @@ async def get_user_responses_to_render_test_details_in_html(
         responses = result.scalars().all()
 
         # Deserialize response_data if it's a string
-        return [
-            {
+        formatted_responses = []
+        for response in responses:
+            user_response_data = json.loads(response.response_data) if isinstance(response.response_data, str) else response.response_data
+
+            # Calculate top value from `value_details`
+            if "value_details" in user_response_data:
+                top_value = max(
+                    user_response_data["value_details"],
+                    key=lambda x: float(x["percentage"].strip('%'))
+                )
+                user_response_data["top_value"] = top_value  # Add top value to user_response_data
+
+            formatted_responses.append({
                 "test_uuid": str(response.user_test.uuid),
                 "test_name": response.user_test.name,
                 "assessment_type_name": response.assessment_type.name,
-                "user_response_data": json.loads(response.response_data)
-                if isinstance(response.response_data, str) else response.response_data,
+                "user_response_data": user_response_data,
                 "created_at": response.created_at.strftime("%Y-%m-%d %H:%M:%S"),
                 "is_deleted": response.is_deleted,
-            }
-            for response in responses
-        ]
+            })
+
+        return formatted_responses
 
     except Exception as e:
         logger.error(f"Error fetching user responses: {e}")
         raise HTTPException(
             status_code=500,
-            detail="An error occurred while fetching user responses.",
+            detail=f"An error occurred while fetching user responses. Details: {str(e)}",
         )
+
 
 
 async def render_html_for_test(request: Request, test_name: str, test_data: dict) -> str:
@@ -472,11 +484,11 @@ async def render_html_for_test(request: Request, test_name: str, test_data: dict
         # Map templates for each assessment type
         template_map = {
             "Personality Test": "assessments/personality_test.html",
-            "Skill Test": "assessments/skill_test.html",
-            "Interest Test": "assessments/interest_test.html",
+            "Skills Test": "assessments/skill_test.html",
+            "Interests Test": "assessments/interest_test.html",
             "Learning Style Test": "assessments/learning_style_test.html",
-            "Value Test": "assessments/value_test.html",
-            "All Test": "assessments/all_tests.html",
+            "Values Test": "assessments/value_test.html",
+            "All Tests": "assessments/all_tests.html",
         }
 
         # Select the template based on the test name
