@@ -77,6 +77,7 @@ async def get_school_with_paginated_majors(
     page_size: int = 10,
 ) -> BaseResponse:
     try:
+        # Fetch the school and its faculties and majors
         school_stmt = (
             select(School)
             .options(joinedload(School.faculties).joinedload(Faculty.majors))
@@ -86,11 +87,13 @@ async def get_school_with_paginated_majors(
         school = school_result.scalars().first()
 
         if not school:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="School not found or has been deleted.",
+            raise format_http_exception(
+                status_code=404,
+                message="❌ School not found or has been deleted.",
+                details={"school_uuid": school_uuid},
             )
 
+        # Filter faculties by name (if provided) and ensure they are not deleted
         faculties = [
             faculty for faculty in school.faculties
             if not faculty.is_deleted and (faculty_name is None or faculty_name.lower() in faculty.name.lower())
@@ -98,13 +101,15 @@ async def get_school_with_paginated_majors(
 
         faculty_responses = []
         for faculty in faculties:
+            # Filter majors by degree (if provided) and ensure they are not deleted
             filtered_majors = [
                 major for major in faculty.majors
                 if not major.is_deleted and (degree is None or major.degree.value == degree)
             ]
-            # Query to load only the unique major of the faculty
-            unique_majors = list({major.name: major for major in filtered_majors}.values())
+            # Keep only unique majors based on name and degree
+            unique_majors = list({(major.name, major.degree): major for major in filtered_majors}.values())
 
+            # Paginate the unique majors
             paginated_majors = paginate_results(unique_majors, page, page_size)
 
             faculty_responses.append({
@@ -114,6 +119,7 @@ async def get_school_with_paginated_majors(
                 "majors": paginated_majors,
             })
 
+        # Construct the response payload
         response_payload = SchoolDetailsResponse(
             uuid=str(school.uuid),
             kh_name=school.kh_name,
@@ -141,15 +147,18 @@ async def get_school_with_paginated_majors(
         return BaseResponse(
             date=datetime.utcnow().strftime("%Y-%m-%d"),
             status=status.HTTP_200_OK,
-            message="School details retrieved successfully.",
+            message="✅ School details retrieved successfully.",
             payload=response_payload.dict(),
         )
     except HTTPException as e:
+        logger.warning(f"HTTPException in get_school_with_paginated_majors: {e.detail}")
         raise e
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while retrieving school details: {str(e)}",
+        logger.exception("Unexpected error in get_school_with_paginated_majors")
+        raise format_http_exception(
+            status_code=400,
+            message="⚠️ An unexpected error occurred while retrieving school details.",
+            details=str(e),
         )
 
 
@@ -232,9 +241,10 @@ async def load_all_schools(
         return formatted_schools, metadata
     except Exception as e:
         logger.error(f"Error loading schools: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while fetching schools: {str(e)}",
+        raise format_http_exception(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            message="⚠️ An error occurred while fetching schools.",
+            details=str(e),
         )
 
 
@@ -255,77 +265,91 @@ def extract_lat_long_from_map_url(map_url: str):
 
 
 async def update_school(school_uuid: str, data: UpdateSchoolRequest, db: AsyncSession):
-    stmt = select(School).where(School.uuid == school_uuid, School.is_deleted == False)
-    result = await db.execute(stmt)
-    school = result.scalars().first()
+    try:
+        # Fetch the school by UUID
+        stmt = select(School).where(School.uuid == school_uuid, School.is_deleted == False)
+        result = await db.execute(stmt)
+        school = result.scalars().first()
 
-    if not school:
-        return BaseResponse(
-            date=datetime.utcnow(),
-            status=status.HTTP_404_NOT_FOUND,
-            payload=None,
-            message="School not found or has been deleted."
-        )
-
-    if data.en_name:
-        existing_school = await db.execute(
-            select(School).where(
-                School.en_name == data.en_name,
-                School.uuid != school_uuid,
-                School.is_deleted == False
-            )
-        )
-        if existing_school.scalars().first():
-            return BaseResponse(
-                date=datetime.utcnow(),
-                status=status.HTTP_400_BAD_REQUEST,
-                payload=None,
-                message="A school with this name already exists."
+        if not school:
+            raise format_http_exception(
+                status_code=status.HTTP_404_NOT_FOUND,
+                message="❌ School not found or has been deleted.",
+                details={"school_uuid": school_uuid},
             )
 
-    for key, value in data.dict(exclude_unset=True).items():
-        if key == "map_url" and value:
-            lat, long = extract_lat_long_from_map_url(value)
-            if lat is not None and long is not None:
-                school.latitude = lat
-                school.longitude = long
-
-        if key == "type":
-            if isinstance(value, str):
-                try:
-                    validated_type = SchoolType(value)
-                    setattr(school, key, validated_type.value)
-                except ValueError:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"Invalid school type: {value}. Allowed values: {[e.value for e in SchoolType]}."
-                    )
-            elif isinstance(value, SchoolType):
-                setattr(school, key, value.value)
-            else:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Invalid type value: {value}. Expected string or SchoolType Enum."
+        # Check for existing school with the same name
+        if data.en_name:
+            existing_school = await db.execute(
+                select(School).where(
+                    School.en_name == data.en_name,
+                    School.uuid != school_uuid,
+                    School.is_deleted == False,
                 )
-        else:
-            setattr(school, key, value)
+            )
+            if existing_school.scalars().first():
+                raise format_http_exception(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    message="⚠️ A school with this name already exists.",
+                    details={"en_name": data.en_name},
+                )
 
-    school.updated_at = datetime.utcnow()
+        # Update school fields
+        for key, value in data.dict(exclude_unset=True).items():
+            if key == "map_url" and value:
+                lat, long = extract_lat_long_from_map_url(value)
+                if lat is not None and long is not None:
+                    school.latitude = lat
+                    school.longitude = long
 
-    db.add(school)
-    await db.commit()
-    await db.refresh(school)
+            if key == "type":
+                if isinstance(value, str):
+                    try:
+                        validated_type = SchoolType(value)
+                        setattr(school, key, validated_type.value)
+                    except ValueError:
+                        raise format_http_exception(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            message=f"⚠️ Invalid school type: {value}.",
+                            details={"allowed_values": [e.value for e in SchoolType]},
+                        )
+                elif isinstance(value, SchoolType):
+                    setattr(school, key, value.value)
+                else:
+                    raise format_http_exception(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        message="⚠️ Invalid type value provided.",
+                        details={"expected": "string or SchoolType Enum", "received": type(value).__name__},
+                    )
+            else:
+                setattr(school, key, value)
 
-    return BaseResponse(
-        date=datetime.utcnow(),
-        status=status.HTTP_200_OK,
-        payload={
-            "uuid": str(school.uuid),
-            "logo_url": school.logo_url,
-            "cover_image": school.cover_image,
-        },
-        message="School updated successfully."
-    )
+        # Update the timestamp
+        school.updated_at = datetime.utcnow()
+
+        db.add(school)
+        await db.commit()
+        await db.refresh(school)
+
+        return BaseResponse(
+            date=datetime.utcnow().strftime("%Y-%m-%d"),
+            status=status.HTTP_200_OK,
+            payload={
+                "uuid": str(school.uuid)
+            },
+            message="✅ School updated successfully.",
+        )
+
+    except HTTPException as e:
+        logger.warning(f"HTTPException in update_school: {e.detail}")
+        raise e
+    except Exception as e:
+        logger.exception("Unexpected error in update_school")
+        raise format_http_exception(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            message="⚠️ An unexpected error occurred while updating the school.",
+            details=str(e),
+        )
 
 
 async def delete_school(school_uuid: str, db: AsyncSession):
@@ -399,7 +423,6 @@ async def create_school_service(
                 details=f"Must be one of: {', '.join([t.value for t in SchoolType])}",
             )
 
-        # The way I check duplicate school names
         existing_school_stmt = select(School).where(
             (School.kh_name == kh_name) | (School.en_name == en_name),
             School.is_deleted == False

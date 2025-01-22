@@ -37,6 +37,7 @@ class SkillGroupedByLevel(BaseModel):
 
 
 class SkillAssessmentResponse(BaseModel):
+    top_category: Dict[str, str]
     skills_grouped: Dict[str, List[SkillGroupedByLevel]]
 
 

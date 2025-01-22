@@ -3,6 +3,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import get_db, get_current_user_data
+from app.exceptions.formatters import format_http_exception
 from app.models import AssessmentType, User
 from sqlalchemy.future import select
 from app.schemas.payload import BaseResponse
@@ -40,9 +41,10 @@ async def get_latest_drafts_endpoint(
         raise e
     except Exception as e:
         logger.error(f"Unexpected error in get_latest_drafts_endpoint: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail="An error occurred while retrieving the latest drafts."
+        raise format_http_exception(
+            status_code=400,
+            message="Failed to retrieve the latest drafts.",
+            details=str(e),
         )
 
 
@@ -76,9 +78,10 @@ async def delete_draft_endpoint(
         raise e
     except Exception as e:
         logger.error(f"Unexpected error in delete_draft_endpoint: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while deleting the draft: {str(e)}",
+        raise format_http_exception(
+            status_code=400,
+            message="Failed to delete the draft.",
+            details=str(e),
         )
 
 
@@ -119,9 +122,11 @@ async def submit_draft_assessment_route(
     except HTTPException as e:
         raise e
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while submitting the assessment: {str(e)}",
+        logger.error(f"Unexpected error in submit_draft_assessment_route: {str(e)}")
+        raise format_http_exception(
+            status_code=400,
+            message="An error occurred while submitting the assessment.",
+            details=str(e),
         )
 
 
@@ -154,10 +159,10 @@ async def retrieve_draft_endpoint(
     except HTTPException as e:
         raise e
     except Exception as e:
-        logger.error(f"Unexpected error in retrieve_draft_endpoint: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while retrieving the draft: {str(e)}",
+        raise format_http_exception(
+            status_code=400,
+            message="An error occurred while retrieving the draft.",
+            details=str(e),
         )
 
 
@@ -209,10 +214,10 @@ async def load_drafts_endpoint(
         logger.warning(f"HTTPException in load_drafts_endpoint: {e.detail}")
         raise e
     except Exception as e:
-        logger.error(f"Unexpected error in load_drafts_endpoint: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An unexpected error occurred while loading drafts: {str(e)}"
+        raise format_http_exception(
+            status_code=400,
+            message="An unexpected error occurred while loading drafts.",
+            details=str(e),
         )
 
 
@@ -258,10 +263,11 @@ async def update_draft(
         logger.warning(f"HTTPException in update_draft route: {e.detail}")
         raise e
     except Exception as e:
-        logger.error(f"Unexpected error in update_draft route: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An unexpected error occurred."
+        logger.error(f"Unexpected error in update_draft route: {str(e)}")
+        raise format_http_exception(
+            status_code=400,
+            message="An unexpected error occurred while updating the draft.",
+            details=str(e),
         )
 
 
@@ -313,4 +319,8 @@ async def save_draft(
         raise e
     except Exception as e:
         logger.error(f"Unexpected error in save_draft route: {e}")
-        raise HTTPException(status_code=500, detail="An unexpected error occurred.")
+        raise format_http_exception(
+            status_code=400,
+            message="An unexpected error occurred while saving the draft.",
+            details=str(e),
+        )

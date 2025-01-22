@@ -1,8 +1,10 @@
+import logging
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Form, Body
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.dependencies import is_admin_user
+from app.exceptions.formatters import format_http_exception
 from app.models import User
 from app.schemas.payload import BaseResponse
 from datetime import datetime
@@ -17,7 +19,7 @@ from app.schemas.school import (
     UpdateSchoolRequest, CreateSchoolRequest
 )
 
-
+logger = logging.getLogger(__name__)
 school_router = APIRouter()
 
 
@@ -80,9 +82,11 @@ async def fetch_all_schools_route(
             payload={"schools": schools, "metadata": metadata},
         )
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while retrieving schools: {str(e)}",
+        logger.error(f"Unexpected error in fetch_all_schools_route: {e}")
+        raise format_http_exception(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            message="⚠️ An error occurred while retrieving schools.",
+            details=str(e),
         )
 
 
@@ -98,11 +102,11 @@ async def update_school_endpoint(
     except HTTPException as e:
         raise e
     except Exception as e:
-        return BaseResponse(
-            date=datetime.utcnow(),
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            payload=None,
-            message=f"An error occurred while updating the school: {str(e)}"
+        logger.error(f"Unexpected error in update_school_endpoint: {str(e)}")
+        raise format_http_exception(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            message="⚠️ An error occurred while updating the school.",
+            details=str(e),
         )
 
 
@@ -118,11 +122,11 @@ async def delete_school_endpoint(
     except HTTPException as e:
         raise e
     except Exception as e:
-        return BaseResponse(
-            date=datetime.utcnow(),
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            payload=None,
-            message=f"An error occurred while deleting the school: {str(e)}"
+        logger.error(f"Unexpected error in delete_school_endpoint: {str(e)}")
+        raise format_http_exception(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            message="❌ An error occurred while deleting the school.",
+            details=str(e),
         )
 
 
@@ -163,7 +167,9 @@ async def create_school_endpoint(
     except HTTPException as e:
         raise e
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An unexpected error occurred: {str(e)}",
+        logger.error(f"Unexpected error in create_school_endpoint: {str(e)}")
+        raise format_http_exception(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            message="❌ An error occurred while creating the school.",
+            details=str(e),
         )

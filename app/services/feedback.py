@@ -30,9 +30,10 @@ async def delete_user_feedback(feedback_uuid: str, db: AsyncSession) -> dict:
         feedback = result.scalars().first()
 
         if not feedback:
-            raise HTTPException(
+            raise format_http_exception(
                 status_code=404,
-                detail="Feedback not found"
+                message="❌ Feedback not found.",
+                details={"feedback_uuid": feedback_uuid},
             )
 
         feedback.is_deleted = True
@@ -48,15 +49,13 @@ async def delete_user_feedback(feedback_uuid: str, db: AsyncSession) -> dict:
             "payload": {"feedback_uuid": feedback_uuid},
         }
 
-    except HTTPException as e:
-        logger.warning(f"HTTPException in delete_user_feedback: {e.detail}")
-        raise e
     except Exception as e:
         logger.exception(f"Error deleting feedback: {e}")
         await db.rollback()
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to delete feedback due to an unexpected error."
+        raise format_http_exception(
+            status_code=400,
+            message="⚠️ An unexpected error occurred while deleting feedback.",
+            details=str(e),
         )
 
 
@@ -76,7 +75,7 @@ async def get_user_feedback_by_uuid(user_uuid: str, db: AsyncSession) -> BaseRes
                 date=datetime.utcnow(),
                 status=404,
                 payload=None,
-                message="No feedback found for this user"
+                message="❌ No feedback found for this user."
             )
 
         feedback_list = [
@@ -102,48 +101,10 @@ async def get_user_feedback_by_uuid(user_uuid: str, db: AsyncSession) -> BaseRes
 
     except Exception as e:
         logger.exception("Error fetching user feedback")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to fetch user feedback: {str(e)}"
-        )
-
-
-async def delete_user_feedback(feedback_uuid: str, db: AsyncSession) -> BaseResponse:
-
-    try:
-        stmt = select(UserFeedback).where(
-            UserFeedback.uuid == feedback_uuid,
-            UserFeedback.is_deleted == False
-        )
-        result = await db.execute(stmt)
-        feedback = result.scalars().first()
-
-        if not feedback:
-            return BaseResponse(
-                date=datetime.utcnow(),
-                status=404,
-                payload=None,
-                message="Feedback not found"
-            )
-
-        feedback.is_deleted = True
-        feedback.updated_at = datetime.utcnow()
-
-        db.add(feedback)
-        await db.commit()
-
-        return BaseResponse(
-            date=datetime.utcnow(),
-            status=200,
-            payload={"feedback_uuid": feedback_uuid},
-            message="Feedback deleted successfully"
-        )
-    except Exception as e:
-        logger.exception("Error deleting feedback")
-        await db.rollback()
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to delete feedback: {str(e)}"
+        raise format_http_exception(
+            status_code=400,
+            message="⚠️ Failed to fetch user feedback.",
+            details=str(e),
         )
 
 
@@ -168,9 +129,14 @@ async def get_promoted_feedbacks(db: AsyncSession) -> list:
             }
             for feedback in feedbacks
         ]
+
     except Exception as e:
         logger.exception("Error fetching promoted feedbacks")
-        raise HTTPException(status_code=500, detail="Failed to fetch promoted feedbacks")
+        raise format_http_exception(
+            status_code=500,
+            message="⚠️ Failed to fetch promoted feedbacks.",
+            details=str(e),
+        )
 
 
 async def get_all_feedbacks(
@@ -237,7 +203,11 @@ async def get_all_feedbacks(
 
     except Exception as e:
         logger.exception("Error fetching feedbacks")
-        raise HTTPException(status_code=500, detail="Failed to fetch feedbacks")
+        raise format_http_exception(
+            status_code=400,
+            message="⚠️ Failed to fetch feedbacks.",
+            details=str(e),
+        )
 
 
 async def promote_feedback(feedback_uuid: str, current_user, db: AsyncSession) -> None:
@@ -267,13 +237,14 @@ async def promote_feedback(feedback_uuid: str, current_user, db: AsyncSession) -
         db.add(feedback)
         await db.commit()
 
-    except HTTPException as e:
-        logger.error(f"Error promoting feedback: {str(e)}")
-        raise e
     except Exception as e:
         logger.exception("Error promoting feedback")
         await db.rollback()
-        raise HTTPException(status_code=500, detail="Failed to promote feedback")
+        raise format_http_exception(
+            status_code=400,
+            message="⚠️ Failed to promote feedback.",
+            details=str(e),
+        )
 
 
 async def create_feedback(feedback: str, user_test_uuid: str, current_user, db: AsyncSession) -> str:
@@ -324,17 +295,22 @@ async def create_feedback(feedback: str, user_test_uuid: str, current_user, db: 
         return feedback_uuid
 
     except ValueError:
-        logger.error("Invalid UUID format for user test")
-        raise HTTPException(status_code=400, detail="Invalid user test UUID format")
+        raise format_http_exception(
+            status_code=400,
+            message="❌ Invalid UUID format for user test.",
+        )
+
     except IntegrityError:
-        logger.error("Database integrity error while creating feedback")
         await db.rollback()
-        raise HTTPException(status_code=500, detail="Database error occurred")
+        raise format_http_exception(
+            status_code=500,
+            message="⚠️ Database error occurred while creating feedback.",
+        )
 
     except Exception as e:
         await db.rollback()
         raise format_http_exception(
             status_code=400,
-            message="Failed to create feedback",
+            message="⚠️ Failed to create feedback.",
             details=str(e),
         )

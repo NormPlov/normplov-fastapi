@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, status, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.dependencies import get_current_user_data, is_admin_user
+from app.exceptions.formatters import format_http_exception
 from app.schemas.payload import BaseResponse
 from app.services.feedback import (
     create_feedback,
@@ -37,12 +38,13 @@ async def delete_feedback(
         return response
 
     except HTTPException as e:
-        logger.warning(f"HTTPException in delete_feedback: {e.detail}")
         raise e
     except Exception as e:
         logger.error(f"Unexpected error in delete_feedback: {e}")
-        raise HTTPException(
-            status_code=500, detail="An unexpected error occurred while deleting feedback."
+        raise format_http_exception(
+            status_code=400,
+            message="An error occurred while deleting feedback.",
+            details=str(e),
         )
 
 
@@ -53,13 +55,21 @@ async def delete_feedback(
     response_model=PromotedFeedbacksResponse,
 )
 async def fetch_promoted_feedbacks(db: AsyncSession = Depends(get_db)):
-    feedbacks = await get_promoted_feedbacks(db)
-    return PromotedFeedbacksResponse(
-        date=datetime.utcnow().strftime("%d-%B-%Y"),
-        status=200,
-        message="Promoted feedbacks retrieved successfully",
-        payload=feedbacks,
-    )
+    try:
+        feedbacks = await get_promoted_feedbacks(db)
+        return PromotedFeedbacksResponse(
+            date=datetime.utcnow().strftime("%d-%B-%Y"),
+            status=200,
+            message="Promoted feedbacks retrieved successfully",
+            payload=feedbacks,
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error in fetch_promoted_feedbacks: {e}")
+        raise format_http_exception(
+            status_code=400,
+            message="An error occurred while fetching promoted feedbacks.",
+            details=str(e),
+        )
 
 
 @feedback_router.post(
@@ -73,19 +83,30 @@ async def promote_user_feedback(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user_data),
 ):
-    if not any(role.role.name == "ADMIN" for role in current_user.roles):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User does not have permission to promote feedback.",
+    try:
+        if not any(role.role.name == "ADMIN" for role in current_user.roles):
+            raise format_http_exception(
+                status_code=403,
+                message="User does not have permission to promote feedback.",
+            )
+
+        await promote_feedback(feedback_uuid, current_user, db)
+        return {
+            "date": datetime.utcnow().strftime("%d-%B-%Y"),
+            "status": 200,
+            "message": "Feedback promoted successfully",
+        }
+
+    except HTTPException as e:
+        logger.warning(f"HTTPException in promote_user_feedback: {e.detail}")
+        raise e
+    except Exception as e:
+        logger.error(f"Unexpected error in promote_user_feedback: {e}")
+        raise format_http_exception(
+            status_code=400,
+            message="An error occurred while promoting feedback.",
+            details=str(e),
         )
-
-    await promote_feedback(feedback_uuid, current_user, db)
-
-    return {
-        "date": datetime.utcnow().strftime("%d-%B-%Y"),
-        "status": 200,
-        "message": "Feedback promoted successfully",
-    }
 
 
 @feedback_router.get(
@@ -129,8 +150,10 @@ async def fetch_all_feedbacks_route(
         raise e
     except Exception as e:
         logger.error(f"Unexpected error in fetch_all_feedbacks_route: {e}")
-        raise HTTPException(
-            status_code=500, detail="An unexpected error occurred while fetching feedbacks."
+        raise format_http_exception(
+            status_code=400,
+            message="An error occurred while fetching feedbacks.",
+            details=str(e),
         )
 
 
@@ -146,10 +169,18 @@ async def create_user_feedback(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user_data),
 ):
-    feedback_uuid = await create_feedback(payload.feedback, payload.user_test_uuid, current_user, db)
-    return CreateFeedbackResponse(
-        date=datetime.utcnow().strftime("%d-%B-%Y"),
-        status=201,
-        message="Feedback created successfully",
-        payload={"feedback_uuid": feedback_uuid, "feedback_description": payload.feedback},
-    )
+    try:
+        feedback_uuid = await create_feedback(payload.feedback, payload.user_test_uuid, current_user, db)
+        return CreateFeedbackResponse(
+            date=datetime.utcnow().strftime("%d-%B-%Y"),
+            status=201,
+            message="Feedback created successfully",
+            payload={"feedback_uuid": feedback_uuid, "feedback_description": payload.feedback},
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error in create_user_feedback: {e}")
+        raise format_http_exception(
+            status_code=400,
+            message="An error occurred while creating feedback.",
+            details=str(e),
+        )

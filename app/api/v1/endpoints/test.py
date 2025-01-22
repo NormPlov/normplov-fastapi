@@ -1,7 +1,8 @@
 import logging
+import os
 import traceback
 
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from pydantic import UUID4
@@ -17,6 +18,7 @@ from app.schemas.test import PaginatedUserTestsWithUsersResponse, PaginatedUserT
 from app.core.database import get_db
 from app.schemas.test_career import CareerData
 from app.services.user import fetch_all_tests
+from fastapi.responses import FileResponse
 from app.services.test import (
     delete_test,
     generate_shareable_link,
@@ -31,26 +33,42 @@ logger = logging.getLogger(__name__)
 
 
 # Load final test details for public sharing
-@test_router.get("/final-test/public/{test_uuid}", summary="Get User Test Details by UUID")
+@test_router.get(
+    "/final-test/public/{test_uuid}",
+    summary="Get User Test Details by UUID",
+    response_model=BaseResponse,
+    tags=["Test Details"],
+)
 async def get_user_test_details(
     test_uuid: str,
     db: AsyncSession = Depends(get_db),
 ):
     try:
+        # Fetch test details using the service function
         user_test_details = await get_final_public_test_details_service(test_uuid, db)
+
+        # Return success response with the test details
         return BaseResponse(
-            date=datetime.utcnow(),
+            date=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
             status=200,
             payload=user_test_details,
-            message="User test details fetched successfully."
+            message="User test details fetched successfully ✅",
         )
-    except HTTPException as e:
-        raise e
+
+    except HTTPException as http_exc:
+        raise format_http_exception(
+            status_code=http_exc.status_code,
+            message="Failed to fetch user test details ❌",
+            details=http_exc.detail,
+        )
+
     except Exception as e:
-        logger.error(f"Unexpected error while fetching user test details: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="An unexpected error occurred while fetching user test details."
+        # Handle unexpected exceptions gracefully
+        logger.error(f"Unexpected error while fetching user test details: {traceback.format_exc()}")
+        raise format_http_exception(
+            status_code=400,
+            message="An unexpected error occurred while fetching user test details ❌",
+            details=str(e),
         )
 
 
@@ -130,13 +148,19 @@ async def get_public_responses_route(
             message="Public responses retrieved successfully.",
             payload=responses
         )
-
     except HTTPException as http_exc:
-        raise http_exc
+        raise format_http_exception(
+            status_code=http_exc.status_code,
+            message="Failed to retrieve public responses ❌",
+            details=http_exc.detail,
+        )
+
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail="An error occurred while retrieving public responses."
+        logger.error(f"Unexpected error in get_public_responses_route: {traceback.format_exc()}")
+        raise format_http_exception(
+            status_code=400,
+            message="An unexpected error occurred while retrieving public responses ❌",
+            details=str(e),
         )
 
 
@@ -161,11 +185,19 @@ async def get_user_tests_route(
             message="User tests retrieved successfully.",
             payload=PaginatedUserTestsResponse(tests=tests, metadata=metadata)
         )
+    except HTTPException as http_exc:
+        raise format_http_exception(
+            status_code=http_exc.status_code,
+            message="Failed to retrieve user tests ❌",
+            details=http_exc.detail,
+        )
+
     except Exception as e:
-        logger.error(f"Error in get_user_tests_route: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred while retrieving user tests."
+        logger.error(f"Error in get_user_tests_route: {traceback.format_exc()}")
+        raise format_http_exception(
+            status_code=400,
+            message="An unexpected error occurred while retrieving user tests ❌",
+            details=str(e),
         )
 
 
@@ -192,60 +224,114 @@ async def get_all_tests_route(
                 metadata=metadata.dict()
             )
         )
+    except HTTPException as http_exc:
+        raise format_http_exception(
+            status_code=http_exc.status_code,
+            message="Failed to retrieve all tests ❌",
+            details=http_exc.detail,
+        )
+
     except Exception as e:
-        logger.error(f"Error in get_all_tests_route: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="An error occurred while retrieving all tests."
+        logger.error(f"Unexpected error in get_all_tests_route: {traceback.format_exc()}")
+        raise format_http_exception(
+            status_code=400,
+            message="An unexpected error occurred while retrieving all tests ❌",
+            details=str(e),
         )
 
 
+# Fetch the saved test image by filename.
 @test_router.get(
-    "/{test_uuid}/image",
-    summary="Get test details as an image",
+    "/image/{filename}",
+    summary="Get the saved test image",
     tags=["Test Results"],
-    response_class=StreamingResponse
+    response_model=BaseResponse
 )
-async def get_test_image(
-        request: Request,
-        test_uuid: str,
-        db: AsyncSession = Depends(get_db)
+async def get_saved_image(filename: str):
+    try:
+        # Validate filename to prevent directory traversal
+        if ".." in filename or filename.startswith("/"):
+            raise format_http_exception(
+                status_code=400,
+                message="Invalid filename provided ❌",
+                details="Filename should not contain `..` or start with `/`."
+            )
+
+        file_path = os.path.join(settings.BASE_UPLOAD_FOLDER, "assessment_images", filename)
+
+        # Check if file exists
+        if not os.path.isfile(file_path):
+            raise format_http_exception(
+                status_code=404,
+                message="Image not found ❌",
+                details="The specified image does not exist."
+            )
+
+        # Serve the image
+        return FileResponse(file_path, media_type="image/png")
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Error serving image: {traceback.format_exc()}")
+        raise format_http_exception(
+            status_code=500,
+            message="An unexpected error occurred while fetching the image ❌",
+            details=str(e)
+        )
+
+
+# Save test details as an image in the specified folder.
+@test_router.post(
+    "/{test_uuid}/save-image",
+    summary="Save test details as an image",
+    tags=["Test Results"],
+    response_model=BaseResponse
+)
+async def save_test_image(
+    request: Request,
+    test_uuid: str,
+    db: AsyncSession = Depends(get_db)
 ):
     try:
-        # Fetch test response without relying on the current user
+        # Load test response data
         user_responses = await get_user_responses_to_render_test_details_in_html(db, test_uuid=test_uuid)
         if not user_responses:
-            raise HTTPException(
+            raise format_http_exception(
                 status_code=404,
-                detail="No test details found for the provided test UUID."
+                message="Test details not found ❌",
+                details="No data found for the provided test UUID."
             )
 
         test_data = user_responses[0]
 
-        # Debugging logs
-        logger.debug(f"Type of test_data: {type(test_data)}")
-        logger.debug(f"Content of test_data: {test_data}")
-
         # Render the HTML
-        logger.info(f"Rendering personality test details for test_uuid: {test_uuid}")
         html_content = await render_html_for_test(request, test_data["test_name"], test_data)
 
-        # Generate an image
-        image_stream = await html_to_image(html_content)
+        # Prepare upload folder
+        upload_folder = os.path.join(settings.BASE_UPLOAD_FOLDER, "assessment_images")
+        os.makedirs(upload_folder, exist_ok=True)
 
-        return StreamingResponse(
-            content=image_stream,
-            media_type="image/png",
-            headers={"Content-Disposition": "inline; filename=personality_test.png"}
+        # Save the image
+        image_path = os.path.join(upload_folder, f"{test_uuid}.png")
+        await html_to_image(html_content, image_path)
+
+        # Return standardized response
+        return BaseResponse(
+            date=date.today(),
+            status=200,
+            payload={"image_path": image_path},
+            message="Image saved successfully ✅"
         )
 
     except HTTPException as e:
         raise e
     except Exception as e:
-        logger.error(f"Unexpected error while processing test detail for image: {traceback.format_exc()}")
-        raise HTTPException(
+        logger.error(f"Error saving test image: {traceback.format_exc()}")
+        raise format_http_exception(
             status_code=500,
-            detail="An error occurred while generating the test image."
+            message="An unexpected error occurred while saving the image ❌",
+            details=str(e)
         )
 
 
@@ -262,22 +348,30 @@ async def get_user_responses_route(
     current_user: User = Depends(get_current_user_data)
 ):
     try:
+        # extract user ID from the current user
         user_id = current_user.id
+
+        # fetch user responses
         responses = await get_user_responses(db, user_id, test_uuid)
 
         return BaseResponse(
             date=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
             status=200,
-            message="User responses retrieved successfully.",
+            message="User responses retrieved successfully ✅",
             payload=responses
         )
 
     except HTTPException as http_exc:
-        raise http_exc
+        raise format_http_exception(
+            status_code=http_exc.status_code,
+            message="Failed to retrieve user responses ❌",
+            details=http_exc.detail
+        )
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail="An error occurred while retrieving user responses."
+        raise format_http_exception(
+            status_code=400,
+            message="An unexpected error occurred while retrieving user responses ❌",
+            details=str(e)
         )
 
 
@@ -314,6 +408,7 @@ async def generate_shareable_link_route(
     "/delete-test/{test_uuid}",
     response_model=BaseResponse,
     summary="Delete a test",
+    tags=["Test Management"],
 )
 async def delete_test_route(
     test_uuid: UUID4,
@@ -321,8 +416,25 @@ async def delete_test_route(
     current_user=Depends(get_current_user_data),
 ):
     try:
-        return await delete_test(test_uuid, current_user.id, db)
-    except HTTPException as e:
-        raise e
+        await delete_test(test_uuid, current_user.id, db)
+
+        return BaseResponse(
+            date=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            status=200,
+            message="Test deleted successfully ✅",
+            payload={"test_uuid": str(test_uuid)},
+        )
+
+    except HTTPException as http_exc:
+        raise format_http_exception(
+            status_code=http_exc.status_code,
+            message="Failed to delete test ❌",
+            details=http_exc.detail,
+        )
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise format_http_exception(
+            status_code=400,
+            message="An unexpected error occurred while deleting the test ❌",
+            details=str(e),
+        )

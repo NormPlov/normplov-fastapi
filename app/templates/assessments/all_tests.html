@@ -2,9 +2,65 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ test_name }}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+
+        .container {
+            min-height: 100vh;
+            margin: 0 auto;
+            padding: 20px;
+            position: relative;
+            background: url('https://hebbkx1anhila5yf.public.blob.vercel-storage.com/2-Y9UhMgCm3S4BGCgrAHY1LI1sacFLi9.png') no-repeat center center fixed;
+            background-size: cover;
+        }
+
+        .dynamic-section {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 2rem;
+            margin-top: 27rem;
+            max-width: 1000px;
+        }
+
+        .dynamic-section .type {
+            font-size: 23px;
+            text-align: center;
+            color: black;
+        }
+    </style>
 </head>
 <body>
-
+    <div class="container">
+        <main class="content">
+            <!-- Dynamic Type and Percentage -->
+            <div class="dynamic-section">
+                <div class="type">{{ user_response_data.all_assessments.personality.personality_type.name }}</div>
+                <div class="type">{{ user_response_data.all_assessments.interest.type_name }}</div>
+                <div class="type">{{ user_response_data.all_assessments.skill.top_category.name }}</div>
+                <div class="type">{{ user_response_data.all_assessments.learning_style.learning_style }}</div>
+                <div class="type">
+                    {% if user_response_data.all_assessments.value.top_score %}
+                        {{ user_response_data.all_assessments.value.top_score.label }}
+                    {% else %}
+                        No top value available
+                    {% endif %}
+                </div>
+            </div>
+        </main>
+    </div>
 </body>
 </html>
+
+
+
+

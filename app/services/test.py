@@ -425,7 +425,78 @@ async def get_user_responses(
         raise HTTPException(status_code=500, detail="An error occurred while fetching user responses.")
 
 
+# async def get_user_responses_to_render_test_details_in_html(
+#     db: AsyncSession,
+#     test_uuid: Optional[str] = None,
+# ) -> List[Dict[str, Any]]:
+#     try:
+#         query = select(UserResponse).options(
+#             joinedload(UserResponse.user_test),
+#             joinedload(UserResponse.assessment_type)
+#         ).where(UserResponse.is_deleted == False)
 #
+#         if test_uuid:
+#             query = query.where(UserResponse.user_test.has(UserTest.uuid == test_uuid))
+#
+#         result = await db.execute(query)
+#         responses = result.scalars().all()
+#
+#         # Deserialize response_data if it's a string
+#         formatted_responses = []
+#         for response in responses:
+#             user_response_data = json.loads(response.response_data) if isinstance(response.response_data, str) else response.response_data
+#
+#             # Process `value` to extract only the top score
+#             if "value" not in user_response_data:
+#                 logger.warning("'value' field is missing. Setting default value.")
+#                 user_response_data["value"] = {"top_score": None}
+#
+#             value_data = user_response_data["value"]
+#             chart_data = value_data.get("chart_data", [])
+#
+#             logger.debug(f"chart_data: {chart_data}")
+#             if isinstance(chart_data, list) and chart_data:
+#                 try:
+#                     top_value = max(chart_data, key=lambda x: x.get("score", 0))
+#                     value_data["top_score"] = {
+#                         "label": top_value.get("label", "Unknown"),
+#                         "score": top_value.get("score", 0),
+#                     }
+#                     logger.debug(f"Calculated top_value: {value_data['top_score']}")
+#                 except Exception as e:
+#                     logger.error(f"Error calculating 'top_score': {e}")
+#                     value_data["top_score"] = None
+#             else:
+#                 logger.warning(f"Invalid or empty chart_data: {chart_data}")
+#                 value_data["top_score"] = None
+#
+#             # Calculate top value from `value_details`
+#             if "value_details" in user_response_data:
+#                 top_value = max(
+#                     user_response_data["value_details"],
+#                     key=lambda x: float(x["percentage"].strip('%'))
+#                 )
+#                 # Add top value to user_response_data
+#                 user_response_data["top_value"] = top_value
+#
+#             formatted_responses.append({
+#                 "test_uuid": str(response.user_test.uuid),
+#                 "test_name": response.user_test.name,
+#                 "assessment_type_name": response.assessment_type.name,
+#                 "user_response_data": user_response_data,
+#                 "created_at": response.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+#                 "is_deleted": response.is_deleted,
+#             })
+#
+#         return formatted_responses
+#
+#     except Exception as e:
+#         logger.error(f"Error fetching user responses: {e}")
+#         raise HTTPException(
+#             status_code=500,
+#             detail=f"An error occurred while fetching user responses. Details: {str(e)}",
+#         )
+
 async def get_user_responses_to_render_test_details_in_html(
     db: AsyncSession,
     test_uuid: Optional[str] = None,
@@ -442,18 +513,51 @@ async def get_user_responses_to_render_test_details_in_html(
         result = await db.execute(query)
         responses = result.scalars().all()
 
-        # Deserialize response_data if it's a string
         formatted_responses = []
         for response in responses:
             user_response_data = json.loads(response.response_data) if isinstance(response.response_data, str) else response.response_data
 
-            # Calculate top value from `value_details`
-            if "value_details" in user_response_data:
-                top_value = max(
-                    user_response_data["value_details"],
-                    key=lambda x: float(x["percentage"].strip('%'))
-                )
-                user_response_data["top_value"] = top_value  # Add top value to user_response_data
+            # Access 'all_assessments' if it exists
+            all_assessments = user_response_data.get("all_assessments", {})
+            value_data = all_assessments.get("value", {})
+            chart_data = value_data.get("chart_data", [])
+
+            if isinstance(chart_data, list) and chart_data:
+                try:
+                    # Calculate top_score from chart_data
+                    top_value = max(chart_data, key=lambda x: x.get("score", 0))
+                    value_data["top_score"] = {
+                        "label": top_value.get("label", "Unknown"),
+                        "score": top_value.get("score", 0),
+                    }
+                except Exception as e:
+                    logger.error(f"Error calculating 'top_score': {e}")
+                    value_data["top_score"] = None
+            else:
+                logger.warning(f"Invalid or empty chart_data: {chart_data}")
+                value_data["top_score"] = None
+
+            # Save the updated value data back into all_assessments
+            all_assessments["value"] = value_data
+
+            # Handle `value_details` if present
+            value_details = all_assessments.get("value_details", [])
+            if value_details:
+                try:
+                    # Find top value based on percentage
+                    top_value = max(
+                        value_details,
+                        key=lambda x: float(x["percentage"].strip('%'))
+                    )
+                    all_assessments["top_value"] = top_value
+                except Exception as e:
+                    logger.error(f"Error calculating top value from value_details: {e}")
+                    all_assessments["top_value"] = None
+            else:
+                all_assessments["top_value"] = None
+
+            # Update user_response_data with processed all_assessments
+            user_response_data["all_assessments"] = all_assessments
 
             formatted_responses.append({
                 "test_uuid": str(response.user_test.uuid),
@@ -501,9 +605,6 @@ async def render_html_for_test(request: Request, test_name: str, test_data: dict
         if not user_response_data:
             raise ValueError("Missing 'user_response_data' in test_data.")
 
-        # log the response from each test
-        logger.debug(f"user_response_data: {user_response_data}")
-
         # Render the template with the required context
         html_content = templates.TemplateResponse(
             template_file,
@@ -515,7 +616,6 @@ async def render_html_for_test(request: Request, test_name: str, test_data: dict
             }
         ).body.decode("utf-8")
 
-        logger.debug(f"Generated HTML content: {html_content}")
         return html_content
 
     except Exception as e:
@@ -523,31 +623,57 @@ async def render_html_for_test(request: Request, test_name: str, test_data: dict
         raise Exception(f"Error rendering template: {traceback.format_exc()}")
 
 
-async def html_to_image(html_content: str) -> BytesIO:
+# async def html_to_image(html_content: str) -> BytesIO:
+#
+#     try:
+#         hti = Html2Image()
+#
+#         temp_image_path = "temp_rendered_image.png"
+#         temp_html_path = "temp_rendered_html.html"
+#
+#         with open(temp_html_path, "w", encoding="utf-8") as file:
+#             file.write(html_content)
+#
+#         # Here is the way we set the size of the image
+#         hti.screenshot(
+#             html_file=temp_html_path,
+#             save_as=temp_image_path,
+#             size=(1200, 630)
+#         )
+#
+#         with open(temp_image_path, "rb") as image_file:
+#             image_stream = BytesIO(image_file.read())
+#
+#         os.remove(temp_image_path)
+#         os.remove(temp_html_path)
+#
+#         return image_stream
+#
+#     except Exception as e:
+#         raise Exception(f"Error while generating image: {traceback.format_exc()}")
 
+async def html_to_image(html_content: str, image_path: str):
     try:
         hti = Html2Image()
 
-        temp_image_path = "temp_rendered_image.png"
-        temp_html_path = "temp_rendered_html.html"
+        # Separate directory and filename
+        output_dir, filename = os.path.split(image_path)
+        hti.output_path = output_dir
 
+        # Temporary HTML file for rendering
+        temp_html_path = "temp_rendered_html.html"
         with open(temp_html_path, "w", encoding="utf-8") as file:
             file.write(html_content)
 
-        # Here is the way we set the size of the image
+        # Generate the image
         hti.screenshot(
             html_file=temp_html_path,
-            save_as=temp_image_path,
+            save_as=filename,
             size=(1200, 630)
         )
 
-        with open(temp_image_path, "rb") as image_file:
-            image_stream = BytesIO(image_file.read())
-
-        os.remove(temp_image_path)
+        # Clean up temporary HTML file
         os.remove(temp_html_path)
-
-        return image_stream
 
     except Exception as e:
         raise Exception(f"Error while generating image: {traceback.format_exc()}")

@@ -82,6 +82,8 @@ app.add_middleware(
         # Allow UI Production CORS Origin
         "https://normplov.istad.co/",
         "https://normplov.istad.co",
+        "http://normplov.istad.co/",
+        "http://normplov.istad.co",
         "https://normplov-admin.istad.co",
         "https://normplov-admin.istad.co/",
         "http://normplov-admin.istad.co"

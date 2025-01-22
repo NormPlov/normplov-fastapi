@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from fastapi import HTTPException, status
 from app.exceptions.formatters import format_http_exception
-from app.models import AssessmentType, UserResponse, User, UserTest
+from app.models import AssessmentType, UserResponse, User
 from app.services.interest_assessment import process_interest_assessment
 from app.services.learning_style_assessment import predict_learning_style
 from app.services.personality_assessment import process_personality_assessment
@@ -92,9 +92,11 @@ async def get_latest_drafts_per_assessment_type(db: AsyncSession, current_user: 
         return draft_items
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail="An error occurred while retrieving the latest drafts."
+        logger.error(f"Unexpected error in get_latest_drafts_endpoint: {str(e)}")
+        raise format_http_exception(
+            status_code=400,
+            message="Failed to retrieve the latest drafts.",
+            details=str(e),
         )
 
 
@@ -152,11 +154,10 @@ async def delete_draft(
     except HTTPException as e:
         raise e
     except Exception as e:
-        logger.error(f"Error during draft deletion: {str(e)}")
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while deleting the draft: {str(e)}",
+        raise format_http_exception(
+            status_code=400,
+            message="Failed to delete the draft.",
+            details=str(e),
         )
 
 
@@ -343,10 +344,10 @@ async def retrieve_draft_by_uuid(db: AsyncSession, current_user: User, draft_uui
     except HTTPException as e:
         raise e
     except Exception as e:
-        logger.error(f"Unexpected error retrieving draft by uuid: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while retrieving the draft: {str(e)}",
+        raise format_http_exception(
+            status_code=400,
+            message="An error occurred while retrieving the draft.",
+            details=str(e),
         )
 
 
@@ -447,10 +448,10 @@ async def load_drafts(
             detail=f"Invalid parameter: {str(ve)}"
         )
     except Exception as e:
-        logger.error(f"Error in load_drafts: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"An error occurred while loading drafts: {str(e)}"
+        raise format_http_exception(
+            status_code=400,
+            message="An unexpected error occurred while loading drafts.",
+            details=str(e),
         )
 
 
@@ -567,10 +568,11 @@ async def save_user_response_as_draft(
         return draft
 
     except HTTPException:
+        logger.error(f"Unexpected error in save_draft route: {HTTPException}")
         raise
     except Exception as e:
-        logger.error(f"Error saving draft for user {current_user.id}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred while saving the draft.",
+        raise format_http_exception(
+            status_code=400,
+            message="An unexpected error occurred while saving the draft.",
+            details=str(e),
         )
