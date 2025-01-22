@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     DB_USER: str = Field(default="postgres", env="POSTGRESQL_USER")
     DB_PASSWORD: str = Field(default="password", env="POSTGRESQL_PASSWORD")
     DB_NAME: str = Field(default="postgres", env="POSTGRESQL_DB")
-    DB_HOST: str = Field(default="136.228.158.126", env="POSTGRESQL_SERVER")
+    DB_HOST: str = Field(default="202.178.125.77", env="POSTGRESQL_SERVER")
     DB_PORT: str = Field(default="3299", env="POSTGRESQL_PORT")
 
     # JWT Configuration
