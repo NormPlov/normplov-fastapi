@@ -5,8 +5,10 @@ import re
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import is_admin_user
+from app.exceptions.formatters import format_http_exception
 from app.models import User
 from app.schemas.payload import BaseResponse
 from app.schemas.job import JobDetailsResponse, JobCreateRequest, JobUpdateRequest
@@ -42,10 +44,24 @@ async def get_trending_jobs_data_route(db: AsyncSession = Depends(get_db)):
             message="Trending job data retrieved successfully.",
             payload=trending_data,
         )
+
+    except ValueError as exc:
+        raise format_http_exception(
+            status_code=400,
+            message="❌ Invalid request for trending job data.",
+            details={"error_message": str(exc)}
+        )
+    except SQLAlchemyError as exc:
+        raise format_http_exception(
+            status_code=400,
+            message="🛠️ Database error occurred while fetching trending job data.",
+            details={"error_message": str(exc)}
+        )
     except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"An error occurred while fetching trending job data: {str(exc)}",
+        raise format_http_exception(
+            status_code=400,
+            message="😿 Could not fetch trending job data.",
+            details={"error_message": str(exc)}
         )
 
 
@@ -72,12 +88,24 @@ async def get_job_categories_route(db: AsyncSession = Depends(get_db)):
             message="Job categories retrieved successfully.",
             payload={"categories": categories},
         )
-    except HTTPException as exc:
-        raise exc
+
+    except ValueError as exc:
+        raise format_http_exception(
+            status_code=400,
+            message="❌ Invalid data encountered while fetching job categories.",
+            details={"error_message": str(exc)}
+        )
+    except SQLAlchemyError as exc:
+        raise format_http_exception(
+            status_code=400,
+            message="🛠️ Database error occurred while fetching job categories.",
+            details={"error_message": str(exc)}
+        )
     except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"An unexpected error occurred while fetching job categories: {str(exc)}"
+        raise format_http_exception(
+            status_code=400,
+            message="😿 Could not retrieve job categories.",
+            details={"error_message": str(exc)}
         )
 
 
@@ -110,15 +138,27 @@ async def admin_get_all_jobs_route(
         return BaseResponse(
             date=datetime.utcnow().strftime("%Y-%m-%d"),
             status=200,
-            message="Jobs retrieved successfully.",
+            message="✅ Jobs retrieved successfully.",
             payload=paginated_result,
         )
-    except HTTPException as exc:
-        raise exc
+
+    except ValueError as exc:
+        raise format_http_exception(
+            status_code=400,
+            message="⚙️ Invalid request parameters.",
+            details={"error_message": str(exc)}
+        )
+    except SQLAlchemyError as exc:
+        raise format_http_exception(
+            status_code=400,
+            message="❌ Database error occurred while retrieving jobs.",
+            details={"error_message": str(exc)}
+        )
     except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"An error occurred: {str(exc)}",
+        raise format_http_exception(
+            status_code=400,
+            message="😥 Could not retrieve jobs.",
+            details={"error_message": str(exc)}
         )
 
 
@@ -137,7 +177,11 @@ async def get_job_details_route(
         try:
             uuid_obj = uuid_lib.UUID(uuid, version=4)
         except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid UUID format.")
+            raise format_http_exception(
+                status_code=400,
+                message="😿 Invalid UUID format.",
+                details={"provided_uuid": uuid}
+            )
 
         job = await fetch_job_details(uuid, db)
 
@@ -170,15 +214,17 @@ async def get_job_details_route(
         return BaseResponse(
             date=datetime.utcnow().strftime("%Y-%m-%d"),
             status=200,
-            message="Job details retrieved successfully.",
+            message="✅ Job details retrieved successfully.",
             payload=job_details,
         )
+
     except HTTPException as exc:
         raise exc
     except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"An error occurred while retrieving job details: {str(exc)}",
+        raise format_http_exception(
+            status_code=400,
+            message="😥 Could not retrieve job details.",
+            details={"error_message": str(exc)}
         )
 
 
@@ -203,12 +249,25 @@ async def delete_job_route(
             message=result["message"],
             payload=None,
         )
-    except HTTPException as exc:
-        raise exc
+
+    except ValueError as exc:
+        raise format_http_exception(
+            status_code=400,
+            message="❌ Invalid UUID format.",
+            details={"provided_uuid": uuid, "error_message": str(exc)}
+        )
+    except SQLAlchemyError as exc:
+        raise format_http_exception(
+            status_code=400,
+            message="🛠️ Database error occurred while deleting the job.",
+            details={"error_message": "An issue occurred while querying the database."}
+        )
     except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"An unexpected error occurred while deleting the job: {str(exc)}"
+        logger.error(f"Unexpected error while deleting job: {str(exc)}")
+        raise format_http_exception(
+            status_code=400,
+            message="😿 Could not delete the job.",
+            details={"error_message": str(exc)}
         )
 
 
@@ -248,13 +307,15 @@ async def get_all_jobs_route(
         return BaseResponse(
             date=datetime.utcnow().strftime("%Y-%m-%d"),
             status=200,
-            message="Jobs retrieved successfully.",
+            message="✅ Jobs retrieved successfully.",
             payload=paginated_result,
         )
-    except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"An error occurred: {str(exc)}",
+
+    except Exception as e:
+        raise format_http_exception(
+            status_code=400,
+            message="😿 Could not retrieve the job.",
+            details={"error_message": str(e)}
         )
 
 
@@ -277,15 +338,27 @@ async def update_job_route(
         return BaseResponse(
             date=datetime.utcnow().strftime("%d-%B-%Y"),
             status=200,
-            message="Job updated successfully.",
+            message="✅ Job updated successfully.",
             payload=updated_job.dict()
         )
-    except HTTPException as e:
-        raise e
+
+    except ValueError as e:
+        raise format_http_exception(
+            status_code=400,
+            message="❌ Invalid data provided for updating the job.",
+            details={"error_message": str(e)}
+        )
+    except SQLAlchemyError as e:
+        raise format_http_exception(
+            status_code=400,
+            message="🛠️ Database error occurred while updating the job.",
+            details={"error_message": str(e)}
+        )
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"An error occurred while updating the job: {str(e)}"
+        raise format_http_exception(
+            status_code=400,
+            message="😿 Could not update the job.",
+            details={"error_message": str(e)}
         )
 
 
@@ -327,13 +400,25 @@ async def create_job_route(
         return BaseResponse(
             date=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
             status=201,
-            message="Job created successfully.",
+            message="✅ Job created successfully.",
             payload=job_response,
         )
-    except HTTPException as e:
-        raise e
+
+    except ValueError as e:
+        raise format_http_exception(
+            status_code=400,
+            message="❌ Invalid job data provided.",
+            details={"error_message": str(e)}
+        )
+    except SQLAlchemyError as e:
+        raise format_http_exception(
+            status_code=400,
+            message="🛠️ Database error occurred while creating the job.",
+            details={"error_message": str(e)}
+        )
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"An unexpected error occurred while creating the job: {str(e)}",
+        raise format_http_exception(
+            status_code=400,
+            message="😿 Could not create the job.",
+            details={"error_message": str(e)}
         )

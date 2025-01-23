@@ -44,41 +44,52 @@ async def process_interest_assessment(
         final_user_test: Optional[UserTest] = None
 ) -> UserTestResponse:
     try:
+        # Validate response keys
         required_keys = [f"q{i}" for i in range(1, 13)]
         missing_keys = [key for key in required_keys if key not in responses]
-
         if missing_keys:
+            logger.error("Missing response keys: %s", missing_keys)
             raise HTTPException(
-                status_code=400,
-                detail=f"Missing required keys in responses: {', '.join(missing_keys)}"
+                status_code=400, detail=f"Missing required keys in responses: {', '.join(missing_keys)}"
             )
 
+        # Fetch assessment type ID
         assessment_type_id = await get_assessment_type_id("Interests", db)
 
-        user_test = final_user_test if final_user_test else await create_user_test(db, current_user.id, assessment_type_id)
+        if not final_user_test:
+            final_user_test = await create_user_test(db, current_user.id, assessment_type_id)
+            logger.debug("Created user test: %s", final_user_test)
 
-        response_values = [responses[f"q{i}"] for i in range(1, 13)]
-        input_data = np.array(response_values).reshape(1, -1)
+        response_values = [responses[key] for key in required_keys]
 
+        # Prepare input data for prediction
+        input_data = pd.DataFrame([response_values], columns=prob_model.feature_names_in_)
+
+        # Predict scores
         predicted_scores = prob_model.predict(input_data)
+        logger.debug("Predicted scores: %s", predicted_scores)
 
+        # Process scores and determine Holland Code
         score_keys = ["R_Score", "I_Score", "A_Score", "S_Score", "E_Score", "C_Score"]
         scores = {key: value for key, value in zip(score_keys, predicted_scores[0])}
         scores_df = pd.DataFrame([scores])
-
         top_dimensions = scores_df.iloc[0].sort_values(ascending=False).index[:2]
         holland_code = "".join([dim[0] for dim in top_dimensions])
 
+        logger.debug("Computed Holland Code: %s", holland_code)
+
+        # Fetch Holland Code details
         holland_code_query = select(HollandCode).where(HollandCode.code.ilike(f"%{holland_code}%"))
         result = await db.execute(holland_code_query)
         holland_code_obj = result.scalars().first()
-
         if not holland_code_obj:
-            logger.error(f"Computed Holland Code '{holland_code}' not found in the database.")
+            logger.error("Holland Code '%s' not found.", holland_code)
             raise HTTPException(
-                status_code=400,
-                detail=f"Holland code '{holland_code}' not found in the database. Ensure it is added."
+                status_code=404,
+                detail=f"Holland Code '{holland_code}' not found in the database.",
             )
+
+        logger.debug("Holland Code details: %s", holland_code_obj)
 
         key_traits_query = select(HollandKeyTrait).where(HollandKeyTrait.holland_code_id == holland_code_obj.id)
         key_traits_result = await db.execute(key_traits_query)
@@ -241,13 +252,21 @@ async def process_interest_assessment(
         dimension_descriptions = []
         assessment_scores = []
 
+        total_score = sum(scores.values())
+        if total_score == 0:
+            logger.error("Total score is zero; cannot calculate percentages.")
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid scores: total score is zero."
+            )
+
         for score_key, score_value in scores.items():
             dimension_name = key_to_dimension.get(score_key)
             if not dimension_name:
-                logger.warning(f"Unmapped score key: {score_key}. Skipping.")
-                continue
+                logger.warning("Unmapped score key: %s. Skipping.", score_key)
 
             dimension_query = select(Dimension).where(Dimension.name == dimension_name)
+
             result = await db.execute(dimension_query)
             dimension = result.scalars().first()
 
@@ -260,7 +279,7 @@ async def process_interest_assessment(
 
             dimension_descriptions.append({
                 "dimension_name": dimension.name,
-                "description": dimension.description,
+                "description": dimension.description or "No Description",
                 "image_url": dimension_image_url,
                 "score": score_value,
             })
@@ -270,7 +289,7 @@ async def process_interest_assessment(
                 UserAssessmentScore(
                     uuid=str(uuid.uuid4()),
                     user_id=current_user.id,
-                    user_test_id=user_test.id,
+                    user_test_id=final_user_test.id,
                     assessment_type_id=assessment_type_id,
                     dimension_id=dimension.id,
                     score={
@@ -292,8 +311,8 @@ async def process_interest_assessment(
 
         response = InterestAssessmentResponse(
             user_uuid=current_user.uuid,
-            test_uuid=str(user_test.uuid),
-            test_name=user_test.name,
+            test_uuid=str(final_user_test.uuid),
+            test_name=final_user_test.name,
             holland_code=holland_code_obj.code,
             type_name=holland_code_obj.type,
             description=holland_code_obj.description,
@@ -313,7 +332,7 @@ async def process_interest_assessment(
         user_response = UserResponse(
             uuid=str(uuid.uuid4()),
             user_id=current_user.id,
-            user_test_id=user_test.id,
+            user_test_id=final_user_test.id,
             assessment_type_id=assessment_type_id,
             response_data=json.dumps(response.dict()),
             is_completed=True,
@@ -325,6 +344,7 @@ async def process_interest_assessment(
         return response
 
     except Exception as e:
+        logger.debug("Exception here", str(e))
         await db.rollback()
         raise HTTPException(
             status_code=400,

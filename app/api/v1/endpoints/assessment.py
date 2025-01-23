@@ -435,11 +435,4 @@ async def process_interest_assessment_route(
             message="Database operational error occurred.",
             details="There may be connectivity issues or a misconfigured database.",
         )
-    except Exception as exc:
-        raise format_http_exception(
-            status_code=500,
-            message="An unexpected error occurred while processing the interest assessment.",
-            details=str(exc),
-        )
-
 

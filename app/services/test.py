@@ -578,7 +578,6 @@ async def get_user_responses_to_render_test_details_in_html(
         )
 
 
-
 async def render_html_for_test(request: Request, test_name: str, test_data: dict) -> str:
     try:
         # Ensure `test_data` contains the required fields
@@ -598,12 +597,20 @@ async def render_html_for_test(request: Request, test_name: str, test_data: dict
         # Select the template based on the test name
         template_file = template_map.get(test_name)
         if not template_file:
-            raise ValueError(f"No template found for test_name: {test_name}")
+            raise format_http_exception(
+                status_code=404,
+                message="❌ No template found for the provided test name.",
+                details={"test_name": test_name}
+            )
 
         # Extract user response data
         user_response_data = test_data.get("user_response_data", {})
         if not user_response_data:
-            raise ValueError("Missing 'user_response_data' in test_data.")
+            raise format_http_exception(
+                status_code=400,
+                message="❌ Missing 'user_response_data' in test_data.",
+                details={"test_data": test_data}
+            )
 
         # Render the template with the required context
         html_content = templates.TemplateResponse(
@@ -620,8 +627,11 @@ async def render_html_for_test(request: Request, test_name: str, test_data: dict
 
     except Exception as e:
         logger.error(f"Error rendering template: {traceback.format_exc()}")
-        raise Exception(f"Error rendering template: {traceback.format_exc()}")
-
+        raise format_http_exception(
+            status_code=500,
+            message="❌ Error rendering the template.",
+            details={"error_message": str(e), "traceback": traceback.format_exc()}
+        )
 
 # async def html_to_image(html_content: str) -> BytesIO:
 #
@@ -652,6 +662,7 @@ async def render_html_for_test(request: Request, test_name: str, test_data: dict
 #     except Exception as e:
 #         raise Exception(f"Error while generating image: {traceback.format_exc()}")
 
+
 async def html_to_image(html_content: str, image_path: str):
     try:
         hti = Html2Image()
@@ -675,8 +686,21 @@ async def html_to_image(html_content: str, image_path: str):
         # Clean up temporary HTML file
         os.remove(temp_html_path)
 
+    except OSError as e:
+        logger.error(f"File system error while generating image: {traceback.format_exc()}")
+        raise format_http_exception(
+            status_code=500,
+            message="❌ Error while handling files for image generation.",
+            details={"error_message": str(e), "image_path": image_path}
+        )
+
     except Exception as e:
-        raise Exception(f"Error while generating image: {traceback.format_exc()}")
+        logger.error(f"Unexpected error while generating image: {traceback.format_exc()}")
+        raise format_http_exception(
+            status_code=500,
+            message="❌ Unexpected error while generating image.",
+            details={"error_message": str(e), "traceback": traceback.format_exc()}
+        )
 
 
 async def generate_shareable_link(
@@ -735,18 +759,19 @@ async def generate_shareable_link(
             },
             message="Shareable link generated successfully."
         )
-
     except SQLAlchemyError as e:
         logger.error(f"Database error while generating shareable link: {str(e)}")
-        raise HTTPException(
+        raise format_http_exception(
             status_code=400,
-            detail="Database query error. Please check the parameters."
+            message="Database query error. Please check the parameters.",
+            details=str(e)
         )
     except Exception as e:
         logger.error(f"Unexpected error while generating shareable link: {str(e)}")
-        raise HTTPException(
+        raise format_http_exception(
             status_code=500,
-            detail="An unexpected error occurred. Please try again later."
+            message="An unexpected error occurred. Please try again later.",
+            details=str(e)
         )
 
 
@@ -761,7 +786,11 @@ async def delete_test(test_uuid: UUID4, user_id: int, db: AsyncSession):
         user_test = result.scalars().first()
 
         if not user_test:
-            raise HTTPException(status_code=404, detail="Test not found or already deleted.")
+            raise format_http_exception(
+                status_code=404,
+                message="Test not found or already deleted.",
+                details={"test_uuid": str(test_uuid), "user_id": user_id}
+            )
 
         user_test.is_deleted = True
         await db.commit()
@@ -774,16 +803,36 @@ async def delete_test(test_uuid: UUID4, user_id: int, db: AsyncSession):
         )
         return response
 
+    except SQLAlchemyError as e:
+        await db.rollback()
+        logger.error(f"Database error while deleting test: {str(e)}")
+        raise format_http_exception(
+            status_code=400,
+            message="Database operation failed.",
+            details=str(e)
+        )
+
     except Exception as e:
         await db.rollback()
-        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+        logger.error(f"Unexpected error while deleting test: {str(e)}")
+        raise format_http_exception(
+            status_code=500,
+            message="An unexpected error occurred while deleting the test.",
+            details=str(e)
+        )
 
 
 def validate_uuid(value: str) -> str:
     try:
+
         return str(UUID(value))
+
     except ValueError:
-        raise ValueError(f"Invalid UUID format: {value}")
+        raise format_http_exception(
+            status_code=400,
+            message="Invalid UUID format.",
+            details={"invalid_value": value}
+        )
 
 
 async def create_user_test(

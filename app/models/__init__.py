@@ -8,7 +8,6 @@ from app.models.dimension import Dimension
 from app.models.question import Question
 from app.models.user_assessment_score import UserAssessmentScore
 from app.models.ai_recommendation import AIRecommendation
-from app.models.learning_style_study_technique import LearningStyleStudyTechnique
 from app.models.dimension_career import DimensionCareer
 from app.models.skill_category import SkillCategory
 from app.models.user_test import UserTest
@@ -31,8 +30,13 @@ from app.models.value_category_key_improvement import ValueCategoryKeyImprovemen
 from app.models.user_test_reference import UserTestReference
 from app.models.career_category_requirement import CareerCategoryRequirement
 from app.models.career_category_responsibility import CareerCategoryResponsibility
+from app.models.app_metadata import AppMetadata
+from app.models.dimension_study_technique import DimensionStudyTechnique
+from app.models.study_technique import StudyTechnique
+from app.models.technique_category import TechniqueCategory
 
 __all__ = ["Role",
+           "AppMetadata",
            "UserRole",
            "User",
            "AssessmentType",
@@ -41,7 +45,6 @@ __all__ = ["Role",
            "Dimension",
            "UserAssessmentScore",
            "AIRecommendation",
-           "LearningStyleStudyTechnique",
            "DimensionCareer",
            "SkillCategory",
            "UserTest",
@@ -63,6 +66,9 @@ __all__ = ["Role",
            "RefreshToken",
            "UserTestReference",
            "CareerCategoryRequirement",
-           "CareerCategoryResponsibility"
+           "CareerCategoryResponsibility",
+           "DimensionStudyTechnique",
+           "StudyTechnique",
+           "TechniqueCategory"
            ]
 

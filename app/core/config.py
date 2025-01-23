@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     MAX_FILE_SIZE: int = Field(default=5 * 1024 * 1024, env="MAX_FILE_SIZE")
     BASE_UPLOAD_FOLDER: str = Field(default="uploads", env="BASE_UPLOAD_FOLDER")
 
-    # Database Configuration
+    # Database Configuration for Production
     DB_USER: str = Field(default="postgres", env="POSTGRESQL_USER")
     DB_PASSWORD: str = Field(default="password", env="POSTGRESQL_PASSWORD")
     DB_NAME: str = Field(default="postgres", env="POSTGRESQL_DB")

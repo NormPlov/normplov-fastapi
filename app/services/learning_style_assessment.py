@@ -8,14 +8,16 @@ import uuid
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 from fastapi import HTTPException
+
+from app.models.dimension_study_technique import DimensionStudyTechnique
+from app.models.study_technique import StudyTechnique
 from app.schemas.learning_style_assessment import LearningStyleChart, LearningStyleResponse
 from app.services.test import create_user_test
 from ml_models.model_loader import load_vark_model
 from app.models import (
-    AssessmentType, Major, CareerMajor, SchoolMajor, School, UserResponse, UserAssessmentScore,
-    LearningStyleStudyTechnique, Dimension, Question, DimensionCareer, UserTest, CareerCategoryResponsibility,
+    AssessmentType, Major, CareerMajor, SchoolMajor, School, UserResponse, Dimension, Question, DimensionCareer, UserTest, CareerCategoryResponsibility,
     CareerCategory, CareerCategoryLink
 )
 
@@ -302,6 +304,8 @@ async def predict_learning_style(
         learning_style = row.idxmax().replace("_Prob", "").replace("ReadWrite", "Read/Write")
         max_prob = row.max()
 
+        logger.debug("learning_style", learning_style)
+
         chart_data = {
             "labels": ["Visual Learning", "Auditory Learning", "Read/Write Learning", "Kinesthetic Learning"],
             "values": [
@@ -487,13 +491,17 @@ async def predict_learning_style(
         related_careers = []
         processed_career_uuids = set()  # Track processed career UUIDs
 
+        dimension_details = []
+        recommended_techniques = []
+
         for style, prob in row.items():
-            dimension_name = style.replace("_Prob", "").replace("ReadWrite", "Read/Write")
+            dimension_name = style
             dimension_stmt = select(Dimension).where(Dimension.name == dimension_name)
             dimension = await db.execute(dimension_stmt)
             dimension = dimension.scalars().first()
 
             if dimension:
+                logger.debug(f"Found dimension: {dimension.name}")
                 percentage = round(prob * 100, 2)
 
                 if prob > 0.6:
@@ -592,26 +600,49 @@ async def predict_learning_style(
                         "level": level,
                     }
                 )
+            else:
+                logger.warning(f"Dimension not found for name: {dimension_name}")
 
-        highest_scoring_dimension_stmt = select(Dimension).where(Dimension.name == learning_style)
-        highest_scoring_dimension = await db.execute(highest_scoring_dimension_stmt)
-        highest_scoring_dimension = highest_scoring_dimension.scalars().first()
+        # Adjust learning style name to include "_Prob" suffix for comparison
+        learning_style_with_prob = f"{learning_style}_Prob"
 
+        # Query for the dimension with the adjusted name
+        highest_scoring_dimension_stmt = select(Dimension).where(Dimension.name == learning_style_with_prob)
+        highest_scoring_dimension_result = await db.execute(highest_scoring_dimension_stmt)
+        highest_scoring_dimension = highest_scoring_dimension_result.scalars().first()
+
+        # Query for recommended techniques
         if highest_scoring_dimension:
-            techniques_stmt = select(LearningStyleStudyTechnique).where(
-                LearningStyleStudyTechnique.dimension_id == highest_scoring_dimension.id,
-                LearningStyleStudyTechnique.is_deleted == False,
+            logger.debug(f"Found highest scoring dimension: {highest_scoring_dimension.name}")
+
+            techniques_stmt = (
+                select(StudyTechnique)
+                .join(DimensionStudyTechnique, DimensionStudyTechnique.study_technique_id == StudyTechnique.id)
+                .options(selectinload(StudyTechnique.category))  # Eagerly load the category relationship
+                .where(
+                    DimensionStudyTechnique.dimension_id == highest_scoring_dimension.id,
+                    StudyTechnique.is_deleted == False
+                )
             )
-            techniques = await db.execute(techniques_stmt)
-            recommended_techniques = [
-                {
-                    "technique_name": t.technique_name,
-                    "category": t.category,
-                    "description": t.description,
-                    "image_url": f"{t.image_url}",
-                }
-                for t in techniques.scalars().all()
-            ]
+            techniques_result = await db.execute(techniques_stmt)
+
+            try:
+                recommended_techniques = [
+                    {
+                        "technique_name": technique.name,
+                        "category": technique.category.name if technique.category else "Uncategorized",
+                        "description": technique.description,
+                    }
+                    for technique in techniques_result.scalars().all()
+                ]
+            except Exception as e:
+                logger.error(f"Error while constructing recommended techniques: {e}")
+                recommended_techniques = []
+
+            logger.debug(f"Recommended techniques: {recommended_techniques}")
+        else:
+            logger.warning(f"No dimension found for learning style: {learning_style_with_prob}")
+            recommended_techniques = []
 
         response = LearningStyleResponse(
             user_uuid=current_user.uuid,
