@@ -20,8 +20,8 @@ class PersonalityType(Base):
     career_personality_types = relationship(
         "CareerPersonalityType", back_populates="personality_type"
     )
-    traits = relationship(
-        "PersonalityTrait",
+    characteristics = relationship(
+        "PersonalityCharacteristic",
         back_populates="personality_type",
         cascade="all, delete-orphan",
     )

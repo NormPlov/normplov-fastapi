@@ -10,20 +10,18 @@ from sqlalchemy.future import select
 from fastapi import HTTPException
 from sqlalchemy.orm import joinedload
 from app.models import AssessmentType, Career, CareerMajor, SchoolMajor, Major, CareerPersonalityType, UserTest, \
-    CareerCategory, CareerCategoryLink
+    CareerCategory, CareerCategoryLink, PersonalityCharacteristic
 from app.models.user_response import UserResponse
 from app.models.user_assessment_score import UserAssessmentScore
 from app.models.dimension import Dimension
 from app.models.personality_type import PersonalityType
-from app.models.personality_trait import PersonalityTrait
 from app.models.personality_strength import PersonalityStrength
 from app.models.personality_weakness import PersonalityWeakness
 from app.services.test import create_user_test
 from app.schemas.personality_assessment import (
     PersonalityAssessmentResponse,
     PersonalityTypeDetails,
-    DimensionScore,
-    PersonalityTraits, CategoryWithResponsibilities, MajorData, CareerData
+    DimensionScore, CategoryWithResponsibilities, MajorData, CareerData, PersonalityCharacteristics
 )
 from ml_models.model_loader import load_personality_models
 
@@ -118,12 +116,22 @@ async def process_personality_assessment(
 
         db.add_all(assessment_scores)
 
-        # Fetch personality traits, strengths, and weaknesses
-        traits_query = select(PersonalityTrait).where(PersonalityTrait.personality_type_id == personality_details.id)
-        traits_result = await db.execute(traits_query)
-        traits = traits_result.scalars().all()
-        positive_traits = [trait.trait for trait in traits if trait.is_positive]
-        negative_traits = [trait.trait for trait in traits if not trait.is_positive]
+        if not personality_details or not personality_details.id:
+            raise HTTPException(status_code=404, detail="Personality type details are missing or invalid.")
+
+        # Fetch personality characteristics
+        characteristics_query = select(PersonalityCharacteristic).where(
+            PersonalityCharacteristic.personality_type_id == personality_details.id
+        )
+
+        characteristics_result = await db.execute(characteristics_query)
+        characteristics = characteristics_result.scalars().all()
+
+        # Transform characteristics into the response format
+        personality_characteristics = [
+            PersonalityCharacteristics(name=char.name, description=char.description)
+            for char in characteristics
+        ]
 
         strengths_query = select(PersonalityStrength).where(PersonalityStrength.personality_type_id == personality_details.id)
         strengths_result = await db.execute(strengths_query)
@@ -207,7 +215,8 @@ async def process_personality_assessment(
                 )
                 for dim, data in normalized_scores.items()
             ],
-            traits=PersonalityTraits(positive=positive_traits, negative=negative_traits),
+            # traits=PersonalityTraits(positive=positive_traits, negative=negative_traits),
+            traits=personality_characteristics,
             strengths=strengths,
             weaknesses=weaknesses,
             career_recommendations=career_data,
@@ -229,6 +238,7 @@ async def process_personality_assessment(
         return response
 
     except Exception as e:
+        logger.debug("Error", str(e))
         await db.rollback()
         logger.exception("Error processing personality assessment.")
         raise HTTPException(status_code=400, detail="An unexpected error occurred during the assessment process.")

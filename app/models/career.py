@@ -24,3 +24,6 @@ class Career(Base):
     holland_codes = relationship("CareerHollandCode", back_populates="career", cascade="all, delete-orphan")
     value_categories = relationship("CareerValueCategory", back_populates="career", cascade="all, delete-orphan")
     career_category_links = relationship("CareerCategoryLink", back_populates="career", cascade="all, delete-orphan")
+    skill_career_associations = relationship("SkillCareerAssociation", back_populates="career")
+    skills = relationship("Skill", secondary="skill_career_associations", back_populates="careers")
+

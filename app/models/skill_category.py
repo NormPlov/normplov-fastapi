@@ -17,4 +17,6 @@ class SkillCategory(Base):
     updated_at = Column(DateTime, nullable=True, onupdate=func.now())
 
     dimensions = relationship("Dimension", back_populates="skill_category")
+    skills = relationship("Skill", back_populates="skill_category", cascade="all, delete-orphan")
+
 

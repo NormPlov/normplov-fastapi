@@ -9,7 +9,6 @@ from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.database import get_db
-from app.models import RefreshToken
 from app.schemas.payload import BaseResponse
 from app.schemas.token import RefreshTokenRequest, OAuthCallbackRequest
 from app.services.token import create_refresh_token, create_access_token
@@ -85,14 +84,6 @@ async def facebook_callback(
 
         app_access_token = create_access_token({"sub": user.uuid})
         app_refresh_token = create_refresh_token({"sub": user.uuid})
-
-        refresh_token_entry = RefreshToken(
-            user_id=user.id,
-            token=app_refresh_token,
-            expires_at=datetime.utcnow() + timedelta(days=7)
-        )
-        db.add(refresh_token_entry)
-        await db.commit()
 
         return BaseResponse(
             status=200,

@@ -38,9 +38,12 @@ class DimensionScore(BaseModel):
     percentage: str
 
 
-class PersonalityTraits(BaseModel):
-    positive: List[str]
-    negative: List[str]
+# class PersonalityTraits(BaseModel):
+#     positive: List[str]
+#     negative: List[str]
+class PersonalityCharacteristics(BaseModel):
+    name: str
+    description: str
 
 
 class PersonalityAssessmentResponse(BaseModel):
@@ -49,7 +52,8 @@ class PersonalityAssessmentResponse(BaseModel):
     test_name: str
     personality_type: PersonalityTypeDetails
     dimensions: List[DimensionScore]
-    traits: PersonalityTraits
+    # traits: PersonalityTraits
+    traits: List[PersonalityCharacteristics]
     strengths: List[str]
     weaknesses: List[str]
     career_recommendations: List[CareerData] = Field(default_factory=list)

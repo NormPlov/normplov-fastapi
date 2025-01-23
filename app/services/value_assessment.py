@@ -123,22 +123,26 @@ async def process_value_assessment(
         for feature in top_3_features:
             feature_name = feature.replace(" Score", "").strip()
 
-            logger.debug(f"Processing feature: {feature_name}")
+            logger.debug(f"processing feature: {feature_name}")
 
             category_query = select(ValueCategory).where(ValueCategory.name == feature_name, ValueCategory.is_deleted == False)
             result = await db.execute(category_query)
             value_category = result.scalars().first()
 
+            logger.debug("Value_Category", value_category.name)
+
+            logger.debug(f"Processing feature: {feature_name}")
             if not value_category:
                 logger.warning(f"No ValueCategory found for feature: {feature_name}")
                 continue
 
-            dimension_query = select(Dimension.id).where(Dimension.name == f"{feature_name} Score")
-            dimension_result = await db.execute(dimension_query)
-            dimension_id = dimension_result.scalars().first()
+            category_query = select(ValueCategory).where(ValueCategory.name == feature_name,
+                                                         ValueCategory.is_deleted == False)
+            result = await db.execute(category_query)
+            value_category = result.scalars().first()
 
-            if not dimension_id:
-                logger.error(f"Dimension not found for feature: {feature_name} Score. Skipping.")
+            if not value_category:
+                logger.error(f"ValueCategory not found for feature: {feature_name}. Skipping.")
                 continue
 
             score_value = normalized_feature_scores.iloc[0][feature]
@@ -146,27 +150,27 @@ async def process_value_assessment(
 
             value_details.append(
                 ValueCategoryDetails(
-                    name=value_category.name,
-                    definition=value_category.definition,
-                    characteristics=value_category.characteristics,
-                    percentage=f"{round(percentage, 2)}%"
+                    name=value_category.name or "Unknown",
+                    definition=value_category.definition or "Unknown",
+                    characteristics=value_category.characteristics or "Unknown",
+                    percentage=f"{round(percentage, 2)}%" or "Unknown"
                 )
             )
 
-            assessment_scores.append(
-                UserAssessmentScore(
-                    uuid=str(uuid.uuid4()),
-                    user_id=current_user.id,
-                    user_test_id=user_test.id,
-                    assessment_type_id=assessment_type_id,
-                    dimension_id=dimension_id,
-                    score={
-                        "score": round(score_value, 2),
-                        "percentage": round(percentage, 2),
-                    },
-                    created_at=datetime.utcnow(),
-                )
-            )
+            # assessment_scores.append(
+            #     UserAssessmentScore(
+            #         uuid=str(uuid.uuid4()),
+            #         user_id=current_user.id,
+            #         user_test_id=user_test.id,
+            #         assessment_type_id=assessment_type_id,
+            #         dimension_id=dimension_id,
+            #         score={
+            #             "score": round(score_value, 2),
+            #             "percentage": round(percentage, 2),
+            #         },
+            #         created_at=datetime.utcnow(),
+            #     )
+            # )
 
             # careers_query = (
             #     select(Career)
@@ -205,7 +209,6 @@ async def process_value_assessment(
             #         "description": career.description,
             #         "majors": majors_with_schools
             #     })
-
 
             # Query all of the career that the model predict getting from the value category
             careers_query = (

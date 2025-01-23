@@ -17,7 +17,7 @@ from app.models import (
     UserTest,
     CareerMajor,
     Major,
-    SchoolMajor, Career, CareerCategoryLink, CareerCategory
+    SchoolMajor, Career, CareerCategoryLink, CareerCategory, SkillCareerAssociation, Skill
 )
 from app.models.dimension import Dimension
 from app.services.test import create_user_test
@@ -143,156 +143,82 @@ async def predict_skills(
                         "name": category,
                         "description": skill_category.category_description,
                     }
-
-        # if top_category:
-        #
-        #     dimension_query = (
-        #         select(DimensionCareer)
-        #         .options(
-        #             joinedload(DimensionCareer.career).joinedload(Career.majors).joinedload(
-        #                 CareerMajor.major).joinedload(Major.school_majors).joinedload(SchoolMajor.school)
-        #         )
-        #         .join(Dimension)
-        #         .join(SkillCategory)
-        #         .where(SkillCategory.category_name == top_category["name"])
-        #         .filter(DimensionCareer.is_deleted == False)
-        #     )
-        #
-        #     result = await db.execute(dimension_query)
-        #     dimension_careers = result.unique().scalars().all()
-        #
-        #     if not dimension_careers:
-        #         logger.warning(f"No careers found for top category: {top_category['name']}")
-        #     else:
-        #         logger.debug(f"Careers found: {[dc.career.name for dc in dimension_careers]}")
-        #
-        #     suggested_careers = []
-        #     added_career_names = set()  # Track unique career names
-        #
-        #     for dc in dimension_careers:
-        #         career = dc.career
-        #         majors = [
-        #             {
-        #                 "major_name": cm.major.name,
-        #                 "schools": [
-        #                     sm.school.en_name for sm in cm.major.school_majors
-        #                 ],
-        #             }
-        #             for cm in career.majors
-        #         ]
-        #
-        #         # Check if the career name is already added
-        #         if career.name not in added_career_names:
-        #             added_career_names.add(career.name)  # Mark this career name as added
-        #             suggested_careers.append(
-        #                 {
-        #                     "career_name": career.name,
-        #                     "description": career.description,
-        #                     "majors": majors,
-        #                 }
-        #             )
-        #     else:
-        #         if not suggested_careers:
-        #             logger.warning("No top category calculated.")
-
-        # career_path = []
-        # if top_category:
-        #     dimension_query = (
-        #         select(DimensionCareer)
-        #         .options(
-        #             joinedload(DimensionCareer.career).joinedload(Career.majors).joinedload(
-        #                 CareerMajor.major).joinedload(Major.school_majors).joinedload(SchoolMajor.school),
-        #             joinedload(DimensionCareer.career).joinedload(Career.career_category_links).joinedload(
-        #                 CareerCategoryLink.career_category).joinedload(CareerCategory.responsibilities)
-        #         )
-        #         .join(Dimension)
-        #         .join(SkillCategory)
-        #         .where(SkillCategory.category_name == top_category["name"])
-        #         .filter(DimensionCareer.is_deleted == False)
-        #     )
-        #
-        #     result = await db.execute(dimension_query)
-        #     dimension_careers = result.unique().scalars().all()
-        #
-        #     for dc in dimension_careers:
-        #         career = dc.career
-        #         majors = [
-        #             MajorWithSchools(
-        #                 major_name=cm.major.name,
-        #                 schools=[sm.school.en_name for sm in cm.major.school_majors if sm.school and not sm.is_deleted]
-        #             )
-        #             for cm in career.majors if not cm.is_deleted
-        #         ]
-        #
-        #         categories = [
-        #             CategoryWithResponsibilities(
-        #                 category_name=link.career_category.name,
-        #                 responsibilities=[resp.description for resp in link.career_category.responsibilities]
-        #             )
-        #             for link in career.career_category_links
-        #         ]
-        #
-        #         career_path.append(CareerData(
-        #             career_uuid=str(career.uuid),
-        #             career_name=career.name,
-        #             description=career.description,
-        #             categories=categories,
-        #             majors=majors
-        #         ))
         career_path = []
-        unique_career_uuids = set()  # Set to store unique career UUIDs
+        unique_career_uuids = set()
 
+        logger.debug("Starting to process top_category")
         if top_category:
-            dimension_query = (
-                select(DimensionCareer)
-                .options(
-                    joinedload(DimensionCareer.career).joinedload(Career.majors).joinedload(
-                        CareerMajor.major).joinedload(Major.school_majors).joinedload(SchoolMajor.school),
-                    joinedload(DimensionCareer.career).joinedload(Career.career_category_links).joinedload(
-                        CareerCategoryLink.career_category).joinedload(CareerCategory.responsibilities)
+            logger.debug("Top category: %s", top_category)
+
+            try:
+                # Build the query using SkillCareerAssociation and Skill
+                skill_query = (
+                    select(SkillCareerAssociation)
+                    .options(
+                        joinedload(SkillCareerAssociation.career).joinedload(Career.majors).joinedload(
+                            CareerMajor.major).joinedload(Major.school_majors).joinedload(SchoolMajor.school),
+                        joinedload(SkillCareerAssociation.career).joinedload(Career.career_category_links).joinedload(
+                            CareerCategoryLink.career_category).joinedload(CareerCategory.responsibilities),
+                    )
+                    .join(Skill)
+                    .join(SkillCategory)
+                    .where(SkillCategory.category_name == top_category["name"])
+                    .filter(SkillCareerAssociation.career.has(is_deleted=False))  # Filter non-deleted careers
                 )
-                .join(Dimension)
-                .join(SkillCategory)
-                .where(SkillCategory.category_name == top_category["name"])
-                .filter(DimensionCareer.is_deleted == False)
-            )
 
-            result = await db.execute(dimension_query)
-            dimension_careers = result.unique().scalars().all()
+                logger.debug("Constructed skill_query: %s", skill_query)
 
-            for dc in dimension_careers:
-                career = dc.career
+                # Execute the query
+                result = await db.execute(skill_query)
+                skill_career_associations = result.unique().scalars().all()
+                logger.debug("Fetched skill_career_associations count: %d", len(skill_career_associations))
 
-                # Skip if career UUID is already processed
-                if career.uuid in unique_career_uuids:
-                    continue
+                for sca in skill_career_associations:
+                    career = sca.career
+                    logger.debug("Processing career: %s", career.name if career else "No Career")
 
-                # Add career UUID to the set
-                unique_career_uuids.add(career.uuid)
+                    if career.uuid in unique_career_uuids:
+                        logger.debug("Skipping duplicate career UUID: %s", career.uuid)
+                        continue
 
-                majors = [
-                    MajorWithSchools(
-                        major_name=cm.major.name,
-                        schools=[sm.school.en_name for sm in cm.major.school_majors if sm.school and not sm.is_deleted]
-                    )
-                    for cm in career.majors if not cm.is_deleted
-                ]
+                    unique_career_uuids.add(career.uuid)
 
-                categories = [
-                    CategoryWithResponsibilities(
-                        category_name=link.career_category.name,
-                        responsibilities=[resp.description for resp in link.career_category.responsibilities]
-                    )
-                    for link in career.career_category_links
-                ]
+                    # Process majors
+                    majors = [
+                        MajorWithSchools(
+                            major_name=cm.major.name,
+                            schools=[sm.school.en_name for sm in cm.major.school_majors if
+                                     sm.school and not sm.is_deleted]
+                        )
+                        for cm in career.majors if not cm.is_deleted
+                    ]
+                    logger.debug("Majors for career %s: %s", career.name, majors)
 
-                career_path.append(CareerData(
-                    career_uuid=str(career.uuid),
-                    career_name=career.name,
-                    description=career.description,
-                    categories=categories,
-                    majors=majors
-                ))
+                    # Process categories
+                    categories = [
+                        CategoryWithResponsibilities(
+                            category_name=link.career_category.name,
+                            responsibilities=[resp.description for resp in link.career_category.responsibilities]
+                        )
+                        for link in career.career_category_links
+                    ]
+                    logger.debug("Categories for career %s: %s", career.name, categories)
+
+                    # Append to career_path
+                    career_path.append(CareerData(
+                        career_uuid=str(career.uuid),
+                        career_name=career.name,
+                        description=career.description,
+                        categories=categories,
+                        majors=majors
+                    ))
+
+                logger.debug("Final career_path: %s", career_path)
+
+            except Exception as e:
+                logger.error("Error processing careers: %s", str(e), exc_info=True)
+        else:
+            logger.warning("No top_category provided. Skipping career processing.")
 
         response = SkillAssessmentResponse(
             user_uuid=user_uuid,
@@ -301,7 +227,6 @@ async def predict_skills(
             top_category=top_category,
             category_percentages=overall_category_percentages,
             skills_grouped=skills_by_levels,
-            # strong_careers=suggested_careers,
             strong_careers=career_path,
         )
 
@@ -325,3 +250,113 @@ async def predict_skills(
             status_code=400,
             detail=f"An unexpected error occurred during the prediction process. Please check your input or try again."
         )
+
+    #     career_path = []
+    #     unique_career_uuids = set()
+    #
+    #     logger.debug("Starting to process top_category")
+    #     if top_category:
+    #         logger.debug("Top category: %s", top_category)
+    #
+    #         try:
+    #             # Build the dimension query
+    #             dimension_query = (
+    #                 select(DimensionCareer)
+    #                 .options(
+    #                     joinedload(DimensionCareer.career).joinedload(Career.majors).joinedload(
+    #                         CareerMajor.major).joinedload(Major.school_majors).joinedload(SchoolMajor.school),
+    #                     joinedload(DimensionCareer.career).joinedload(Career.career_category_links).joinedload(
+    #                         CareerCategoryLink.career_category).joinedload(CareerCategory.responsibilities)
+    #                 )
+    #                 .join(Dimension)
+    #                 .join(SkillCategory)
+    #                 .where(SkillCategory.category_name == top_category["name"])
+    #                 .filter(DimensionCareer.is_deleted == False)
+    #             )
+    #
+    #             logger.debug("Constructed dimension_query: %s", dimension_query)
+    #
+    #             # Execute the query
+    #             result = await db.execute(dimension_query)
+    #             dimension_careers = result.unique().scalars().all()
+    #             logger.debug("Fetched dimension_careers count: %d", len(dimension_careers))
+    #
+    #             for dc in dimension_careers:
+    #                 career = dc.career
+    #                 logger.debug("Processing career: %s", career.name if career else "No Career")
+    #
+    #                 if career.uuid in unique_career_uuids:
+    #                     logger.debug("Skipping duplicate career UUID: %s", career.uuid)
+    #                     continue
+    #
+    #                 unique_career_uuids.add(career.uuid)
+    #
+    #                 # Process majors
+    #                 majors = [
+    #                     MajorWithSchools(
+    #                         major_name=cm.major.name,
+    #                         schools=[sm.school.en_name for sm in cm.major.school_majors if
+    #                                  sm.school and not sm.is_deleted]
+    #                     )
+    #                     for cm in career.majors if not cm.is_deleted
+    #                 ]
+    #                 logger.debug("Majors for career %s: %s", career.name, majors)
+    #
+    #                 # Process categories
+    #                 categories = [
+    #                     CategoryWithResponsibilities(
+    #                         category_name=link.career_category.name,
+    #                         responsibilities=[resp.description for resp in link.career_category.responsibilities]
+    #                     )
+    #                     for link in career.career_category_links
+    #                 ]
+    #                 logger.debug("Categories for career %s: %s", career.name, categories)
+    #
+    #                 # Append to career_path
+    #                 career_path.append(CareerData(
+    #                     career_uuid=str(career.uuid),
+    #                     career_name=career.name,
+    #                     description=career.description,
+    #                     categories=categories,
+    #                     majors=majors
+    #                 ))
+    #
+    #             logger.debug("Final career_path: %s", career_path)
+    #
+    #         except Exception as e:
+    #             logger.error("Error processing dimension careers: %s", str(e), exc_info=True)
+    #     else:
+    #         logger.warning("No top_category provided. Skipping dimension career processing.")
+    #
+    #     response = SkillAssessmentResponse(
+    #         user_uuid=user_uuid,
+    #         test_uuid=str(user_test.uuid),
+    #         test_name=user_test.name,
+    #         top_category=top_category,
+    #         category_percentages=overall_category_percentages,
+    #         skills_grouped=skills_by_levels,
+    #         # strong_careers=suggested_careers,
+    #         strong_careers=career_path,
+    #     )
+    #
+    #     user_response = UserResponse(
+    #         uuid=str(uuid.uuid4()),
+    #         user_id=user_id,
+    #         user_test_id=user_test.id,
+    #         assessment_type_id=assessment_type_id,
+    #         response_data=json.dumps(response.dict()),
+    #         is_completed=True,
+    #         created_at=datetime.utcnow(),
+    #     )
+    #     db.add(user_response)
+    #
+    #     await db.commit()
+    #     return response
+    #
+    # except Exception as e:
+    #     await db.rollback()
+    #     raise HTTPException(
+    #         status_code=400,
+    #         detail=f"An unexpected error occurred during the prediction process. Please check your input or try again."
+    #     )
+

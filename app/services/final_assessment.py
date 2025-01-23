@@ -5,7 +5,6 @@ import uuid
 import numpy as np
 import pandas as pd
 
-from datetime import datetime
 from sqlalchemy.orm import joinedload
 from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +19,7 @@ from app.schemas.learning_style_assessment import LearningStyleResponse
 from app.services.test import create_user_test
 from app.utils.prepare_model_input import prepare_model_input
 from ml_models.model_loader import load_career_recommendation_model
-from app.schemas.personality_assessment import PersonalityTypeDetails, PersonalityAssessmentResponse, PersonalityTraits
+from app.schemas.personality_assessment import PersonalityTypeDetails, PersonalityAssessmentResponse
 from app.schemas.skill_assessment import SkillAssessmentResponse, MajorWithSchools, SkillGroupedByLevel
 from app.schemas.value_assessment import (
     ValueAssessmentResponse,

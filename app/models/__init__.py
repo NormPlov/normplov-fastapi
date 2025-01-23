@@ -1,7 +1,6 @@
 from app.models.role import Role
 from app.models.user_role import UserRole
 from app.models.user import User
-from app.models.refresh_token import RefreshToken
 from app.models.assessment_type import AssessmentType
 from app.models.user_response import UserResponse
 from app.models.dimension import Dimension
@@ -34,6 +33,9 @@ from app.models.app_metadata import AppMetadata
 from app.models.dimension_study_technique import DimensionStudyTechnique
 from app.models.study_technique import StudyTechnique
 from app.models.technique_category import TechniqueCategory
+from app.models.personality_characteristic import PersonalityCharacteristic
+from app.models.skill import Skill
+from app.models.skill_career_association import SkillCareerAssociation
 
 __all__ = ["Role",
            "AppMetadata",
@@ -56,6 +58,7 @@ __all__ = ["Role",
            "Faculty",
            "CareerMajor",
            "PersonalityType",
+           "PersonalityCharacteristic",
            "CareerCategory",
            "CareerPersonalityType",
            "CareerHollandCode",
@@ -63,12 +66,13 @@ __all__ = ["Role",
            "CareerCategoryLink",
            "Bookmark",
            "ValueCategoryKeyImprovement",
-           "RefreshToken",
            "UserTestReference",
            "CareerCategoryRequirement",
            "CareerCategoryResponsibility",
            "DimensionStudyTechnique",
            "StudyTechnique",
-           "TechniqueCategory"
+           "TechniqueCategory",
+           "Skill",
+           "SkillCareerAssociation"
            ]
 

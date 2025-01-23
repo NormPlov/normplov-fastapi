@@ -284,30 +284,30 @@ async def process_interest_assessment(
                 "score": score_value,
             })
 
-            percentage = round((score_value / sum(scores.values())) * 100, 2)
-            assessment_scores.append(
-                UserAssessmentScore(
-                    uuid=str(uuid.uuid4()),
-                    user_id=current_user.id,
-                    user_test_id=final_user_test.id,
-                    assessment_type_id=assessment_type_id,
-                    dimension_id=dimension.id,
-                    score={
-                        "score": round(score_value, 2),
-                        "percentage": percentage,
-                    },
-                    created_at=datetime.utcnow(),
-                )
-            )
+            # percentage = round((score_value / sum(scores.values())) * 100, 2)
+            # assessment_scores.append(
+            #     UserAssessmentScore(
+            #         uuid=str(uuid.uuid4()),
+            #         user_id=current_user.id,
+            #         user_test_id=final_user_test.id,
+            #         assessment_type_id=assessment_type_id,
+            #         dimension_id=dimension.id,
+            #         score={
+            #             "score": round(score_value, 2),
+            #             "percentage": percentage,
+            #         },
+            #         created_at=datetime.utcnow(),
+            #     )
+            # )
 
-        if not assessment_scores:
-            logger.error("No assessment scores to save.")
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to resolve dimension IDs for interest assessment scores."
-            )
-
-        db.add_all(assessment_scores)
+        # if not assessment_scores:
+        #     logger.error("No assessment scores to save.")
+        #     raise HTTPException(
+        #         status_code=500,
+        #         detail="Failed to resolve dimension IDs for interest assessment scores."
+        #     )
+        #
+        # db.add_all(assessment_scores)
 
         response = InterestAssessmentResponse(
             user_uuid=current_user.uuid,
