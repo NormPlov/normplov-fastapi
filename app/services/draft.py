@@ -164,11 +164,11 @@ async def delete_draft(
 def get_required_keys(assessment_type_id: int) -> list:
     if assessment_type_id == 1:
         return [f"Q{i}" for i in range(1, 17)]
-    elif assessment_type_id == 2:
-        return [f"q{i}" for i in range(1, 13)]
-    elif assessment_type_id == 3:
-        return [f"Q{i}" for i in range(1, 23)]
     elif assessment_type_id == 4:
+        return [f"q{i}" for i in range(1, 13)]
+    elif assessment_type_id == 2:
+        return [f"Q{i}" for i in range(1, 23)]
+    elif assessment_type_id == 3:
         return [
             "Complex Problem Solving",
             "Critical Thinking Score",
@@ -571,6 +571,7 @@ async def save_user_response_as_draft(
         logger.error(f"Unexpected error in save_draft route: {HTTPException}")
         raise
     except Exception as e:
+        logger.error(f"Error saving draft: {str(e)}")
         raise format_http_exception(
             status_code=400,
             message="An unexpected error occurred while saving the draft.",

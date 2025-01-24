@@ -10,7 +10,7 @@ from app.schemas.job_scraper import ScrapeRequest
 
 job_scaper_router = APIRouter()
 
-DJANGO_BASE_URL = "http://136.228.158.126:3290/api/v1"
+DJANGO_BASE_URL = "http://202.178.125.77:3290/api/v1"
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 logger = logging.getLogger(__name__)
