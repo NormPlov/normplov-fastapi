@@ -253,11 +253,11 @@ async def submit_assessment(
 
         if draft.assessment_type_id == 1:
             response_data = await process_personality_assessment(new_responses, db, current_user)
-        elif draft.assessment_type_id == 2:
-            response_data = await process_interest_assessment(new_responses, db, current_user)
-        elif draft.assessment_type_id == 3:
-            response_data = await process_value_assessment(new_responses, db, current_user)
         elif draft.assessment_type_id == 4:
+            response_data = await process_interest_assessment(new_responses, db, current_user)
+        elif draft.assessment_type_id == 2:
+            response_data = await process_value_assessment(new_responses, db, current_user)
+        elif draft.assessment_type_id == 3:
             response_data = await predict_skills(new_responses, db, current_user)
         elif draft.assessment_type_id == 5:
             response_data = await predict_learning_style(new_responses, db, current_user)
