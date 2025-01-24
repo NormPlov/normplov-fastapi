@@ -11,7 +11,6 @@ from sqlalchemy.orm import joinedload
 from fastapi import HTTPException
 from app.models import (
     SkillCategory,
-    DimensionCareer,
     UserResponse,
     AssessmentType,
     UserTest,
@@ -70,6 +69,79 @@ async def predict_skills(
             for idx, column in enumerate(target_columns)
         }
 
+        # category_percentages = {}
+        # total_skills_per_category = {}
+        # top_category = None
+        # skills_by_levels = {"Strong": [], "Average": [], "Weak": []}
+        #
+        # for skill, level in predicted_labels.items():
+        #     skill_with_level = f"{skill} Level" if not skill.endswith("Level") else skill
+        #     dimension_query = select(Dimension).where(Dimension.name == skill_with_level)
+        #     result = await db.execute(dimension_query)
+        #     dimension = result.scalars().first()
+        #
+        #     if not dimension:
+        #         continue
+        #
+        #     skill_category_query = (
+        #         select(SkillCategory)
+        #         .where(SkillCategory.id == dimension.skill_category_id)  # Use the foreign key
+        #     )
+        #     result = await db.execute(skill_category_query)
+        #     skill_category = result.scalars().first()
+        #
+        #     if not skill_category:
+        #         continue
+        #
+        #     category_name = skill_category.category_name
+        #     category_level = (
+        #         "Strong" if level in ["Strong", "High"]
+        #         else "Average" if level in ["Average", "Moderate"]
+        #         else "Weak"
+        #     )
+        #
+        #     skills_by_levels[category_level].append({
+        #         "skill": skill_with_level.replace(" Level", ""),
+        #         "description": dimension.description,
+        #     })
+        #
+        #     if category_name not in category_percentages:
+        #         category_percentages[category_name] = {"Strong": 0, "Average": 0, "Weak": 0}
+        #         total_skills_per_category[category_name] = 0
+        #
+        #     total_skills_per_category[category_name] += 1
+        #     category_percentages[category_name][category_level] += 1
+        #
+        # overall_category_percentages = {}
+        # for category, levels in category_percentages.items():
+        #     total_skills = total_skills_per_category.get(category, 0)
+        #     if total_skills > 0:
+        #         strong_percentage = round((levels["Strong"] / total_skills) * 100, 2)
+        #         average_percentage = round((levels["Average"] / total_skills) * 100, 2)
+        #         weak_percentage = round((levels["Weak"] / total_skills) * 100, 2)
+        #
+        #         overall_score = round(
+        #             (levels["Strong"] * 1.0 + levels["Average"] * 0.5) / total_skills * 100, 2
+        #         )
+        #
+        #         overall_category_percentages[category] = max(overall_score, 0.01)
+        #     else:
+        #         overall_category_percentages[category] = 0.0
+        #
+        #     if (
+        #         top_category is None
+        #         or overall_category_percentages[category] > overall_category_percentages.get(top_category["name"], 0)
+        #     ):
+        #         # Fetch the description for the current category
+        #         skill_category_query = select(SkillCategory).where(SkillCategory.category_name == category)
+        #         result = await db.execute(skill_category_query)
+        #         skill_category = result.scalars().first()
+        #
+        #         if skill_category:
+        #             top_category = {
+        #                 "name": category,
+        #                 "description": skill_category.category_description,
+        #             }
         category_percentages = {}
         total_skills_per_category = {}
         top_category = None
@@ -130,8 +202,9 @@ async def predict_skills(
                 overall_category_percentages[category] = 0.0
 
             if (
-                top_category is None
-                or overall_category_percentages[category] > overall_category_percentages.get(top_category["name"], 0)
+                    top_category is None
+                    or overall_category_percentages[category] > overall_category_percentages.get(top_category["name"],
+                                                                                                 0)
             ):
                 # Fetch the description for the current category
                 skill_category_query = select(SkillCategory).where(SkillCategory.category_name == category)
@@ -143,6 +216,8 @@ async def predict_skills(
                         "name": category,
                         "description": skill_category.category_description,
                     }
+
+        # Existing career logic remains unchanged below
         career_path = []
         unique_career_uuids = set()
 
@@ -245,6 +320,7 @@ async def predict_skills(
         return response
 
     except Exception as e:
+        logger.debug("Error Database", str(e))
         await db.rollback()
         raise HTTPException(
             status_code=400,

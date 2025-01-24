@@ -15,6 +15,7 @@ class StudyTechnique(Base):
     is_deleted = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=None, onupdate=datetime.utcnow)
+    image = Column(String, nullable=True)
 
     category = relationship("TechniqueCategory", back_populates="study_techniques")
     dimensions = relationship(

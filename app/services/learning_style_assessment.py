@@ -307,7 +307,7 @@ async def predict_learning_style(
         logger.debug("learning_style", learning_style)
 
         chart_data = {
-            "labels": ["Visual Learning", "Auditory Learning", "Read/Write Learning", "Kinesthetic Learning"],
+            "labels": ["Visual Learner", "Auditory Learner", "Read/Write Learner", "Kinesthetic Learner"],
             "values": [
                 round(row["Visual_Prob"] * 100, 2),
                 round(row["Auditory_Prob"] * 100, 2),
@@ -595,7 +595,7 @@ async def predict_learning_style(
 
                 dimension_details.append(
                     {
-                        "dimension_name": dimension.name,
+                        "dimension_name": dimension.name.replace("_Prob", ""),
                         "dimension_description": dimension.description,
                         "level": level,
                     }
@@ -632,6 +632,7 @@ async def predict_learning_style(
                         "technique_name": technique.name,
                         "category": technique.category.name if technique.category else "Uncategorized",
                         "description": technique.description,
+                        "image_url": technique.image
                     }
                     for technique in techniques_result.scalars().all()
                 ]
