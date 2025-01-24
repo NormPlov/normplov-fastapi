@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status
 from app.schemas.payload import BaseResponse
 from app.schemas.test import UserTestResponseSchema, PaginationMetadata, UserTestResponse
-from app.schemas.test_career import CareerData, CategoryWithResponsibilities, MajorData
+from app.schemas.test_career import CareerData, CategoryWithResponsibilities, MajorWithSchools
 from app.utils.pagination import paginate_results
 from fastapi.templating import Jinja2Templates
 
@@ -331,8 +331,8 @@ async def fetch_specific_career_from_user_response_by_test_uuid(
         ]
 
         majors_json = specific_career_json.get("majors", [])
-        majors_list: List[MajorData] = [
-            MajorData(
+        majors_list: List[MajorWithSchools] = [
+            MajorWithSchools(
                 major_name=major.get("major_name", ""),
                 schools=major.get("schools", []),
             )
@@ -354,7 +354,6 @@ async def fetch_specific_career_from_user_response_by_test_uuid(
             message="Invalid or malformed JSON in user_response.response_data.",
             details=str(e),
         )
-
 
 
 async def get_public_responses(

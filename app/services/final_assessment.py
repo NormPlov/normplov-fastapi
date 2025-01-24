@@ -1,6 +1,5 @@
 import logging
 import json
-import os
 import uuid
 import numpy as np
 import pandas as pd
@@ -39,8 +38,8 @@ async def get_user_test_details_service(test_uuid: str, db: AsyncSession):
         stmt_user_test = (
             select(UserTest)
             .options(
-                joinedload(UserTest.assessment_type),  # Load assessment type
-                joinedload(UserTest.test_references)  # Load test references
+                joinedload(UserTest.assessment_type),
+                joinedload(UserTest.test_references)
             )
             .where(UserTest.uuid == test_uuid)
         )
