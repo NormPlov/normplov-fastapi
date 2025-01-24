@@ -8,9 +8,14 @@ class ValueAssessmentInput(BaseModel):
     )
 
 
-class MajorData(BaseModel):
+class SchoolData(BaseModel):
+    school_uuid: str
+    school_name: str
+
+
+class MajorWithSchools(BaseModel):
     major_name: str
-    schools: List[str]
+    schools: List[SchoolData]
 
 
 class CategoryWithResponsibilities(BaseModel):
@@ -23,7 +28,7 @@ class CareerData(BaseModel):
     career_name: str
     description: Optional[str] = None
     categories: List[CategoryWithResponsibilities] = Field(default_factory=list)
-    majors: List[MajorData] = Field(default_factory=list)
+    majors: List[MajorWithSchools] = Field(default_factory=list)
 
 
 class ChartData(BaseModel):

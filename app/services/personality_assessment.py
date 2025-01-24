@@ -21,7 +21,7 @@ from app.services.test import create_user_test
 from app.schemas.personality_assessment import (
     PersonalityAssessmentResponse,
     PersonalityTypeDetails,
-    DimensionScore, CategoryWithResponsibilities, MajorData, CareerData, PersonalityCharacteristics
+    DimensionScore, CategoryWithResponsibilities, CareerData, PersonalityCharacteristics, MajorWithSchools
 )
 from ml_models.model_loader import load_personality_models
 
@@ -176,10 +176,13 @@ async def process_personality_assessment(
                 for link in career.career_category_links
             ]
             majors = [
-                MajorData(
+                MajorWithSchools(
                     major_name=major.name,
                     schools=[
-                        school.en_name
+                        {
+                            "school_uuid": str(school.uuid),  # Include school UUID
+                            "school_name": school.en_name  # Include school name
+                        }
                         for school_major in major.school_majors if not school_major.is_deleted
                         for school in [school_major.school] if school
                     ],

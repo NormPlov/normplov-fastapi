@@ -20,7 +20,7 @@ from app.models.dimension import Dimension
 from app.schemas.value_assessment import (
     ValueAssessmentResponse,
     ChartData,
-    ValueCategoryDetails, CareerData, CategoryWithResponsibilities, MajorData,
+    ValueCategoryDetails, CareerData, CategoryWithResponsibilities, MajorWithSchools,
 )
 from app.services.test import create_user_test
 from ml_models.model_loader import load_feature_score_models, load_target_value_model
@@ -238,9 +238,15 @@ async def process_value_assessment(
                     )
                     result = await db.execute(schools_stmt)
                     schools = result.scalars().all()
-                    majors_with_schools.append(MajorData(
+                    majors_with_schools.append(MajorWithSchools(
                         major_name=major.name,
-                        schools=[school.en_name for school in schools]
+                        schools=[
+                            {
+                                "school_uuid": str(school.uuid),
+                                "school_name": school.en_name
+                            }
+                            for school in schools
+                        ]
                     ))
 
                 categories_query = (

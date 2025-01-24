@@ -8,9 +8,14 @@ class PersonalityAssessmentInput(BaseModel):
     )
 
 
-class MajorData(BaseModel):
+class SchoolData(BaseModel):
+    school_uuid: str
+    school_name: str
+
+
+class MajorWithSchools(BaseModel):
     major_name: str
-    schools: List[str]
+    schools: List[SchoolData]
 
 
 class CategoryWithResponsibilities(BaseModel):
@@ -23,7 +28,7 @@ class CareerData(BaseModel):
     career_name: str
     description: Optional[str] = None
     categories: List[CategoryWithResponsibilities] = Field(default_factory=list)
-    majors: List[MajorData] = Field(default_factory=list)
+    majors: List[MajorWithSchools] = Field(default_factory=list)
 
 
 class PersonalityTypeDetails(BaseModel):
@@ -38,9 +43,6 @@ class DimensionScore(BaseModel):
     percentage: str
 
 
-# class PersonalityTraits(BaseModel):
-#     positive: List[str]
-#     negative: List[str]
 class PersonalityCharacteristics(BaseModel):
     name: str
     description: str
@@ -52,7 +54,6 @@ class PersonalityAssessmentResponse(BaseModel):
     test_name: str
     personality_type: PersonalityTypeDetails
     dimensions: List[DimensionScore]
-    # traits: PersonalityTraits
     traits: List[PersonalityCharacteristics]
     strengths: List[str]
     weaknesses: List[str]

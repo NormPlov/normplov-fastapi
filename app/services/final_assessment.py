@@ -25,7 +25,7 @@ from app.schemas.value_assessment import (
     ValueAssessmentResponse,
     CareerData,
     KeyImprovement,
-    MajorData,
+    MajorWithSchools,
     ValueCategoryDetails,
     ChartData
 )
@@ -426,7 +426,7 @@ async def get_aggregated_tests_service(
                             career_name=career["career_name"],
                             description=career.get("description"),
                             majors=[
-                                MajorData(
+                                MajorWithSchools(
                                     major_name=major["major_name"],
                                     schools=major["schools"],
                                 )

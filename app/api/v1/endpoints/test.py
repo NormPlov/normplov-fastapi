@@ -100,11 +100,12 @@ async def export_all_tests_excel(
 )
 async def get_specific_career_data_by_test_uuid(
     test_uuid: str,
+    career_uuid: str,
     db: AsyncSession = Depends(get_db),
 ):
     try:
         career_data: Optional[CareerData] = await fetch_specific_career_from_user_response_by_test_uuid(
-            db, test_uuid
+            db=db, test_uuid=test_uuid, career_uuid=career_uuid
         )
 
         if not career_data:

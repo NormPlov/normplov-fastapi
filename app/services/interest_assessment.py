@@ -196,9 +196,16 @@ async def process_interest_assessment(
                 )
                 result = await db.execute(schools_stmt)
                 schools = result.scalars().all()
+
                 majors_with_schools.append({
                     "major_name": major.name,
-                    "schools": [school.en_name for school in schools]
+                    "schools": [
+                        {
+                            "school_uuid": str(school.uuid),
+                            "school_name": school.en_name
+                        }
+                        for school in schools
+                    ]
                 })
 
             # Fetch categories for the career

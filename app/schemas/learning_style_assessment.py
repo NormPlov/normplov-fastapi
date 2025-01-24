@@ -21,9 +21,14 @@ class LearningStyleInput(BaseModel):
         return responses
 
 
+class SchoolData(BaseModel):
+    school_uuid: str
+    school_name: str
+
+
 class MajorWithSchools(BaseModel):
     major_name: str
-    schools: List[str]
+    schools: List[SchoolData]
 
 
 class CategoryWithResponsibilities(BaseModel):

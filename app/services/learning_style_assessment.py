@@ -577,9 +577,7 @@ async def predict_learning_style(
                     majors = result.scalars().all()
 
                     for major in majors:
-                        major_info = {"major_name": major.name, "schools": []}
-
-                        # Step 6: Fetching schools related to each major
+                        # Fetch schools associated with the major
                         schools_stmt = (
                             select(School)
                             .join(SchoolMajor, SchoolMajor.school_id == School.id)
@@ -588,7 +586,17 @@ async def predict_learning_style(
                         result = await db.execute(schools_stmt)
                         schools = result.scalars().all()
 
-                        major_info["schools"] = [school.en_name for school in schools]
+                        # Add major and school details to career_info
+                        major_info = {
+                            "major_name": major.name,
+                            "schools": [
+                                {
+                                    "school_uuid": str(school.uuid),
+                                    "school_name": school.en_name
+                                }
+                                for school in schools
+                            ],
+                        }
                         career_info["majors"].append(major_info)
 
                     related_careers.append(career_info)
