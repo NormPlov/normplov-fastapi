@@ -7,8 +7,6 @@ import google.generativeai as genai
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy.orm import joinedload
-
 from app.models import UserResponse
 from app.models.ai_recommendation import AIRecommendation
 from app.models.user import User
@@ -333,6 +331,7 @@ async def generate_ai_recommendation(data: AIRecommendationCreate, db: AsyncSess
 
 async def generate_ai_response(context: dict, db: AsyncSession, user_id: int) -> str:
     try:
+        # Fetch user responses from the database
         user_responses_stmt = select(UserResponse.response_data).where(
             UserResponse.user_id == user_id,
             UserResponse.is_deleted == False,
@@ -341,29 +340,12 @@ async def generate_ai_response(context: dict, db: AsyncSession, user_id: int) ->
         result = await db.execute(user_responses_stmt)
         user_responses = result.scalars().all()
 
-        formatted_user_responses = []
-        for idx, response in enumerate(user_responses):
-            try:
-                deserialized_response = json.loads(response) if isinstance(response, str) else response
+        logger.debug("User Responses:", user_responses)
 
-                if isinstance(deserialized_response, list):
-                    for item in deserialized_response:
-                        formatted_user_responses.append(
-                            f"Response {idx + 1} - {item.get('Career', 'Unknown Career')}: "
-                            f"Similarity {item.get('Similarity', 'N/A')}"
-                        )
-                elif isinstance(deserialized_response, dict):
-                    formatted_user_responses.append(
-                        f"Response {idx + 1} - {deserialized_response.get('top_category', {}).get('name', 'Unknown Category')}: "
-                        f"{deserialized_response.get('top_category', {}).get('description', 'No description available')}"
-                    )
-                else:
-                    logger.warning(f"Skipping invalid response format: {response}")
-            except json.JSONDecodeError:
-                logger.warning(f"Skipping invalid JSON response: {response}")
+        # Pass raw user responses directly into the AI context
+        raw_user_responses = "\n".join(user_responses) if user_responses else "No user responses available."
 
-        user_response_summary = "\n".join(formatted_user_responses) if formatted_user_responses else "No user responses available."
-
+        # Extract and clean the recent conversation history
         conversation_history = context.get("user_responses", [])
         cleaned_history = ""
         for idx, entry in enumerate(conversation_history[-5:]):
@@ -372,20 +354,23 @@ async def generate_ai_response(context: dict, db: AsyncSession, user_id: int) ->
             if user_query and ai_reply and "I need more details" not in ai_reply:
                 cleaned_history += f"User: {user_query}\nAI: {ai_reply}\n"
 
+        # Get the current user query
         user_query = context.get("user_query", "").strip()
         if not user_query:
             logger.error("Missing or empty 'user_query' in context.")
             return "I need more details to provide an answer. Could you clarify your question?"
 
+        # Construct the prompt for AI
         formatted_prompt = (
             "You are a helpful career and life advisor. Use the provided user information and conversation history "
             "to give a clear and actionable answer to the user's current question.\n\n"
-            f"### User Information:\n{user_response_summary}\n\n"
+            f"### Raw User Responses:\n{raw_user_responses}\n\n"
             f"### Recent Conversation History:\n{cleaned_history}\n"
             f"### Current User Query:\n{user_query}\n\n"
             "Provide a detailed, thoughtful, and specific response to the user's query."
         )
 
+        # Initialize and send the prompt to the AI model
         chat_session = model.start_chat(history=[])
         response = chat_session.send_message(formatted_prompt)
 
@@ -395,11 +380,13 @@ async def generate_ai_response(context: dict, db: AsyncSession, user_id: int) ->
             return "I'm sorry, I couldn't generate a specific answer. Could you provide more details?"
 
     except Exception as e:
+        # Handle quota or API key errors and retry
         if "quota" in str(e).lower() or "limit" in str(e).lower():
             api_key_manager.switch_key()
             configure_ai()
             return await generate_ai_response(context, db, user_id)
 
+        logger.error(f"An unexpected error occurred: {e}")
         return "An unexpected error occurred while generating a response. Please try again later."
 
 

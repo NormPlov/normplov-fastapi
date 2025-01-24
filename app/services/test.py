@@ -269,7 +269,7 @@ async def generate_excel_for_tests(tests: list) -> BytesIO:
 async def fetch_specific_career_from_user_response_by_test_uuid(
     db: AsyncSession,
     test_uuid: str,
-    career_uuid: str,  # Accept career_uuid
+    career_uuid: str,
 ) -> Optional[CareerData]:
     stmt = (
         select(UserResponse)
