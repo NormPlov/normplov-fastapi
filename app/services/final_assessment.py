@@ -1,5 +1,6 @@
 import logging
 import json
+import os
 import uuid
 import numpy as np
 import pandas as pd
@@ -120,13 +121,13 @@ async def predict_careers_service(
         user_input = prepare_model_input(aggregated_response)
 
         # Load the training dataset to fit the model in server
-        dataset_path = "/app/datasets/train_testing.csv"
+        # dataset_path = "/app/datasets/train_testing.csv"
 
         # Load the training dataset to fit the model from local computer
-        # dataset_path = os.path.join(
-        #     os.getcwd(),
-        #     r"D:\CSTAD Scholarship Program\python for data analytics\NORMPLOV_PROJECT\normplov-fastapi\datasets\train_testing.csv",
-        # )
+        dataset_path = os.path.join(
+            os.getcwd(),
+            r"D:\CSTAD Scholarship Program\python for data analytics\NORMPLOV_PROJECT\normplov-fastapi\datasets\train_testing.csv",
+        )
 
         career_model = load_career_recommendation_model(dataset_path=dataset_path)
         model_features = career_model.get_feature_columns()
@@ -161,18 +162,41 @@ async def predict_careers_service(
 
             majors_with_schools = []
             for major in majors:
+                # Fetch schools for the major
                 stmt_schools = (
-                    select(School.en_name)
+                    select(School.uuid, School.en_name)  # Fetch both UUID and name
                     .join(SchoolMajor, SchoolMajor.school_id == School.id)
                     .where(SchoolMajor.major_id == major.id, SchoolMajor.is_deleted == False)
                 )
                 result_schools = await db.execute(stmt_schools)
-                schools = [school for school in result_schools.scalars().all()]  # Use the strings directly
+                schools = [
+                    {
+                        "school_uuid": str(school[0]),
+                        "school_name": school[1],
+                    }
+                    for school in result_schools.fetchall()
+                ]
 
+                # Append the major with its associated schools
                 majors_with_schools.append({
                     "major_name": major.name,
                     "schools": schools,
                 })
+
+                # majors_with_schools = []
+            # for major in majors:
+            #     stmt_schools = (
+            #         select(School.en_name)
+            #         .join(SchoolMajor, SchoolMajor.school_id == School.id)
+            #         .where(SchoolMajor.major_id == major.id, SchoolMajor.is_deleted == False)
+            #     )
+            #     result_schools = await db.execute(stmt_schools)
+            #     schools = [school for school in result_schools.scalars().all()]  # Use the strings directly
+            #
+            #     majors_with_schools.append({
+            #         "major_name": major.name,
+            #         "schools": schools,
+            #     })
 
                 # Fetch related categories and responsibilities
                 stmt_categories = (
