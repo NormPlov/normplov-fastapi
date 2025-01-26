@@ -16,11 +16,10 @@ from app.models.user_assessment_score import UserAssessmentScore
 from app.models.assessment_type import AssessmentType
 from app.models import UserTest, School, SchoolMajor, CareerMajor, Major, CareerValueCategory, \
     ValueCategoryKeyImprovement, CareerCategoryResponsibility, CareerCategoryLink, CareerCategory
-from app.models.dimension import Dimension
 from app.schemas.value_assessment import (
     ValueAssessmentResponse,
     ChartData,
-    ValueCategoryDetails, CareerData, CategoryWithResponsibilities, MajorWithSchools,
+    ValueCategoryDetails, CareerData, CategoryWithResponsibilities, MajorData,
 )
 from app.services.test import create_user_test
 from ml_models.model_loader import load_feature_score_models, load_target_value_model
@@ -238,7 +237,7 @@ async def process_value_assessment(
                     )
                     result = await db.execute(schools_stmt)
                     schools = result.scalars().all()
-                    majors_with_schools.append(MajorWithSchools(
+                    majors_with_schools.append(MajorData(
                         major_name=major.name,
                         schools=[
                             {

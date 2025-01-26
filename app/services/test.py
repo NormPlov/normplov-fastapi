@@ -601,13 +601,18 @@ async def get_user_responses_to_render_test_details_in_html(
         result = await db.execute(query)
         responses = result.scalars().all()
 
+        logger.debug(f"Fetched responses: {[response.__dict__ for response in responses]}")
+
         formatted_responses = []
         for response in responses:
             user_response_data = json.loads(response.response_data) if isinstance(response.response_data, str) else response.response_data
+            logger.debug(f"Raw user_response_data: {user_response_data}")
 
             # Access 'all_assessments' if it exists
             all_assessments = user_response_data.get("all_assessments", {})
             value_data = all_assessments.get("value", {})
+            logger.debug(f"value_data: {value_data}")
+
             chart_data = value_data.get("chart_data", [])
 
             if isinstance(chart_data, list) and chart_data:
@@ -630,19 +635,24 @@ async def get_user_responses_to_render_test_details_in_html(
 
             # Handle `value_details` if present
             value_details = all_assessments.get("value_details", [])
+            logger.debug(f"value_details: {value_details}")
+
+            # Process value_details to extract the top_value
+            value_details = user_response_data.get("value_details", [])
             if value_details:
                 try:
-                    # Find top value based on percentage
+                    # Extract the value with the highest percentage
                     top_value = max(
                         value_details,
                         key=lambda x: float(x["percentage"].strip('%'))
                     )
-                    all_assessments["top_value"] = top_value
+                    user_response_data["top_value"] = top_value  # Add to response data
+                    logger.debug(f"Top value calculated: {top_value}")
                 except Exception as e:
-                    logger.error(f"Error calculating top value from value_details: {e}")
-                    all_assessments["top_value"] = None
+                    logger.error(f"Error calculating top_value: {e}")
+                    user_response_data["top_value"] = {"name": "N/A", "definition": "No data available"}
             else:
-                all_assessments["top_value"] = None
+                user_response_data["top_value"] = {"name": "N/A", "definition": "No data available"}
 
             # Update user_response_data with processed all_assessments
             user_response_data["all_assessments"] = all_assessments
@@ -693,12 +703,18 @@ async def render_html_for_test(request: Request, test_name: str, test_data: dict
 
         # Extract user response data
         user_response_data = test_data.get("user_response_data", {})
+        logger.debug("user_response_data", user_response_data)
         if not user_response_data:
             raise format_http_exception(
                 status_code=400,
                 message="❌ Missing 'user_response_data' in test_data.",
                 details={"test_data": test_data}
             )
+        # Check if `top_value` exists and provide a fallback
+        top_value = user_response_data.get("all_assessments", {}).get("top_value", {})
+        if not top_value:
+            top_value = {"name": "N/A", "definition": "No data available"}
+            logger.warning("No 'top_value' found in user_response_data.")
 
         # Render the template with the required context
         html_content = templates.TemplateResponse(

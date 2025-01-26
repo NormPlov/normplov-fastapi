@@ -4,7 +4,7 @@ import traceback
 
 from datetime import datetime, date
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import UUID4
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -258,7 +258,7 @@ async def get_saved_image(filename: str):
                 details="Filename should not contain `..` or start with `/`."
             )
 
-        file_path = os.path.join(settings.BASE_UPLOAD_FOLDER, "assessment_images", filename)
+        file_path = os.path.join(settings.BASE_UPLOAD_FOLDER, filename)
 
         # Check if file exists
         if not os.path.isfile(file_path):
@@ -310,18 +310,21 @@ async def save_test_image(
         html_content = await render_html_for_test(request, test_data["test_name"], test_data)
 
         # Prepare upload folder
-        upload_folder = os.path.join(settings.BASE_UPLOAD_FOLDER, "assessment_images")
+        upload_folder = os.path.join(settings.BASE_UPLOAD_FOLDER)
         os.makedirs(upload_folder, exist_ok=True)
 
         # Save the image
         image_path = os.path.join(upload_folder, f"{test_uuid}.png")
         await html_to_image(html_content, image_path)
 
+        # Normalize the image path to use forward slashes
+        normalized_image_path = image_path.replace("\\", "/")
+
         # Return standardized response
         return BaseResponse(
             date=date.today(),
             status=200,
-            payload={"image_path": image_path},
+            payload={"image_path": normalized_image_path},
             message="Image saved successfully ✅"
         )
 

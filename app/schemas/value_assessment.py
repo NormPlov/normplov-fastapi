@@ -13,9 +13,9 @@ class SchoolData(BaseModel):
     school_name: str
 
 
-class MajorWithSchools(BaseModel):
+class MajorData(BaseModel):
     major_name: str
-    schools: List[SchoolData]
+    schools: List[SchoolData] = Field(default_factory=list)
 
 
 class CategoryWithResponsibilities(BaseModel):
@@ -28,7 +28,7 @@ class CareerData(BaseModel):
     career_name: str
     description: Optional[str] = None
     categories: List[CategoryWithResponsibilities] = Field(default_factory=list)
-    majors: List[MajorWithSchools] = Field(default_factory=list)
+    majors: List[MajorData] = Field(default_factory=list)
 
 
 class ChartData(BaseModel):
