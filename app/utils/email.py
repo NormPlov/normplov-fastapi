@@ -13,12 +13,10 @@ env = Environment(loader=FileSystemLoader(os.path.join(os.path.dirname(__file__)
 
 async def send_thank_you_email(email: str, username: str):
     template = env.get_template('thank_you_feedback.html')
-    logo_url = f"https://normplov.istad.co/uploads/279d303f-0634-4428-8a8d-008dbaf9baca.png"
     current_year = datetime.utcnow().year
 
     html_content = template.render(
         username=username,
-        logo_url=logo_url,
         current_year=current_year
     )
 

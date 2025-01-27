@@ -61,11 +61,22 @@ async def fetch_all_schools_route(
     page_size: int = Query(10, ge=1, le=100, description="Number of items per page"),
     search: str = Query(None, description="Search by Khmer name and English name"),
     type: str = Query(None, description="Filter by school type"),
-    sort_by: str = Query("created_at", description="Field to sort by"),
+    sort_by: str = Query(
+        "created_at",
+        description="Field to sort by. Allowed values: 'created_at', 'updated_at'",
+    ),
     sort_order: str = Query("desc", description="Sort order: 'asc' or 'desc'"),
     db: AsyncSession = Depends(get_db),
 ):
     try:
+        # Ensure `sort_by` is valid
+        if sort_by not in ["created_at", "updated_at"]:
+            raise format_http_exception(
+                status_code=400,
+                message="⚠️ Invalid sort field.",
+                details=f"Allowed values for sort_by are 'created_at' and 'updated_at'. You provided: {sort_by}",
+            )
+
         schools, metadata = await load_all_schools(
             db=db,
             page=page,
