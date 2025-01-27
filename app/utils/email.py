@@ -7,15 +7,13 @@ from email.message import EmailMessage
 from dotenv import load_dotenv
 from jinja2 import Environment, FileSystemLoader
 
-from app.core.config import settings
-
 load_dotenv()
 env = Environment(loader=FileSystemLoader(os.path.join(os.path.dirname(__file__), '../templates')))
 
 
 async def send_thank_you_email(email: str, username: str):
     template = env.get_template('thank_you_feedback.html')
-    logo_url = f"{settings.FRONTEND_URL}/uploads/279d303f-0634-4428-8a8d-008dbaf9baca.png"
+    logo_url = f"https://normplov.istad.co/uploads/279d303f-0634-4428-8a8d-008dbaf9baca.png"
     current_year = datetime.utcnow().year
 
     html_content = template.render(
