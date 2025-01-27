@@ -31,6 +31,9 @@ COPY requirements.txt /app/
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir --timeout=300 -r requirements.txt --index-url https://pypi.org/simple
 
+# Install Playwright browsers
+RUN playwright install chromium
+
 COPY . /app/
 
 EXPOSE 8000

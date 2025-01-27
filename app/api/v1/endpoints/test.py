@@ -1,8 +1,8 @@
 import logging
 import os
 import traceback
-import uuid
 
+from playwright.async_api import async_playwright
 from datetime import datetime, date
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -284,8 +284,6 @@ async def get_saved_image(filename: str):
 
 
 # Save test details as an image in the specified folder.
-from playwright.async_api import async_playwright
-
 async def html_to_image(html_content: str, image_path: str):
     async with async_playwright() as p:
         browser = await p.chromium.launch()
@@ -293,6 +291,7 @@ async def html_to_image(html_content: str, image_path: str):
         await page.set_content(html_content)
         await page.screenshot(path=image_path)
         await browser.close()
+
 
 @test_router.post(
     "/{test_uuid}/save-image",
