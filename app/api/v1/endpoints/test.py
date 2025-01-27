@@ -284,62 +284,6 @@ async def get_saved_image(filename: str):
 
 
 # Save test details as an image in the specified folder.
-# @test_router.post(
-#     "/{test_uuid}/save-image",
-#     summary="Save test details as an image",
-#     tags=["Test Results"],
-#     response_model=BaseResponse
-# )
-# async def save_test_image(
-#     request: Request,
-#     test_uuid: str,
-#     db: AsyncSession = Depends(get_db)
-# ):
-#     try:
-#         # Load test response data
-#         user_responses = await get_user_responses_to_render_test_details_in_html(db, test_uuid=test_uuid)
-#         if not user_responses:
-#             raise format_http_exception(
-#                 status_code=404,
-#                 message="Test details not found ❌",
-#                 details="No data found for the provided test UUID."
-#             )
-#
-#         test_data = user_responses[0]
-#
-#         # Render the HTML
-#         html_content = await render_html_for_test(request, test_data["test_name"], test_data)
-#
-#         # Prepare upload folder
-#         upload_folder = os.path.join(settings.BASE_UPLOAD_FOLDER)
-#         os.makedirs(upload_folder, exist_ok=True)
-#
-#         # Save the image
-#         image_path = os.path.join(upload_folder, f"{test_uuid}.png")
-#         logger.debug("Image path", image_path)
-#         await html_to_image(html_content, image_path)
-#
-#         # Normalize the image path to use forward slashes
-#         normalized_image_path = image_path.replace("\\", "/")
-#
-#         # Return standardized response
-#         return BaseResponse(
-#             date=date.today(),
-#             status=200,
-#             payload={"image_path": normalized_image_path},
-#             message="Image saved successfully ✅"
-#         )
-#
-#     except HTTPException as e:
-#         raise e
-#     except Exception as e:
-#         logger.error(f"Error saving test image: {traceback.format_exc()}")
-#         raise format_http_exception(
-#             status_code=500,
-#             message="An unexpected error occurred while saving the image ❌",
-#             details=str(e)
-#         )
-
 @test_router.post(
     "/{test_uuid}/save-image",
     summary="Save test details as an image",
@@ -363,42 +307,30 @@ async def save_test_image(
 
         test_data = user_responses[0]
 
-        # Render the HTML content
+        # Render the HTML
         html_content = await render_html_for_test(request, test_data["test_name"], test_data)
 
-        # Set the path to save the image
-        upload_dir = "/app/uploads"  # Specific directory inside the container
-        os.makedirs(upload_dir, exist_ok=True)
+        # Prepare upload folder
+        upload_folder = os.path.join(settings.BASE_UPLOAD_FOLDER)
+        os.makedirs(upload_folder, exist_ok=True)
 
-        # Generate a unique file name for the image
-        unique_filename = f"{test_uuid}_{uuid.uuid4().hex}.png"
-        image_path = os.path.join(upload_dir, unique_filename)
-
-        # Save the HTML as an image
+        # Save the image
+        image_path = os.path.join(upload_folder, f"{test_uuid}.png")
+        logger.debug("Image path", image_path)
         await html_to_image(html_content, image_path)
 
-        # Validate the saved image
-        if not os.path.isfile(image_path):
-            raise HTTPException(status_code=500, detail="Failed to save the image.")
+        # Normalize the image path to use forward slashes
+        normalized_image_path = image_path.replace("\\", "/")
 
-        # Get the file size and content type
-        file_size = os.path.getsize(image_path)
-        file_type = "image/png"
-
-        # Return the standardized response
+        # Return standardized response
         return BaseResponse(
             date=date.today(),
             status=200,
-            payload={
-                "image_path": image_path,
-                "file_size": file_size,
-                "file_type": file_type
-            },
+            payload={"image_path": normalized_image_path},
             message="Image saved successfully ✅"
         )
 
     except HTTPException as e:
-        logger.error(f"HTTPException occurred: {e.detail}")
         raise e
     except Exception as e:
         logger.error(f"Error saving test image: {traceback.format_exc()}")
@@ -407,6 +339,74 @@ async def save_test_image(
             message="An unexpected error occurred while saving the image ❌",
             details=str(e)
         )
+
+# @test_router.post(
+#     "/{test_uuid}/save-image",
+#     summary="Save test details as an image",
+#     tags=["Test Results"],
+#     response_model=BaseResponse
+# )
+# async def save_test_image(
+#     request: Request,
+#     test_uuid: str,
+#     db: AsyncSession = Depends(get_db)
+# ):
+#     try:
+#         # Load test response data
+#         user_responses = await get_user_responses_to_render_test_details_in_html(db, test_uuid=test_uuid)
+#         if not user_responses:
+#             raise format_http_exception(
+#                 status_code=404,
+#                 message="Test details not found ❌",
+#                 details="No data found for the provided test UUID."
+#             )
+#
+#         test_data = user_responses[0]
+#
+#         # Render the HTML content
+#         html_content = await render_html_for_test(request, test_data["test_name"], test_data)
+#
+#         # Set the path to save the image
+#         upload_dir = "/app/uploads"
+#         os.makedirs(upload_dir, exist_ok=True)
+#
+#         # Generate a unique file name for the image
+#         unique_filename = f"{test_uuid}_{uuid.uuid4().hex}.png"
+#         image_path = os.path.join(upload_dir, unique_filename)
+#
+#         # Save the HTML as an image
+#         await html_to_image(html_content, image_path)
+#
+#         # Validate the saved image
+#         if not os.path.isfile(image_path):
+#             raise HTTPException(status_code=500, detail="Failed to save the image.")
+#
+#         # Get the file size and content type
+#         file_size = os.path.getsize(image_path)
+#         file_type = "image/png"
+#
+#         # Return the standardized response
+#         return BaseResponse(
+#             date=date.today(),
+#             status=200,
+#             payload={
+#                 "image_path": image_path,
+#                 "file_size": file_size,
+#                 "file_type": file_type
+#             },
+#             message="Image saved successfully ✅"
+#         )
+#
+#     except HTTPException as e:
+#         logger.error(f"HTTPException occurred: {e.detail}")
+#         raise e
+#     except Exception as e:
+#         logger.error(f"Error saving test image: {traceback.format_exc()}")
+#         raise format_http_exception(
+#             status_code=500,
+#             message="An unexpected error occurred while saving the image ❌",
+#             details=str(e)
+#         )
 
 
 # This code is stable version to load user test details
