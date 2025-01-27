@@ -833,7 +833,7 @@ async def generate_shareable_link(
             "Personality": "personality",
             "LearningStyle": "learningStyle",
             "Interests": "interest",
-            "Skill": "skill",
+            "Skills": "skill",
             "AllTests": "all"
         }
 
