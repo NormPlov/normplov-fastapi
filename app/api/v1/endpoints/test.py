@@ -284,6 +284,16 @@ async def get_saved_image(filename: str):
 
 
 # Save test details as an image in the specified folder.
+from playwright.async_api import async_playwright
+
+async def html_to_image(html_content: str, image_path: str):
+    async with async_playwright() as p:
+        browser = await p.chromium.launch()
+        page = await browser.new_page()
+        await page.set_content(html_content)
+        await page.screenshot(path=image_path)
+        await browser.close()
+
 @test_router.post(
     "/{test_uuid}/save-image",
     summary="Save test details as an image",
@@ -317,6 +327,7 @@ async def save_test_image(
         # Save the image
         image_path = os.path.join(upload_folder, f"{test_uuid}.png")
         logger.debug("Image path", image_path)
+
         await html_to_image(html_content, image_path)
 
         # Normalize the image path to use forward slashes
@@ -339,7 +350,6 @@ async def save_test_image(
             message="An unexpected error occurred while saving the image ❌",
             details=str(e)
         )
-
 # @test_router.post(
 #     "/{test_uuid}/save-image",
 #     summary="Save test details as an image",
