@@ -212,6 +212,7 @@ async def load_all_jobs(
     category: Optional[str] = None,
 ) -> List[JobDetailsWithBookmarkResponse]:
     try:
+
         stmt = select(Job).where(Job.is_deleted == False)
 
         if location:
@@ -227,6 +228,12 @@ async def load_all_jobs(
                 | Job.location.ilike(f"%{search}%")
                 | Job.job_type.ilike(f"%{job_type}%")
             )
+
+        # Default sorting by created_at in descending order
+        stmt = stmt.order_by(
+            Job.created_at.desc(),
+            Job.updated_at.desc()
+        )
 
         result = await db.execute(stmt)
         jobs = result.scalars().all()
