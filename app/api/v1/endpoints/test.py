@@ -1,6 +1,7 @@
 import logging
 import os
 import traceback
+import uuid
 
 from playwright.async_api import async_playwright
 from datetime import datetime, date
@@ -320,23 +321,40 @@ async def save_test_image(
         html_content = await render_html_for_test(request, test_data["test_name"], test_data)
 
         # Prepare upload folder
-        upload_folder = os.path.join(settings.BASE_UPLOAD_FOLDER)
+        upload_folder = "/app/uploads"  # Specific path inside the container
         os.makedirs(upload_folder, exist_ok=True)
 
-        # Save the image
-        image_path = os.path.join(upload_folder, f"{test_uuid}.png")
-        logger.debug("Image path", image_path)
+        # Generate a unique filename
+        unique_filename = f"{test_uuid}_{uuid.uuid4().hex}.png"
+        image_path = os.path.join(upload_folder, unique_filename)
 
+        # Save the HTML content as an image
         await html_to_image(html_content, image_path)
 
-        # Normalize the image path to use forward slashes
+        # Validate the saved image
+        if not os.path.isfile(image_path):
+            raise format_http_exception(
+                status_code=500,
+                message="Failed to save the image ❌"
+            )
+
+        # Get file metadata
+        file_size = os.path.getsize(image_path)
+        file_type = "image/png"
+
+        # Normalize the path for the response
         normalized_image_path = image_path.replace("\\", "/")
 
-        # Return standardized response
+        # Return the standardized response
         return BaseResponse(
             date=date.today(),
             status=200,
-            payload={"image_path": normalized_image_path},
+            payload={
+                "file_path": normalized_image_path,
+                "file_name": unique_filename,
+                "file_size": file_size,
+                "file_type": file_type
+            },
             message="Image saved successfully ✅"
         )
 
@@ -349,6 +367,7 @@ async def save_test_image(
             message="An unexpected error occurred while saving the image ❌",
             details=str(e)
         )
+
 # @test_router.post(
 #     "/{test_uuid}/save-image",
 #     summary="Save test details as an image",
