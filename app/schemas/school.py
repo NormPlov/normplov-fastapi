@@ -81,6 +81,7 @@ class CreateSchoolRequest(BaseModel):
     cover_image: Optional[str]
     is_popular: Optional[bool] = False
     is_recommended: Optional[bool] = False
+    province_id: Optional[int] = 12
 
 
 class UpdateSchoolRequest(BaseModel):

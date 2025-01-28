@@ -3,7 +3,7 @@ import logging
 
 from typing import Optional, List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, text, or_
+from sqlalchemy import select, text, or_, func
 from fastapi import HTTPException, status
 from app.models import Job
 from app.schemas.job import JobDetailsResponse, JobResponse, JobDetailsWithBookmarkResponse
@@ -78,14 +78,12 @@ async def admin_load_all_jobs(
     order: str = "desc"
 ) -> list[JobDetailsResponse]:
     try:
-        current_datetime = datetime.utcnow()
-
         stmt = select(Job).where(
             and_(
                 Job.is_deleted == False,
                 or_(
                     Job.closing_date.is_(None),
-                    Job.closing_date >= current_datetime
+                    func.date(Job.closing_date) >= func.current_date()  # ✅ Compare only the date
                 )
             )
         )

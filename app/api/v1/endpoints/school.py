@@ -167,7 +167,9 @@ async def create_school_endpoint(
             logo=request.logo,
             cover_image=request.cover_image,
             is_popular=request.is_popular,
+            province_id=request.province_id,
             db=db,
+
         )
 
         return BaseResponse(

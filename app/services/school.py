@@ -416,6 +416,7 @@ async def create_school_service(
     logo: str = None,
     cover_image: str = None,
     is_popular: bool = False,
+    province_id: int = 12,
     db: AsyncSession = None,
 ):
     try:
@@ -469,6 +470,7 @@ async def create_school_service(
             is_popular=is_popular,
             is_recommended=False,
             reference_url=reference_url,
+            province_id=province_id
         )
 
         db.add(new_school)
