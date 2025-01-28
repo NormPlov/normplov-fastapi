@@ -5,7 +5,7 @@ from typing import Optional, List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text, or_
 from fastapi import HTTPException, status
-from app.models import Job, Bookmark
+from app.models import Job
 from app.schemas.job import JobDetailsResponse, JobResponse, JobDetailsWithBookmarkResponse
 from datetime import datetime
 from sqlalchemy import and_
@@ -14,9 +14,6 @@ logger = logging.getLogger(__name__)
 
 
 async def get_trending_jobs(db: AsyncSession) -> dict:
-    """
-    Only fetch data for the most recent 5 months (including current month).
-    """
     try:
         category_query = text("""
             SELECT 

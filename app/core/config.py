@@ -52,7 +52,7 @@ class Settings(BaseSettings):
                                        env="FACEBOOK_REDIRECT_URI")
 
     # Google Generative AI Key
-    GOOGLE_GENERATIVE_AI_KEYS: List[str] = Field(default=["AIzaSyDLz0bS0Bm1z-km6XeuUX6lQKxqa9ZuJlw"],
+    GOOGLE_GENERATIVE_AI_KEYS: List[str] = Field(default=["AIzaSyBxll6Nb_N2PBgmz9NM5a8tVOXHD0nN8Ak"],
                                                  env="GOOGLE_GENERATIVE_AI_KEYS")
 
     @validator("GOOGLE_GENERATIVE_AI_KEYS", pre=True)
