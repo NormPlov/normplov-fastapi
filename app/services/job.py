@@ -227,8 +227,9 @@ async def load_all_jobs(
         # Exclude jobs where closing_date is in the past
         stmt = stmt.where(
             or_(
-                Job.closing_date.is_(None),  # Include jobs without a closing date
-                func.date(Job.closing_date) >= func.current_date()  # Exclude jobs with past closing dates
+                Job.closing_date.is_(None),
+                func.date(func.timezone('UTC', Job.closing_date)) >= func.current_date()
+                # Convert to UTC before comparing
             )
         )
 
@@ -271,9 +272,7 @@ async def load_all_jobs(
                 website=job.website,
                 created_at=job.created_at,
                 created_at_days_ago=calculate_days_ago(job.created_at),
-                closing_date=job.closing_date.strftime("%d.%b.%Y")
-                if job.closing_date and job.closing_date >= datetime.utcnow()
-                else None,
+                closing_date=job.closing_date.strftime("%d.%b.%Y"),
                 category=job.category,
                 visitor_count=job.visitor_count,
             )
