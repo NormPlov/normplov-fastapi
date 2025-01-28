@@ -224,6 +224,14 @@ async def load_all_jobs(
                 | Job.job_type.ilike(f"%{job_type}%")
             )
 
+        # Exclude jobs where closing_date is in the past
+        stmt = stmt.where(
+            or_(
+                Job.closing_date.is_(None),  # Include jobs without a closing date
+                func.date(Job.closing_date) >= func.current_date()  # Exclude jobs with past closing dates
+            )
+        )
+
         # Default sorting by created_at in descending order
         stmt = stmt.order_by(
             Job.created_at.desc(),
@@ -270,7 +278,6 @@ async def load_all_jobs(
                 visitor_count=job.visitor_count,
             )
             for job in jobs
-            if job.closing_date is None or job.closing_date >= datetime.utcnow()
         ]
 
         # Ensure sorting respects `posted_at_days_ago` and `created_at_days_ago`
