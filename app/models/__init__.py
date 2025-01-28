@@ -36,6 +36,7 @@ from app.models.technique_category import TechniqueCategory
 from app.models.personality_characteristic import PersonalityCharacteristic
 from app.models.skill import Skill
 from app.models.skill_career_association import SkillCareerAssociation
+from app.models.province import Province
 
 __all__ = ["Role",
            "AppMetadata",
@@ -73,6 +74,7 @@ __all__ = ["Role",
            "StudyTechnique",
            "TechniqueCategory",
            "Skill",
-           "SkillCareerAssociation"
+           "SkillCareerAssociation",
+           "Province"
            ]
 

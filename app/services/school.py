@@ -8,7 +8,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 from app.exceptions.formatters import format_http_exception
-from app.models import Faculty
+from app.models import Faculty, Province
 from app.models.school import School, SchoolType
 from app.schemas.payload import BaseResponse
 from app.schemas.school import UpdateSchoolRequest, SchoolDetailsResponse
@@ -168,6 +168,7 @@ async def load_all_schools(
     page_size: int = 10,
     search: str = None,
     type: str = None,
+    province: str = None,
     sort_by: str = "created_at",
     sort_order: str = "desc",
 ) -> tuple:
@@ -183,6 +184,10 @@ async def load_all_schools(
 
         if type:
             query = query.where(School.type == type)
+
+        if province:
+            # Join with Province table and filter by province name
+            query = query.join(Province).where(Province.name.ilike(f"%{province}%"))
 
         if hasattr(School, sort_by):
             sort_column = getattr(School, sort_by)
