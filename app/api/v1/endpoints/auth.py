@@ -52,7 +52,7 @@ async def facebook_callback(
                 "code": request.code,
                 "client_id": settings.FACEBOOK_CLIENT_ID,
                 "client_secret": settings.FACEBOOK_CLIENT_SECRET,
-                "redirect_uri": "http://localhost:5173/auth/facebook/callback",
+                "redirect_uri": "https://normplov.istad.co/auth/facebook/callback",
             }
 
             response = await client.post(token_url, params=data)
