@@ -8,7 +8,7 @@ from urllib.parse import quote_plus
 
 class Settings(BaseSettings):
     # Frontend URL Configuration
-    FRONTEND_URL: str = Field(default="http://localhost:5173", env="FRONTEND_URL")
+    FRONTEND_URL: str = Field(default="https://normplov.istad.co", env="FRONTEND_URL")
 
     # Environment Configuration
     ENVIRONMENT: str = Field(default="development", env="ENVIRONMENT")

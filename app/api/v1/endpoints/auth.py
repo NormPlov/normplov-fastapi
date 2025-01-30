@@ -1,3 +1,4 @@
+import json
 import logging
 import jwt
 import httpx
@@ -203,14 +204,18 @@ async def google_callback(
             token_url = "https://oauth2.googleapis.com/token"
             data = {
                 "code": request.code,
-                "client_id": settings.GOOGLE_CLIENT_ID,
-                "client_secret": settings.GOOGLE_CLIENT_SECRET,
+                "client_id": "917422990561-q0dov20sv7dpr8fj2p0u8a19ilql9o8g.apps.googleusercontent.com",
+                "client_secret": "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",
                 "redirect_uri": f"{settings.FRONTEND_URL}/auth/google/callback",
                 "grant_type": "authorization_code",
             }
 
+            logger.debug(f"Data sent to Google: {json.dumps(data, indent=2)}")
+
             response = await client.post(token_url, data=data)
             token_data = response.json()
+
+            print("Token Data Response: ", token_data)
 
             if "id_token" not in token_data:
                 raise HTTPException(
