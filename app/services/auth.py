@@ -122,7 +122,6 @@ async def get_or_create_user(db: AsyncSession, user_info: dict) -> dict:
         raw_password = generate_random_password()
         hashed_password = hash_password(raw_password)
         user = User(
-
             uuid=str(uuid.uuid4()),
             username=name,
             email=email,
@@ -130,6 +129,7 @@ async def get_or_create_user(db: AsyncSession, user_info: dict) -> dict:
             password=hashed_password,
             is_verified=True,
             is_active=True,
+            is_blocked=False,
         )
         db.add(user)
         await db.commit()
@@ -162,6 +162,8 @@ async def get_or_create_user(db: AsyncSession, user_info: dict) -> dict:
         "email": user.email,
         "avatar": user.avatar,
         "roles": user_roles,
+        "is_verified": user.is_verified,
+        "is_blocked": user.is_blocked,
     }
 
 
@@ -224,6 +226,11 @@ async def perform_login(db: AsyncSession, email: str, password: str) -> BaseResp
             status_code=status.HTTP_403_FORBIDDEN,
             message="User account is not verified. Please verify your email."
         )
+    if user.is_blocked:
+        raise format_http_exception(
+            status_code=status.HTTP_403_FORBIDDEN,
+            message="User account has been blocked. Please contact support."
+        )
 
     stmt = (
         select(Role.name)
@@ -264,6 +271,8 @@ async def perform_login(db: AsyncSession, email: str, password: str) -> BaseResp
             "access_token": access_token,
             "refresh_token": refresh_token,
             "token_type": "bearer",
+            "is_verified": user.is_verified,
+            "is_blocked": user.is_blocked,
         }
     )
 

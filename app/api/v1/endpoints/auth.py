@@ -229,16 +229,14 @@ async def google_callback(
 
         user = await get_or_create_user(db, user_info)
 
+        if user["is_blocked"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User account has been blocked. Please contact support."
+            )
+
         access_token = create_access_token(data={"sub": user["uuid"]})
         refresh_token = create_refresh_token(data={"sub": user["uuid"]})
-
-        # refresh_token_entry = RefreshToken(
-        #     user_id=user["id"],
-        #     token=refresh_token,
-        #     expires_at=datetime.utcnow() + timedelta(days=7)
-        # )
-        # db.add(refresh_token_entry)
-        # await db.commit()
 
         response_payload = {
             "date": datetime.utcnow().strftime("%Y-%m-%d"),
@@ -257,6 +255,7 @@ async def google_callback(
                 "is_deleted": user.get("is_deleted", False),
                 "is_active": user.get("is_active", True),
                 "is_verified": user.get("is_verified", True),
+                "is_blocked": user.get("is_blocked", False),
                 "registered_at": user.get("registered_at", None),
                 "access_token": access_token,
                 "refresh_token": refresh_token,
