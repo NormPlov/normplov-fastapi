@@ -6,15 +6,16 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.dependencies import get_current_user_data
-from app.models import AIRecommendation
+from app.models import AIRecommendation, UserResponse, UserTest
 from app.models.user import User
 from app.schemas.ai_recommendation import RenameAIRecommendationRequest, StartConversationRequest
 from app.schemas.payload import BaseResponse
+from sqlalchemy.future import select
 from app.services.ai_recommendation import (
     delete_ai_recommendation,
     rename_ai_recommendation,
     load_all_user_recommendations,
-    get_user_ai_conversation_details, generate_ai_response, continue_user_ai_conversation
+    get_user_ai_conversation_details, generate_ai_response, continue_user_ai_conversation, generate_chat_title
 )
 
 ai_recommendation_router = APIRouter()
@@ -141,25 +142,61 @@ async def start_new_conversation(
         current_user: User = Depends(get_current_user_data),
 ):
     try:
-        query = data.query
+        query = data.query or "Start a conversation"
+        user_test_uuid = data.user_test_uuid
+
+        # Fetch user test based on provided UUID
+        test_stmt = (
+            select(UserTest)
+            .where(
+                UserTest.user_id == current_user.id,
+                UserTest.uuid == user_test_uuid,
+                UserTest.is_completed == True,
+                UserTest.is_deleted == False
+            )
+        )
+        test_result = await db.execute(test_stmt)
+        user_test = test_result.scalars().first()
+
+        if not user_test:
+            raise HTTPException(status_code=404, detail="User test not found or not completed.")
+
+        # Fetch only the responses related to this specific user test
+        response_stmt = (
+            select(UserResponse.response_data)
+            .where(
+                UserResponse.user_id == current_user.id,
+                UserResponse.user_test_id == user_test.id,
+                UserResponse.is_completed == True,
+                UserResponse.is_deleted == False
+            )
+        )
+        result = await db.execute(response_stmt)
+        user_responses = result.scalars().all()
+
         ai_reply = await generate_ai_response(
-            context={"user_query": query or "Start a conversation", "user_responses": []},
+            context={"user_query": query, "user_responses": user_responses},
             db=db,
             user_id=current_user.id
         )
 
+        chat_title = await generate_chat_title(query)
+
+        # Store conversation history
         conversation_history = [{
             "user_query": query,
             "ai_reply": ai_reply,
             "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
         }]
 
+        # Save the AI recommendation
         new_conversation = AIRecommendation(
             uuid=str(uuid.uuid4()),
             user_id=current_user.id,
+            user_test_id=user_test.id,
             query=query,
             recommendation=ai_reply,
-            chat_title="Career Recommendation",
+            chat_title=chat_title,
             conversation_history=conversation_history
         )
 
@@ -177,6 +214,8 @@ async def start_new_conversation(
                 "conversation_history": new_conversation.conversation_history
             }
         )
+    except HTTPException as http_error:
+        raise http_error
     except Exception as e:
         logger.error(f"Error starting conversation: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to start the conversation.")

@@ -249,13 +249,7 @@ async def promote_feedback(feedback_uuid: str, current_user, db: AsyncSession) -
 
 async def create_feedback(feedback: str, user_test_uuid: str, current_user, db: AsyncSession) -> str:
     try:
-        # result = await db.execute(
-        #     select(UserTest.id, AssessmentType.name).where(
-        #         UserTest.uuid == str(uuid.UUID(user_test_uuid)),
-        #         UserTest.is_deleted == False,
-        #         UserTest.user_id == current_user.id
-        #     )
-        # )
+
         result = await db.execute(
             select(UserTest.id, AssessmentType.name)
             .join(AssessmentType, AssessmentType.id == UserTest.assessment_type_id)

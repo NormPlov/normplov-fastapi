@@ -1,6 +1,6 @@
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, UUID4
 
 
 class ContinueConversationRequest(BaseModel):
@@ -9,6 +9,7 @@ class ContinueConversationRequest(BaseModel):
 
 class StartConversationRequest(BaseModel):
     query: Optional[str] = None
+    user_test_uuid: Optional[UUID4] = None
 
 
 class AIRecommendationCreate(BaseModel):

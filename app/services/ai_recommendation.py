@@ -2,7 +2,7 @@ import uuid
 import json
 import logging
 import google.generativeai as genai
-
+import asyncio
 
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,7 +45,6 @@ def configure_ai():
 
 # Initial configuration
 configure_ai()
-
 
 
 async def continue_user_ai_conversation(
@@ -329,29 +328,26 @@ async def generate_ai_recommendation(data: AIRecommendationCreate, db: AsyncSess
         raise HTTPException(status_code=500, detail="Failed to create AI recommendation.")
 
 
-async def generate_ai_response(context: dict, db: AsyncSession, user_id: int) -> str:
+async def generate_ai_response(context: dict, db: AsyncSession, user_id: int, retry: bool = True) -> str:
     try:
-        # Fetch user responses from the database
-        user_responses_stmt = select(UserResponse.response_data).where(
-            UserResponse.user_id == user_id,
-            UserResponse.is_deleted == False,
-            UserResponse.is_completed == True
-        )
-        result = await db.execute(user_responses_stmt)
-        user_responses = result.scalars().all()
+        user_responses = context.get("user_responses", [])
 
-        logger.debug("User Responses:", user_responses)
-
-        # Pass raw user responses directly into the AI context
-        raw_user_responses = "\n".join(user_responses) if user_responses else "No user responses available."
+        # Format responses for AI
+        formatted_responses = "\n".join(
+            [str(resp) for resp in user_responses]) if user_responses else "No user responses available."
 
         # Extract and clean the recent conversation history
-        conversation_history = context.get("user_responses", [])
+        conversation_history = context.get("conversation_history", [])
         cleaned_history = ""
-        for idx, entry in enumerate(conversation_history[-5:]):
+
+        for entry in conversation_history[-5:]:  # Limit to last 5 exchanges
             user_query = entry.get("user_query", "").strip()
             ai_reply = entry.get("ai_reply", "").strip()
-            if user_query and ai_reply and "I need more details" not in ai_reply:
+
+            if isinstance(ai_reply, dict):
+                ai_reply = str(ai_reply)
+
+            if user_query and ai_reply:
                 cleaned_history += f"User: {user_query}\nAI: {ai_reply}\n"
 
         # Get the current user query
@@ -360,34 +356,46 @@ async def generate_ai_response(context: dict, db: AsyncSession, user_id: int) ->
             logger.error("Missing or empty 'user_query' in context.")
             return "I need more details to provide an answer. Could you clarify your question?"
 
-        # Construct the prompt for AI
+        # Construct AI prompt using user responses
         formatted_prompt = (
-            "You are a helpful career and life advisor. Use the provided user information and conversation history "
-            "to give a clear and actionable answer to the user's current question.\n\n"
-            f"### Raw User Responses:\n{raw_user_responses}\n\n"
+            "You are a career advisor AI. Based on the user's assessment, provide insightful career guidance.\n\n"
+            f"### User Responses:\n{formatted_responses}\n\n"
             f"### Recent Conversation History:\n{cleaned_history}\n"
             f"### Current User Query:\n{user_query}\n\n"
-            "Provide a detailed, thoughtful, and specific response to the user's query."
+            "Provide a detailed and thoughtful response."
         )
 
-        # Initialize and send the prompt to the AI model
+        # Debugging log
+        logger.debug(f"Formatted AI Prompt:\n{formatted_prompt}")
+
+        # Initialize AI model
         chat_session = model.start_chat(history=[])
         response = chat_session.send_message(formatted_prompt)
 
-        if response and response.text.strip():
-            return response.text.strip()
+        if response and hasattr(response, "text") and response.text.strip():
+            ai_response = response.text.strip()
+            logger.debug(f"AI Response: {ai_response}")
+            return ai_response
         else:
-            return "I'm sorry, I couldn't generate a specific answer. Could you provide more details?"
+            logger.error("AI returned an empty or invalid response.")
+            return "I'm sorry, but I couldn't generate a useful response. Can you provide more details?"
 
     except Exception as e:
-        # Handle quota or API key errors and retry
-        if "quota" in str(e).lower() or "limit" in str(e).lower():
+        error_message = str(e).lower()
+        logger.error(f"AI Response Generation Error: {error_message}")
+
+        # Handle API quota or rate limit errors
+        if ("quota" in error_message or "limit" in error_message) and retry:
+            logger.warning("Quota limit reached. Attempting to switch API key and retrying once.")
             api_key_manager.switch_key()
             configure_ai()
-            return await generate_ai_response(context, db, user_id)
 
-        logger.error(f"An unexpected error occurred: {e}")
-        return "An unexpected error occurred while generating a response. Please try again later."
+            # Adding a small delay before retrying to avoid instant failure again
+            await asyncio.sleep(2)
+
+            return await generate_ai_response(context, db, user_id, retry=False)  # Retry only once
+
+        return f"An error occurred: {error_message}. Please try again later."
 
 
 async def generate_chat_title(user_query: str) -> str:
