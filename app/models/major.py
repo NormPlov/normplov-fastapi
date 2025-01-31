@@ -11,6 +11,7 @@ class DegreeType(PyEnum):
     BACHELOR = "BACHELOR"
     MASTER = "MASTER"
     PHD = "PHD"
+    SHORT_COURSE = "SHORT_COURSE"
 
 
 class Major(Base):

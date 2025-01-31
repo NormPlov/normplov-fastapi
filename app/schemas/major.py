@@ -1,6 +1,6 @@
 from uuid import UUID
 from pydantic import BaseModel, Field, validator, UUID4
-from typing import Optional, List
+from typing import Optional
 from enum import Enum
 
 
@@ -29,6 +29,7 @@ class DegreeTypeEnum(str, Enum):
     BACHELOR = "BACHELOR"
     MASTER = "MASTER"
     PHD = "PHD"
+    SHORT_COURSE = "SHORT_COURSE"
 
 
 class CreateMajorRequest(BaseModel):
