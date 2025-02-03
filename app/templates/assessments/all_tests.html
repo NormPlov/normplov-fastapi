@@ -20,34 +20,36 @@
             margin: 0 auto;
             padding: 20px;
             position: relative;
-            background: url('https://hebbkx1anhila5yf.public.blob.vercel-storage.com/2-Y9UhMgCm3S4BGCgrAHY1LI1sacFLi9.png') no-repeat center center fixed;
+            background: url('https://hebbkx1anhila5yf.public.blob.vercel-storage.com/image-nobS5madmDKNUkCiNxD58G7rnW0jvv.png') no-repeat center center fixed;
             background-size: cover;
         }
 
-        .dynamic-section {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 2rem;
-            margin-top: 27rem;
-            max-width: 1000px;
+        .grid-container {
+          margin-top: 240px;
+          display: grid;
+          justify-content: space-evenly;
+          grid-template-columns: 50px 50px;
+          gap: 34px;
+          padding: 10px;
         }
 
-        .dynamic-section .type {
+        .grid-container .type {
             font-size: 23px;
-            text-align: center;
             color: black;
+            width: 400px;
         }
+
+
     </style>
 </head>
 <body>
     <div class="container">
-        <main class="content">
             <!-- Dynamic Type and Percentage -->
-            <div class="dynamic-section">
+            <div class="grid-container">
                 <div class="type">{{ user_response_data.all_assessments.personality.personality_type.name }}</div>
                 <div class="type">{{ user_response_data.all_assessments.interest.type_name }}</div>
-                <div class="type">{{ user_response_data.all_assessments.skill.top_category.name }}</div>
                 <div class="type">{{ user_response_data.all_assessments.learning_style.learning_style }}</div>
+                 <div class="type">{{ user_response_data.all_assessments.skill.top_category.name }}</div>
                 <div class="type">
                     {% if user_response_data.all_assessments.value.top_score %}
                         {{ user_response_data.all_assessments.value.top_score.label }}
@@ -56,11 +58,6 @@
                     {% endif %}
                 </div>
             </div>
-        </main>
     </div>
 </body>
 </html>
-
-
-
-
