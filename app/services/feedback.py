@@ -1,6 +1,7 @@
 import uuid
 import logging
 
+from sqlalchemy.sql import or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.future import select
@@ -8,7 +9,7 @@ from sqlalchemy.orm import joinedload
 from datetime import datetime
 from sqlalchemy.sql.functions import func
 from app.exceptions.formatters import format_http_exception
-from app.models import AssessmentType, UserTest
+from app.models import AssessmentType, UserTest, User
 from app.models.user_feedback import UserFeedback
 from fastapi import HTTPException
 from app.schemas.payload import BaseResponse
@@ -158,8 +159,15 @@ async def get_all_feedbacks(
             filters.append(UserFeedback.is_deleted == is_deleted)
         if is_promoted is not None:
             filters.append(UserFeedback.is_promoted == is_promoted)
+
+        # Search by feedback content OR username
         if search:
-            filters.append(UserFeedback.feedback.ilike(f"%{search}%"))
+            filters.append(
+                or_(
+                    UserFeedback.feedback.ilike(f"%{search}%"),  # Search in feedback text
+                    UserFeedback.user.has(User.username.ilike(f"%{search}%"))  # Search in username
+                )
+            )
 
         query = query.where(*filters)
 
