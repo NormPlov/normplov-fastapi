@@ -9,7 +9,7 @@ from app.exceptions.formatters import format_http_exception
 from app.schemas.payload import BaseResponse
 from app.services.feedback import (
     create_feedback,
-    get_all_feedbacks, promote_feedback, get_promoted_feedbacks, delete_user_feedback,
+    get_all_feedbacks, promote_feedback, get_promoted_feedbacks, delete_user_feedback, unpromote_feedback,
 )
 from app.schemas.feedback import (
     CreateFeedbackRequest,
@@ -91,6 +91,43 @@ async def promote_user_feedback(
             )
 
         await promote_feedback(feedback_uuid, current_user, db)
+        return {
+            "date": datetime.utcnow().strftime("%d-%B-%Y"),
+            "status": 200,
+            "message": "Feedback promoted successfully",
+        }
+
+    except HTTPException as e:
+        logger.warning(f"HTTPException in promote_user_feedback: {e.detail}")
+        raise e
+    except Exception as e:
+        logger.error(f"Unexpected error in promote_user_feedback: {e}")
+        raise format_http_exception(
+            status_code=400,
+            message="An error occurred while promoting feedback.",
+            details=str(e),
+        )
+
+
+@feedback_router.post(
+    "/unpromote/{feedback_uuid}",
+    status_code=status.HTTP_200_OK,
+    summary="Promote user feedback",
+    tags=["Feedback"],
+)
+async def unpromote_user_feedback(
+    feedback_uuid: str,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user_data),
+):
+    try:
+        if not any(role.role.name == "ADMIN" for role in current_user.roles):
+            raise format_http_exception(
+                status_code=403,
+                message="User does not have permission to promote feedback.",
+            )
+
+        await unpromote_feedback(feedback_uuid, current_user, db)
         return {
             "date": datetime.utcnow().strftime("%d-%B-%Y"),
             "status": 200,

@@ -247,6 +247,43 @@ async def promote_feedback(feedback_uuid: str, current_user, db: AsyncSession) -
         )
 
 
+async def unpromote_feedback(feedback_uuid: str, current_user, db: AsyncSession) -> None:
+    try:
+        # Fetch feedback by UUID
+        stmt = select(UserFeedback).where(
+            UserFeedback.uuid == feedback_uuid,
+            UserFeedback.is_deleted == False,
+        )
+        result = await db.execute(stmt)
+        feedback = result.scalars().first()
+
+        if not feedback:
+            raise HTTPException(status_code=404, detail="Feedback not found")
+
+        # Prevent self-promotion
+        if feedback.user_id == current_user.id:
+            raise HTTPException(
+                status_code=403,
+                detail="You cannot promote your own feedback.",
+            )
+
+        # Update feedback status
+        feedback.is_promoted = False
+        feedback.updated_at = datetime.utcnow()
+
+        db.add(feedback)
+        await db.commit()
+
+    except Exception as e:
+        logger.exception("Error promoting feedback")
+        await db.rollback()
+        raise format_http_exception(
+            status_code=400,
+            message="⚠️ Failed to promote feedback.",
+            details=str(e),
+        )
+
+
 async def create_feedback(feedback: str, user_test_uuid: str, current_user, db: AsyncSession) -> str:
     try:
 
