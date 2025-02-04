@@ -260,14 +260,21 @@ async def unpromote_feedback(feedback_uuid: str, current_user, db: AsyncSession)
         if not feedback:
             raise HTTPException(status_code=404, detail="Feedback not found")
 
-        # Prevent self-promotion
+        # Prevent self-unpromotion
         if feedback.user_id == current_user.id:
             raise HTTPException(
                 status_code=403,
-                detail="You cannot promote your own feedback.",
+                detail="You cannot unpromote your own feedback.",
             )
 
-        # Update feedback status
+        # Check if feedback has never been promoted
+        if feedback.is_promoted is False:
+            raise HTTPException(
+                status_code=400,
+                detail="Feedback has never been promoted and cannot be unpromoted.",
+            )
+
+        # Update feedback status to unpromoted
         feedback.is_promoted = False
         feedback.updated_at = datetime.utcnow()
 
@@ -275,11 +282,11 @@ async def unpromote_feedback(feedback_uuid: str, current_user, db: AsyncSession)
         await db.commit()
 
     except Exception as e:
-        logger.exception("Error promoting feedback")
+        logger.exception("Error unpromoting feedback")
         await db.rollback()
         raise format_http_exception(
             status_code=400,
-            message="⚠️ Failed to promote feedback.",
+            message="⚠️ Failed to unpromote feedback.",
             details=str(e),
         )
 

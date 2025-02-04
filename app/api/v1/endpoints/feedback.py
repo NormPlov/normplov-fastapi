@@ -128,11 +128,12 @@ async def unpromote_user_feedback(
             )
 
         await unpromote_feedback(feedback_uuid, current_user, db)
-        return {
-            "date": datetime.utcnow().strftime("%d-%B-%Y"),
-            "status": 200,
-            "message": "Feedback promoted successfully",
-        }
+
+        return BaseResponse(
+            date=datetime.utcnow(),
+            status=200,
+            message="Feedback unpromoted successfully"
+        )
 
     except HTTPException as e:
         logger.warning(f"HTTPException in promote_user_feedback: {e.detail}")
