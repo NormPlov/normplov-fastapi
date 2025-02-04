@@ -34,8 +34,8 @@ class Settings(BaseSettings):
     # Email Configuration
     EMAIL_HOST: str = Field(default="smtp.gmail.com", env="EMAIL_HOST")
     EMAIL_PORT: int = Field(default=587, env="EMAIL_PORT")
-    EMAIL_SENDER: str = Field(default="normplov.istad@gmail.com", env="EMAIL_SENDER")
-    EMAIL_PASSWORD: str = Field(default="jmve hjoo lqix gaec", env="EMAIL_PASSWORD")
+    EMAIL_SENDER: str = Field(default="efound.istad@gmail.com", env="EMAIL_SENDER")
+    EMAIL_PASSWORD: str = Field(default="lqhs mrvi nbtu efls", env="EMAIL_PASSWORD")
     EMAIL_USE_TLS: bool = Field(default=True, env="EMAIL_USE_TLS")
 
     # Debug and Environment Settings
