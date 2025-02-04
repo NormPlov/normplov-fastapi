@@ -239,7 +239,7 @@ async def update_user_by_uuid_route(uuid: str, user_update: UpdateUser, db: Asyn
 async def get_users_route(
         search: Optional[str] = Query(None, description="Search term for users (username, email, or bio)"),
         sort_by: Optional[str] = Query("created_at", description="Field to sort by (e.g., username, email)"),
-        sort_order: Optional[str] = Query("asc", regex="^(asc|desc)$", description="Sort order (asc or desc)"),
+        sort_order: Optional[str] = Query("desc", regex="^(asc|desc)$", description="Sort order (asc or desc)"),
         page: int = Query(1, ge=1, description="Page number"),
         page_size: int = Query(10, ge=1, le=100, description="Number of users per page"),
         is_active: Optional[bool] = Query(None, description="Filter users by active status"),

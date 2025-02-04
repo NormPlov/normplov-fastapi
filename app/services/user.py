@@ -7,7 +7,7 @@ from typing import Optional, Tuple, List
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import joinedload, selectinload
 from fastapi import HTTPException, status, UploadFile
-from sqlalchemy import or_, desc, asc
+from sqlalchemy import or_, desc, asc, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from datetime import datetime, timedelta, timezone
@@ -587,9 +587,12 @@ async def get_all_users(
             select(User)
             .where(User.is_deleted == False)
             .options(joinedload(User.roles).joinedload(UserRole.role))
-            .distinct()
         )
 
+        # Exclude ADMIN users
+        stmt = stmt.where(~User.roles.any(UserRole.role.has(Role.name == "ADMIN")))
+
+        # Apply search filter directly in the query
         if search:
             search_filter = or_(
                 User.username.ilike(f"%{search}%"),
@@ -598,24 +601,29 @@ async def get_all_users(
             )
             stmt = stmt.where(search_filter)
 
+        # Apply additional filters
         if filters:
             for field, value in filters.items():
                 if value is not None and hasattr(User, field):
                     stmt = stmt.where(getattr(User, field) == value)
 
-        stmt = stmt.where(~User.roles.any(UserRole.role.has(Role.name == "ADMIN")))
-
+        # Apply sorting
         if hasattr(User, sort_by):
             sort_column = getattr(User, sort_by)
             stmt = stmt.order_by(desc(sort_column) if sort_order.lower() == "desc" else asc(sort_column))
         else:
             stmt = stmt.order_by(User.created_at.desc())
 
+        # **Apply Pagination at the database level**
+        total_users = await db.execute(select(func.count()).select_from(stmt.subquery()))
+        total_count = total_users.scalar()
+
+        stmt = stmt.limit(page_size).offset((page - 1) * page_size)
+
         result = await db.execute(stmt)
         users = result.unique().scalars().all()
 
-        paginated_users = paginate_results(users, page, page_size)
-
+        # Response formatting
         response_payload = [
             {
                 "uuid": user.uuid,
@@ -629,12 +637,17 @@ async def get_all_users(
                 "created_at": user.created_at.strftime("%d-%B-%Y"),
                 "is_blocked": user.is_blocked
             }
-            for user in paginated_users["items"]
+            for user in users
         ]
 
         return {
             "users": response_payload,
-            "metadata": paginated_users["metadata"]
+            "metadata": {
+                "total": total_count,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": (total_count // page_size) + (1 if total_count % page_size > 0 else 0),
+            }
         }
 
     except Exception as e:
