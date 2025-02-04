@@ -25,7 +25,7 @@ from app.services.test import (
     delete_test,
     generate_shareable_link,
     get_user_responses,
-    fetch_user_tests_for_current_user, get_public_responses, render_html_for_test, html_to_image,
+    fetch_user_tests_for_current_user, get_public_responses, render_html_for_test,
     fetch_specific_career_from_user_response_by_test_uuid, fetch_all_tests_with_users,
     generate_excel_for_tests, get_user_responses_to_render_test_details_in_html, get_final_public_test_details_service
 )

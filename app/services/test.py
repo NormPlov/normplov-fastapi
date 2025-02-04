@@ -767,46 +767,6 @@ async def render_html_for_test(request: Request, test_name: str, test_data: dict
 #         raise Exception(f"Error while generating image: {traceback.format_exc()}")
 
 
-async def html_to_image(html_content: str, image_path: str):
-    try:
-        hti = Html2Image()
-
-        # Separate directory and filename
-        output_dir, filename = os.path.split(image_path)
-        hti.output_path = output_dir
-
-        # Temporary HTML file for rendering
-        temp_html_path = "temp_rendered_html.html"
-        with open(temp_html_path, "w", encoding="utf-8") as file:
-            file.write(html_content)
-
-        # Generate the image
-        hti.screenshot(
-            html_file=temp_html_path,
-            save_as=filename,
-            size=(1200, 630)
-        )
-
-        # Clean up temporary HTML file
-        os.remove(temp_html_path)
-
-    except OSError as e:
-        logger.error(f"File system error while generating image: {traceback.format_exc()}")
-        raise format_http_exception(
-            status_code=500,
-            message="❌ Error while handling files for image generation.",
-            details={"error_message": str(e), "image_path": image_path}
-        )
-
-    except Exception as e:
-        logger.error(f"Unexpected error while generating image: {traceback.format_exc()}")
-        raise format_http_exception(
-            status_code=500,
-            message="❌ Unexpected error while generating image.",
-            details={"error_message": str(e), "traceback": traceback.format_exc()}
-        )
-
-
 async def generate_shareable_link(
     test_uuid: str, base_url: str, db: AsyncSession
 ) -> BaseResponse:

@@ -17,6 +17,8 @@
 
         .container {
             min-height: 100vh;
+            /* width: 1200px;
+            height: 650px; */
             margin: 0 auto;
             padding: 20px;
             position: relative;
@@ -25,19 +27,27 @@
         }
 
         .grid-container {
-          margin-top: 240px;
           display: grid;
-          justify-content: space-evenly;
-          grid-template-columns: 50px 50px;
-          gap: 34px;
-          padding: 10px;
+          margin-top: 337px;
+          justify-content: space-around;
+          grid-template-columns: 48px 48px;
+          gap: 57px;
         }
 
         .grid-container .type {
-            font-size: 23px;
+            font-size: 32px;
+            font-weight:600;
             color: black;
             width: 400px;
         }
+        .grid-container .type-interest{
+            font-size: 32px;
+            font-weight:600;
+            color: black;
+            width: 400px;
+            padding-top: 5px;
+        }
+
 
 
     </style>
@@ -47,9 +57,9 @@
             <!-- Dynamic Type and Percentage -->
             <div class="grid-container">
                 <div class="type">{{ user_response_data.all_assessments.personality.personality_type.name }}</div>
-                <div class="type">{{ user_response_data.all_assessments.interest.type_name }}</div>
+                <div class="type-interest">{{ user_response_data.all_assessments.interest.type_name }}</div>
                 <div class="type">{{ user_response_data.all_assessments.learning_style.learning_style }}</div>
-                 <div class="type">{{ user_response_data.all_assessments.skill.top_category.name }}</div>
+                 <div class="type-interest">{{ user_response_data.all_assessments.skill.top_category.name }}</div>
                 <div class="type">
                     {% if user_response_data.all_assessments.value.top_score %}
                         {{ user_response_data.all_assessments.value.top_score.label }}

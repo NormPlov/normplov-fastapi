@@ -93,7 +93,9 @@ app.add_middleware(
         "http://normplov-admin.istad.co",
         "http://normplov-admin.istad.co/",
         "https://e-found.istad.co",
-        "https://e-found.istad.co/"
+        "https://e-found.istad.co/",
+        "https://admin.e-found.istad.co",
+        "https://admin.e-found.istad.co/"
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
