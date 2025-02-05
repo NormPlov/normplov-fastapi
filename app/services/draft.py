@@ -15,6 +15,7 @@ from app.services.interest_assessment import process_interest_assessment
 from app.services.learning_style_assessment import predict_learning_style
 from app.services.personality_assessment import process_personality_assessment
 from app.services.skill_assessment import predict_skills
+from app.services.test import create_user_test
 from app.services.value_assessment import process_value_assessment
 
 logging.basicConfig(
@@ -513,6 +514,70 @@ async def update_user_response_draft(
         )
 
 
+# async def save_user_response_as_draft(
+#     db: AsyncSession,
+#     response_data: dict,
+#     assessment_type_name: str,
+#     assessment_type_id: int,
+#     current_user: User,
+# ):
+#     try:
+#         if not current_user or not current_user.id:
+#             raise format_http_exception(
+#                 status_code=status.HTTP_401_UNAUTHORIZED,
+#                 message="User is not authenticated.",
+#             )
+#
+#         assessment_type = (
+#             await db.execute(
+#                 select(AssessmentType).where(AssessmentType.id == assessment_type_id)
+#             )
+#         ).scalar_one_or_none()
+#
+#         if not assessment_type:
+#             raise format_http_exception(
+#                 status_code=status.HTTP_404_NOT_FOUND,
+#                 message="Assessment type not found.",
+#             )
+#
+#         required_keys = get_required_keys(assessment_type_id)
+#         invalid_keys = [key for key in response_data.keys() if key not in required_keys]
+#
+#         if invalid_keys:
+#             raise format_http_exception(
+#                 status_code=status.HTTP_400_BAD_REQUEST,
+#                 message=f"Invalid keys for assessment type '{assessment_type_name}'",
+#                 details={"invalid_keys": invalid_keys},
+#             )
+#
+#         draft_name_prefix = f"{assessment_type_name} Draft"
+#
+#         draft_name = f"{draft_name_prefix}"
+#
+#         draft = UserResponse(
+#             uuid=uuid.uuid4(),
+#             user_id=current_user.id,
+#             assessment_type_id=assessment_type_id,
+#             draft_name=draft_name,
+#             response_data=response_data,
+#             is_draft=True,
+#         )
+#         db.add(draft)
+#
+#         await db.commit()
+#         await db.refresh(draft)
+#         return draft
+#
+#     except HTTPException:
+#         logger.error(f"Unexpected error in save_draft route: {HTTPException}")
+#         raise
+#     except Exception as e:
+#         logger.error(f"Error saving draft: {str(e)}")
+#         raise format_http_exception(
+#             status_code=400,
+#             message="An unexpected error occurred while saving the draft.",
+#             details=str(e),
+#         )
 async def save_user_response_as_draft(
     db: AsyncSession,
     response_data: dict,
@@ -549,9 +614,14 @@ async def save_user_response_as_draft(
                 details={"invalid_keys": invalid_keys},
             )
 
-        draft_name_prefix = f"{assessment_type_name} Draft"
+        # ✅ Create a new test first before saving the draft
+        new_test = await create_user_test(
+            db=db,
+            user_id=current_user.id,
+            assessment_type_id=assessment_type_id,
+        )
 
-        draft_name = f"{draft_name_prefix}"
+        draft_name = f"{assessment_type_name} Draft"
 
         draft = UserResponse(
             uuid=uuid.uuid4(),
@@ -560,11 +630,13 @@ async def save_user_response_as_draft(
             draft_name=draft_name,
             response_data=response_data,
             is_draft=True,
+            user_test_id=new_test.id,  # ✅ Link the draft to the newly created test
         )
         db.add(draft)
 
         await db.commit()
         await db.refresh(draft)
+
         return draft
 
     except HTTPException:
@@ -572,6 +644,7 @@ async def save_user_response_as_draft(
         raise
     except Exception as e:
         logger.error(f"Error saving draft: {str(e)}")
+        await db.rollback()
         raise format_http_exception(
             status_code=400,
             message="An unexpected error occurred while saving the draft.",
