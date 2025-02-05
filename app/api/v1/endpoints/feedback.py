@@ -130,9 +130,10 @@ async def unpromote_user_feedback(
         await unpromote_feedback(feedback_uuid, current_user, db)
 
         return BaseResponse(
-            date=datetime.utcnow(),
+            date=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
             status=200,
-            message="Feedback unpromoted successfully"
+            message="Feedback unpromoted successfully",
+            payload={"feedback_uuid": feedback_uuid}
         )
 
     except HTTPException as e:
