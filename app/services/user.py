@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 from app.core.config import settings
 from app.exceptions.file_exceptions import FileExtensionError, handle_file_error, FileSizeError
 from app.exceptions.formatters import format_http_exception
-from app.models import UserRole, Role, UserTest
+from app.models import UserRole, Role, UserTest, AssessmentType
 from app.models.user import User
 from app.schemas.payload import BaseResponse
 from app.schemas.test import PaginationMetadata, UserTestWithUserSchema
@@ -102,7 +102,8 @@ async def get_all_mentors(
 async def fetch_all_tests(
     db: AsyncSession,
     page: int,
-    page_size: int
+    page_size: int,
+    search: Optional[str] = None,
 ) -> Tuple[List[UserTestWithUserSchema], PaginationMetadata]:
     try:
         query = (
@@ -115,6 +116,16 @@ async def fetch_all_tests(
             .where(UserTest.is_deleted == False)
             .order_by(UserTest.created_at.desc())
         )
+
+        # Apply search condition
+        if search:
+            query = query.where(
+                or_(
+                    UserTest.name.ilike(f"%{search}%"),
+                    UserTest.user.has(User.username.ilike(f"%{search}%")),
+                    UserTest.assessment_type.has(AssessmentType.name.ilike(f"%{search}%"))
+                )
+            )
 
         result = await db.execute(query)
         all_tests = result.scalars().all()
