@@ -630,7 +630,7 @@ async def save_user_response_as_draft(
             draft_name=draft_name,
             response_data=response_data,
             is_draft=True,
-            user_test_id=new_test.id,  # ✅ Link the draft to the newly created test
+            user_test_id=new_test.id,
         )
         db.add(draft)
 

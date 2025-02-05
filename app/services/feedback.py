@@ -282,6 +282,13 @@ async def unpromote_feedback(feedback_uuid: str, current_user, db: AsyncSession)
                 detail="Feedback has never been promoted and cannot be unpromoted.",
             )
 
+        # Check if feedback is already unpromoted or was never promoted
+        if not feedback.is_promoted:
+            raise HTTPException(
+                status_code=400,
+                detail="Feedback is already unpromoted and cannot be unpromoted again.",
+            )
+
         # Update feedback status to unpromoted
         feedback.is_promoted = False
         feedback.updated_at = datetime.utcnow()
