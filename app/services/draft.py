@@ -25,7 +25,137 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-async def get_latest_drafts_per_assessment_type(db: AsyncSession, current_user: User):
+# async def get_latest_drafts_per_assessment_type(db: AsyncSession, current_user: User):
+#     try:
+#         route_mapping = {
+#             "Personality": "personality",
+#             "Interests": "interest",
+#             "Values": "value",
+#             "Skills": "skill",
+#             "Learning Style": "learningStyle",
+#             "All Tests": "all"
+#         }
+#
+#         subquery = (
+#             select(
+#                 UserResponse.assessment_type_id,
+#                 UserResponse.uuid.label("draft_uuid")
+#             )
+#             .where(
+#                 UserResponse.user_id == current_user.id,
+#                 UserResponse.is_deleted == False,
+#                 UserResponse.is_draft == True
+#             )
+#             .distinct(UserResponse.assessment_type_id)
+#             .subquery()
+#         )
+#
+#         stmt = (
+#             select(
+#                 AssessmentType.id,
+#                 AssessmentType.name,
+#                 AssessmentType.title,
+#                 AssessmentType.description,
+#                 AssessmentType.image,
+#                 func.coalesce(func.max(UserResponse.created_at), None).label("latest_draft_date"),
+#                 subquery.c.draft_uuid,
+#                 func.count(UserResponse.id).label("response_count")
+#             )
+#             .outerjoin(UserResponse, and_(
+#                 UserResponse.assessment_type_id == AssessmentType.id,
+#                 UserResponse.user_id == current_user.id,
+#                 UserResponse.is_deleted == False,
+#                 UserResponse.is_draft == True
+#             ))
+#             .outerjoin(subquery, subquery.c.assessment_type_id == AssessmentType.id)
+#             .where(AssessmentType.is_deleted == False)
+#             .group_by(AssessmentType.id, subquery.c.draft_uuid)
+#         )
+#
+#         result = await db.execute(stmt)
+#         drafts = result.fetchall()
+#
+#         draft_items = []
+#         for draft in drafts:
+#             is_draft = draft.response_count > 0
+#
+#             route = route_mapping.get(draft.name, "unknown")
+#
+#             draft_items.append({
+#                 "draft_uuid": draft.draft_uuid if is_draft else None,
+#                 "is_draft": is_draft,
+#                 "title": draft.title,
+#                 "description": draft.description,
+#                 "image": draft.image.strip() if draft.image else None,
+#                 "route": route
+#             })
+#
+#         return draft_items
+#
+#     except Exception as e:
+#         logger.error(f"Unexpected error in get_latest_drafts_endpoint: {str(e)}")
+#         raise format_http_exception(
+#             status_code=400,
+#             message="Failed to retrieve the latest drafts.",
+#             details=str(e),
+#         )
+# Translation data for titles and descriptions
+translations = {
+    "en": {
+        "interest": {
+            "title": "Interest Assessment Test",
+            "description": "Understand your interests using Holland Theory, created by John Holland"
+        },
+        "learningStyle": {
+            "title": "Learning Style Assessment Test",
+            "description": "Understand your learning style using VARK Theory, created by Neil Fleming"
+        },
+        "personality": {
+            "title": "Personality Assessment Test",
+            "description": "Understand your personality type using MBTI (Myers-Briggs Type Indicator), developed by Carl Jung"
+        },
+        "skill": {
+            "title": "Skill Strengths & Weaknesses Assessment",
+            "description": "Evaluate your strengths and weaknesses in in-demand skills based on the 1st O*NET Database"
+        },
+        "value": {
+            "title": "Value Assessment Test",
+            "description": "Understand your work values using Schwartz Value Theory, created by Shalom Schwartz"
+        },
+        "all": {
+            "title": "Comprehensive Assessment Test",
+            "description": "Take all assessments for an overall result: MBTI, Holland Theory, VARK Theory, Schwartz Value Theory"
+        }
+    },
+    "km": {
+        "interest": {
+            "title": "តេស្តវាយតម្លៃតាមចំណាប់អារម្មណ៍",
+            "description": "យល់ដឹងពីចំណាប់អារម្មណ៍របស់អ្នកតាមរយៈ Holland Theory បង្កើតឡើងដោយលោក John Holland"
+        },
+        "learningStyle": {
+            "title": "តេស្តវាយតម្លៃតាមរបៀបសិក្សា",
+            "description": "យល់ដឹងពីរបៀបនៃការសិក្សារបស់អ្នកតាមរយៈ VARY Theory បង្កើតឡើងដោយលោក Neil Fleming"
+        },
+        "personality": {
+            "title": "តេស្តវាយតម្លៃតាមបុគ្គលិកលក្ខណៈ",
+            "description": "យល់ដឹងពីប្រភេទបុគ្កលិកលក្ខណៈរបស់អ្នកតាមរយៈ MBTI (Myers-Briggs Type Indicator) បង្កើតឡើងដោយលោក Carl Jung"
+        },
+        "skill": {
+            "title": "តេស្តវាយតម្លៃតាមភាពខ្លាំងខ្សោយ",
+            "description": "វាយតម្លៃពីភាពខ្លាំងខ្សោយនៃជំនាញកំពុងតម្រូវការ សម្រាប់ការងារនាពេលបច្ចុប្បន្នដោយផ្អែកលើការកំណត់ 1st O*NET Database"
+        },
+        "value": {
+            "title": "តេស្តវាយតម្លៃតាមគុណតម្លៃ",
+            "description": "យល់ដឹងពីគុណតម្លៃការងាររបស់អ្នកតាមរយៈ Schwartz Value Theory បង្កើតឡើងដោយលោក Shalom Schwartz"
+        },
+        "all": {
+            "title": "តេស្តគ្រប់ការវាយតម្លៃទាំងអស់",
+            "description": "តេស្តលើគ្រប់ការវាយតម្លៃដើម្បីទទួលបានលទ្ធផលសរុប MBTI, Holland theory, VARY Theory, Schwartz Value Theory"
+        }
+    }
+}
+
+async def get_latest_drafts_per_assessment_type(db: AsyncSession, current_user: User, lang: str):
     try:
         route_mapping = {
             "Personality": "personality",
@@ -54,10 +184,7 @@ async def get_latest_drafts_per_assessment_type(db: AsyncSession, current_user: 
             select(
                 AssessmentType.id,
                 AssessmentType.name,
-                AssessmentType.title,
-                AssessmentType.description,
                 AssessmentType.image,
-                func.coalesce(func.max(UserResponse.created_at), None).label("latest_draft_date"),
                 subquery.c.draft_uuid,
                 func.count(UserResponse.id).label("response_count")
             )
@@ -78,14 +205,16 @@ async def get_latest_drafts_per_assessment_type(db: AsyncSession, current_user: 
         draft_items = []
         for draft in drafts:
             is_draft = draft.response_count > 0
-
             route = route_mapping.get(draft.name, "unknown")
+
+            # Get the translation based on language
+            translated = translations.get(lang, translations["en"]).get(route, {})
 
             draft_items.append({
                 "draft_uuid": draft.draft_uuid if is_draft else None,
                 "is_draft": is_draft,
-                "title": draft.title,
-                "description": draft.description,
+                "title": translated.get("title", draft.name),
+                "description": translated.get("description", ""),
                 "image": draft.image.strip() if draft.image else None,
                 "route": route
             })
@@ -99,7 +228,6 @@ async def get_latest_drafts_per_assessment_type(db: AsyncSession, current_user: 
             message="Failed to retrieve the latest drafts.",
             details=str(e),
         )
-
 
 async def get_assessment_type_id(assessment_name: str, db: AsyncSession) -> int:
 
