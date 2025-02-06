@@ -88,9 +88,14 @@ async def admin_load_all_jobs(
             )
         )
 
+        # Apply search by job title, company and category
         if search:
             stmt = stmt.where(
-                Job.title.ilike(f"%{search}%") | Job.company.ilike(f"%{search}%")
+                or_(
+                    Job.title.ilike(f"%{search}%"),
+                    Job.company.ilike(f"%{search}%"),
+                    Job.category.ilike(f"%{search}%")
+                )
             )
 
         sort_column = getattr(Job, sort_by, Job.created_at)
