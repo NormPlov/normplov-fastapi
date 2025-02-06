@@ -11,6 +11,8 @@ class SkillCareerAssociation(Base):
     career_id = Column(Integer, ForeignKey("careers.id", ondelete="CASCADE"), primary_key=True)
     created_at = Column(DateTime, nullable=False, server_default=func.now())
 
-    # Relationships
-    skill = relationship("Skill", back_populates="skill_career_associations")
-    career = relationship("Career", back_populates="skill_career_associations")
+    # Define relationships with overlap resolution
+    skill = relationship("Skill", back_populates="skill_career_associations",
+                         overlaps="careers,skill_career_associations")
+    career = relationship("Career", back_populates="skill_career_associations",
+                          overlaps="skills,skill_career_associations")

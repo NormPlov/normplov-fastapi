@@ -213,11 +213,12 @@ async def get_user_tests_route(
 async def get_all_tests_route(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(10, ge=1, le=100, description="Number of tests per page"),
+    is_draft: Optional[bool] = Query(None, description="Filter by draft status"),
     search: Optional[str] = Query(None, description="Search by username, test name, or assessment type name"),
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        tests, metadata = await fetch_all_tests(db, page, page_size, search)
+        tests, metadata = await fetch_all_tests(db, page, page_size, is_draft, search)
 
         return BaseResponse(
             date=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),

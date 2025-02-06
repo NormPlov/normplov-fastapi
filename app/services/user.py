@@ -103,6 +103,7 @@ async def fetch_all_tests(
     db: AsyncSession,
     page: int,
     page_size: int,
+    is_draft: Optional[bool] = None,
     search: Optional[str] = None,
 ) -> Tuple[List[UserTestWithUserSchema], PaginationMetadata]:
     try:
@@ -116,6 +117,12 @@ async def fetch_all_tests(
             .where(UserTest.is_deleted == False)
             .order_by(UserTest.created_at.desc())
         )
+
+        # Apply is_draft filter
+        if is_draft is not None:
+            query = query.where(
+                UserTest.user_responses.any(is_draft=is_draft)
+            )
 
         # Apply search condition
         if search:
