@@ -25,80 +25,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# async def get_latest_drafts_per_assessment_type(db: AsyncSession, current_user: User):
-#     try:
-#         route_mapping = {
-#             "Personality": "personality",
-#             "Interests": "interest",
-#             "Values": "value",
-#             "Skills": "skill",
-#             "Learning Style": "learningStyle",
-#             "All Tests": "all"
-#         }
-#
-#         subquery = (
-#             select(
-#                 UserResponse.assessment_type_id,
-#                 UserResponse.uuid.label("draft_uuid")
-#             )
-#             .where(
-#                 UserResponse.user_id == current_user.id,
-#                 UserResponse.is_deleted == False,
-#                 UserResponse.is_draft == True
-#             )
-#             .distinct(UserResponse.assessment_type_id)
-#             .subquery()
-#         )
-#
-#         stmt = (
-#             select(
-#                 AssessmentType.id,
-#                 AssessmentType.name,
-#                 AssessmentType.title,
-#                 AssessmentType.description,
-#                 AssessmentType.image,
-#                 func.coalesce(func.max(UserResponse.created_at), None).label("latest_draft_date"),
-#                 subquery.c.draft_uuid,
-#                 func.count(UserResponse.id).label("response_count")
-#             )
-#             .outerjoin(UserResponse, and_(
-#                 UserResponse.assessment_type_id == AssessmentType.id,
-#                 UserResponse.user_id == current_user.id,
-#                 UserResponse.is_deleted == False,
-#                 UserResponse.is_draft == True
-#             ))
-#             .outerjoin(subquery, subquery.c.assessment_type_id == AssessmentType.id)
-#             .where(AssessmentType.is_deleted == False)
-#             .group_by(AssessmentType.id, subquery.c.draft_uuid)
-#         )
-#
-#         result = await db.execute(stmt)
-#         drafts = result.fetchall()
-#
-#         draft_items = []
-#         for draft in drafts:
-#             is_draft = draft.response_count > 0
-#
-#             route = route_mapping.get(draft.name, "unknown")
-#
-#             draft_items.append({
-#                 "draft_uuid": draft.draft_uuid if is_draft else None,
-#                 "is_draft": is_draft,
-#                 "title": draft.title,
-#                 "description": draft.description,
-#                 "image": draft.image.strip() if draft.image else None,
-#                 "route": route
-#             })
-#
-#         return draft_items
-#
-#     except Exception as e:
-#         logger.error(f"Unexpected error in get_latest_drafts_endpoint: {str(e)}")
-#         raise format_http_exception(
-#             status_code=400,
-#             message="Failed to retrieve the latest drafts.",
-#             details=str(e),
-#         )
 # Translation data for titles and descriptions
 translations = {
     "en": {
@@ -154,6 +80,7 @@ translations = {
         }
     }
 }
+
 
 async def get_latest_drafts_per_assessment_type(db: AsyncSession, current_user: User, lang: str):
     try:

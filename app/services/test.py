@@ -21,7 +21,7 @@ from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status
 from app.schemas.payload import BaseResponse
-from app.schemas.test import UserTestResponseSchema, PaginationMetadata, UserTestResponse
+from app.schemas.test import UserTestResponseSchema, PaginationMetadata, UserTestResponse, UserCompletedTestSchema
 from app.schemas.test_career import CareerData, CategoryWithResponsibilities, MajorWithSchools
 from app.utils.pagination import paginate_results
 from fastapi.templating import Jinja2Templates
@@ -416,7 +416,7 @@ async def fetch_user_tests_for_current_user(
     current_user: User,
     page: int,
     page_size: int
-) -> Tuple[List[UserTestResponseSchema], PaginationMetadata]:
+) -> Tuple[List[UserCompletedTestSchema], PaginationMetadata]:
     try:
         query = (
             select(UserTest)
@@ -446,12 +446,13 @@ async def fetch_user_tests_for_current_user(
             flattened_responses = [item for sublist in formatted_responses for item in sublist]
 
             formatted_tests.append(
-                UserTestResponseSchema(
+                UserCompletedTestSchema(
                     test_uuid=str(test.uuid),
                     test_name=test.name,
                     assessment_type_name=(
                         test.assessment_type.name if test.assessment_type else None
                     ),
+                    assessment_type_image=(test.assessment_type.image if test.assessment_type else None),
                     response_data=flattened_responses,
                     created_at=test.created_at
                 )

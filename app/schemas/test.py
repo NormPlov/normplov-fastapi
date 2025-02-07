@@ -45,6 +45,15 @@ class UserTestResponseSchema(BaseModel):
     created_at: datetime
 
 
+class UserCompletedTestSchema(BaseModel):
+    test_uuid: str
+    test_name: str
+    assessment_type_name: Optional[str]
+    assessment_type_image: Optional[str]
+    response_data: List[Dict[str, Any]]
+    created_at: datetime
+
+
 class PaginationMetadata(BaseModel):
     page: int
     page_size: int
@@ -56,6 +65,12 @@ class PaginatedUserTestsResponse(BaseModel):
     tests: list[UserTestResponseSchema]
     metadata: PaginationMetadata
 
+
+class PaginatedUserTestsResponse(BaseModel):
+    tests: List[UserCompletedTestSchema]
+    metadata: PaginationMetadata
+
+    
 
 class AssessmentDraftData(BaseModel):
     responses: Dict[str, int]
