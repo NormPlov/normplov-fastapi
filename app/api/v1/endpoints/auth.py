@@ -279,7 +279,13 @@ async def request_password_reset_handler(
     response = await generate_password_reset_code(data.email, db)
     username = response.payload.get("username")
     reset_code = response.payload["reset_code"]
-    background_tasks.add_task(send_reset_email, data.email, reset_code, username)
+    background_tasks.add_task(
+        send_reset_email,
+        data.email,
+        reset_code,
+        username,
+        logo_url=settings.LOGO_URL
+    )
     return response
 
 
