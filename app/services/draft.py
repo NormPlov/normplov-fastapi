@@ -93,26 +93,31 @@ async def get_latest_drafts_per_assessment_type(db: AsyncSession, current_user: 
             "All Tests": "all"
         }
 
+        # Subquery: Select UUID and is_completed for drafts
         subquery = (
             select(
                 UserResponse.assessment_type_id,
-                UserResponse.uuid.label("draft_uuid")
+                UserResponse.uuid.label("draft_uuid"),
+                UserResponse.is_completed.label("is_completed")
             )
             .where(
                 UserResponse.user_id == current_user.id,
                 UserResponse.is_deleted == False,
-                UserResponse.is_draft == True
+                UserResponse.is_draft == True,
+                or_(UserResponse.is_draft == True, UserResponse.is_completed == True)
             )
             .distinct(UserResponse.assessment_type_id)
             .subquery()
         )
 
+        # Main query with join to fetch draft details including is_completed
         stmt = (
             select(
                 AssessmentType.id,
                 AssessmentType.name,
                 AssessmentType.image,
                 subquery.c.draft_uuid,
+                subquery.c.is_completed,
                 func.count(UserResponse.id).label("response_count")
             )
             .outerjoin(UserResponse, and_(
@@ -123,7 +128,7 @@ async def get_latest_drafts_per_assessment_type(db: AsyncSession, current_user: 
             ))
             .outerjoin(subquery, subquery.c.assessment_type_id == AssessmentType.id)
             .where(AssessmentType.is_deleted == False)
-            .group_by(AssessmentType.id, subquery.c.draft_uuid)
+            .group_by(AssessmentType.id, subquery.c.draft_uuid, subquery.c.is_completed)
         )
 
         result = await db.execute(stmt)
@@ -140,6 +145,7 @@ async def get_latest_drafts_per_assessment_type(db: AsyncSession, current_user: 
             draft_items.append({
                 "draft_uuid": draft.draft_uuid if is_draft else None,
                 "is_draft": is_draft,
+                "is_completed": not is_draft,  # Add is_completed to the response
                 "title": translated.get("title", draft.name),
                 "description": translated.get("description", ""),
                 "image": draft.image.strip() if draft.image else None,
@@ -149,12 +155,13 @@ async def get_latest_drafts_per_assessment_type(db: AsyncSession, current_user: 
         return draft_items
 
     except Exception as e:
-        logger.error(f"Unexpected error in get_latest_drafts_endpoint: {str(e)}")
+        logger.error(f"Unexpected error in get_latest_drafts_per_assessment_type: {str(e)}")
         raise format_http_exception(
             status_code=400,
             message="Failed to retrieve the latest drafts.",
             details=str(e),
         )
+
 
 async def get_assessment_type_id(assessment_name: str, db: AsyncSession) -> int:
 
@@ -424,6 +431,7 @@ async def load_drafts(
                 UserResponse.draft_name.label("draft_name"),
                 UserResponse.created_at.label("created_at"),
                 AssessmentType.name.label("assessment_name"),
+                AssessmentType.image.label("image"),
                 UserResponse.is_draft.label("is_draft"),
                 UserResponse.updated_at.label("updated_at")
             )
@@ -484,6 +492,7 @@ async def load_drafts(
                 "uuid": draft.uuid,
                 "draft_name": draft_name,
                 "assessment_name": draft.assessment_name,
+                "image": draft.image,
                 "is_draft": draft.is_draft,
                 "created_at": draft.created_at.strftime("%d-%B-%Y %H:%M:%S"),
                 "updated_at": draft.updated_at.strftime("%d-%B-%Y %H:%M:%S") if draft.updated_at else None
@@ -493,7 +502,7 @@ async def load_drafts(
             "page": page,
             "page_size": page_size,
             "total_items": total_items,
-            "total_pages": (total_items + page_size - 1) // page_size
+            "total_pages": (total_items + page_size - 1)
         }
 
         return {"items": draft_items, "metadata": metadata}
