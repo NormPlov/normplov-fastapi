@@ -7,6 +7,8 @@ from email.message import EmailMessage
 from dotenv import load_dotenv
 from jinja2 import Environment, FileSystemLoader
 
+from app.core.config import settings
+
 load_dotenv()
 env = Environment(loader=FileSystemLoader(os.path.join(os.path.dirname(__file__), '../templates')))
 
@@ -41,9 +43,9 @@ async def send_thank_you_email(email: str, username: str):
     await asyncio.to_thread(send_email)
 
 
-async def send_verification_email(email: str, username: str, verification_code: str):
+async def send_verification_email(email: str, username: str, verification_code: str, logo_url: str = settings.LOGO_URL):
     template = env.get_template('email_verification.html')
-    html_content = template.render(username=username, verification_code=verification_code)
+    html_content = template.render(username=username, verification_code=verification_code, logo_url=logo_url)
 
     msg = EmailMessage()
     msg.set_content(f"Hi {username}, your verification code is: {verification_code}")
@@ -66,10 +68,10 @@ async def send_verification_email(email: str, username: str, verification_code: 
     await asyncio.to_thread(send_email)
 
 
-def send_reset_email(email: str, reset_code: str, username: str):
+def send_reset_email(email: str, reset_code: str, username: str, logo_url: str = settings.LOGO_URL):
 
     template = env.get_template('password_reset.html')
-    html_content = template.render(username=username, reset_code=reset_code)
+    html_content = template.render(username=username, reset_code=reset_code, logo_url=logo_url)
 
     msg = EmailMessage()
     msg.set_content(f"Hi {username}, use the following code to reset your password: {reset_code}")

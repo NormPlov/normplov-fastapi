@@ -19,6 +19,12 @@
             text-align: center;
             color: #4CAF50;
         }
+        .logo {
+            display: block;
+            margin: 0 auto 20px auto;
+            max-width: 150px;
+            height: auto;
+        }
         .code {
             font-size: 1.5em;
             color: #333;
@@ -37,6 +43,7 @@
     </style>
 </head>
 <body>
+    <img src="{{ logo_url }}" alt="Platform Logo" class="logo">
     <div class="container">
         <h2 class="header">Welcome to Our Platform, {{ username }}!</h2>
         <p>Please verify your email address using the code below:</p>

@@ -7,6 +7,12 @@ from urllib.parse import quote_plus
 
 
 class Settings(BaseSettings):
+
+    LOGO_URL: str = Field(
+        default="https://normplov-api.istad.co/uploads/fea5b083-4815-424b-8bd2-24bea3b3ae57.png",
+        env="LOGO_URL"
+    )
+
     # Frontend URL Configuration
     FRONTEND_URL: str = Field(default="https://e-found.istad.co", env="FRONTEND_URL")
 

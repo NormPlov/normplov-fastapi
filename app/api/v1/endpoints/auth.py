@@ -324,7 +324,8 @@ async def resend_code(
             send_verification_email,
             email=response.payload["email"],
             username=response.payload["username"],
-            verification_code=response.payload["verification_code"]
+            verification_code=response.payload["verification_code"],
+            logo_url=settings.LOGO_URL
         )
 
         return response

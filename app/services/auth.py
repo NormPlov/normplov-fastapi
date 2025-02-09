@@ -669,8 +669,8 @@ async def register_new_user(create_user: UserCreateRequest, db: AsyncSession) ->
 
     await assign_user_role(new_user.id, "USER", db)
 
-    # Send the verification email
-    await send_verification_email(new_user.email, new_user.username, verification_code)
+    # Send the verification email with the logo URL
+    await send_verification_email(new_user.email, new_user.username, verification_code, settings.LOGO_URL)
 
     return BaseResponse(
         date=datetime.utcnow().strftime("%d-%B-%Y"),
