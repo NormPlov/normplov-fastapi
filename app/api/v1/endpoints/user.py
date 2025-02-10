@@ -244,6 +244,7 @@ async def get_users_route(
         page_size: int = Query(10, ge=1, le=100, description="Number of users per page"),
         is_active: Optional[bool] = Query(None, description="Filter users by active status"),
         is_verified: Optional[bool] = Query(None, description="Filter users by verification status"),
+        gender: Optional[str] = Query(None, description="Filter users by gender (e.g., male, female, other)"),
         db: AsyncSession = Depends(get_db),
         current_user=Depends(is_admin_user)
 ):
@@ -251,7 +252,8 @@ async def get_users_route(
         filters = {
             "is_active": is_active,
             "is_verified": is_verified,
-            "is_deleted": False
+            "is_deleted": False,
+            "gender": gender
         }
 
         result = await get_all_users(
