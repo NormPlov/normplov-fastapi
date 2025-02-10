@@ -8,6 +8,8 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload
 from datetime import datetime
 from sqlalchemy.sql.functions import func
+
+from app.core.config import settings
 from app.exceptions.formatters import format_http_exception
 from app.models import AssessmentType, UserTest, User
 from app.models.user_feedback import UserFeedback
@@ -343,7 +345,7 @@ async def create_feedback(feedback: str, user_test_uuid: str, current_user, db: 
         db.add(new_feedback)
         await db.commit()
 
-        await send_thank_you_email(current_user.email, current_user.username)
+        await send_thank_you_email(current_user.email, current_user.username, settings.LOGO_URL)
 
         formatted_date = format_date(created_at)
         telegram_message = (

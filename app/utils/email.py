@@ -13,13 +13,14 @@ load_dotenv()
 env = Environment(loader=FileSystemLoader(os.path.join(os.path.dirname(__file__), '../templates')))
 
 
-async def send_thank_you_email(email: str, username: str):
+async def send_thank_you_email(email: str, username: str, logo_url: str = settings.LOGO_URL):
     template = env.get_template('thank_you_feedback.html')
     current_year = datetime.utcnow().year
 
     html_content = template.render(
         username=username,
-        current_year=current_year
+        current_year=current_year,
+        logo_url=logo_url
     )
 
     msg = EmailMessage()
