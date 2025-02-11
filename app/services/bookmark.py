@@ -8,6 +8,7 @@ from app.exceptions.formatters import format_http_exception
 from app.models import Job, Bookmark, User
 from app.schemas.job import CustomJobListingResponse
 from app.utils.pagination import paginate_results
+from sqlalchemy import desc
 
 
 async def unbookmark_job_service(current_user: User, bookmark_uuid: uuid.UUID, db: AsyncSession) -> dict:
@@ -59,6 +60,7 @@ async def get_user_bookmarked_jobs_service(
                 Bookmark.is_deleted == False,
                 Job.is_deleted == False
             )
+            .order_by(desc(Job.created_at))
         )
         result = await db.execute(stmt)
         bookmarked_jobs = result.fetchall()
